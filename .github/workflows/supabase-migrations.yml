@@ -1,0 +1,50 @@
+name: Supabase migrations
+
+on:
+  push:
+    paths:
+      - 'supabase/**'
+      - 'scripts/verify_live_functions.sql'
+      - 'scripts/pull-live-baseline.mjs'
+      - '.github/workflows/supabase-migrations.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'scripts/verify_live_functions.sql'
+      - 'scripts/pull-live-baseline.mjs'
+      - '.github/workflows/supabase-migrations.yml'
+  workflow_dispatch:
+
+jobs:
+  migration-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase (Docker)
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector
+
+      - name: Apply migrations from scratch
+        run: supabase db reset --yes
+
+      - name: Verify function architecture (local)
+        run: npx supabase db query --local --file scripts/verify_live_functions.sql
+
+      - name: Confirm forbidden RPCs absent in baseline
+        run: |
+          if grep -E 'CREATE OR REPLACE FUNCTION public\.(save_factory_user|update_factory_user)' supabase/migrations/*.sql; then
+            echo 'Baseline migration must not define save_factory_user / update_factory_user'
+            exit 1
+          fi

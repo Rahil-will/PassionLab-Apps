@@ -1,0 +1,466 @@
+/**
+ * MES / ERP print reports — A4 portrait, information-dense, no dashboard chrome.
+ * Apply class `mes-report` on printable root; use `.no-print` / `.print-only` sections.
+ */
+
+.print-only {
+  display: none;
+}
+
+.mes-report-header,
+.mes-report-footer {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: #0f172a !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 11pt !important;
+    line-height: 1.35 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  /* Prevent the app shell (sidebar flex layout) from reserving width in print.
+     We hide it by layout, not just visibility, so reports use full page width. */
+  #root,
+  #root > div {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #root > div > aside {
+    display: none !important;
+  }
+
+  #root > div > main {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  #root > div > main > div {
+    padding: 0 !important;
+  }
+
+  .mes-report,
+  .mes-report *,
+  #planning-summary-print-root,
+  #planning-summary-print-root *,
+  #order-completion-print-root,
+  #order-completion-print-root *,
+  #style-report-print-root,
+  #style-report-print-root * {
+    visibility: visible;
+  }
+
+  .mes-page-chrome,
+  .order-1 {
+    display: none !important;
+  }
+
+  .no-print,
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  .mes-report:not(#order-completion-print-root):not(#style-report-print-root),
+  #planning-summary-print-root {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+
+  /* Order Completion — static flow so multi-page body prints; sidebar hidden */
+  #order-completion-print-root {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    visibility: visible !important;
+  }
+
+  #order-completion-print-root .oc-layout-grid {
+    display: block !important;
+    min-height: 0 !important;
+    width: 100% !important;
+  }
+
+  #order-completion-print-root .oc-detail-panel {
+    display: block !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .mes-report-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #001f3f;
+    padding-bottom: 4mm;
+    margin-bottom: 4mm;
+    page-break-after: avoid;
+  }
+
+  .mes-report-logo {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #001f3f;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .mes-report-logo-sub {
+    font-size: 8pt;
+    font-weight: 400;
+    color: #64748b;
+    margin-top: 1mm;
+  }
+
+  .mes-report-title-block {
+    text-align: right;
+  }
+
+  .mes-report-title {
+    font-size: 16pt !important;
+    font-weight: 700 !important;
+    color: #001f3f !important;
+    margin: 0 !important;
+    letter-spacing: 0.02em;
+  }
+
+  .mes-report-meta {
+    font-size: 9pt;
+    color: #475569;
+    margin-top: 2mm;
+  }
+
+  .mes-report-section {
+    page-break-inside: avoid;
+    margin-bottom: 5mm;
+  }
+
+  .mes-report-section-title {
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #001f3f !important;
+    border-bottom: 1px solid #94a3b8;
+    padding-bottom: 1.5mm;
+    margin: 4mm 0 2mm 0 !important;
+  }
+
+  .mes-report-product-grid {
+    display: grid !important;
+    grid-template-columns: 22mm 1fr 1fr 1fr;
+    gap: 0;
+    border: 1px solid #d1d5db;
+    page-break-inside: avoid;
+    margin-bottom: 4mm;
+  }
+
+  .mes-report-product-grid .mes-report-thumb {
+    grid-row: span 3;
+    border-right: 1px solid #d1d5db;
+    padding: 2mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8pt;
+    color: #94a3b8;
+  }
+
+  .mes-report-kv {
+    padding: 2mm 3mm;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+  }
+
+  .mes-report-kv-label {
+    font-size: 7pt;
+    text-transform: uppercase;
+    color: #64748b;
+    letter-spacing: 0.03em;
+  }
+
+  .mes-report-kv-value {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .mes-report-hr {
+    border: none;
+    border-top: 1px solid #cbd5e1;
+    margin: 4mm 0;
+  }
+
+  .mes-report table,
+  .mes-report-table,
+  .summary-table-wrap table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    font-size: 9pt !important;
+    page-break-inside: auto;
+  }
+
+  .mes-report thead,
+  .summary-table-wrap thead {
+    display: table-header-group !important;
+  }
+
+  .mes-report th,
+  .mes-report td,
+  .mes-report-table th,
+  .mes-report-table td,
+  .summary-table-wrap th,
+  .summary-table-wrap td {
+    border: 1px solid #d1d5db !important;
+    padding: 1.5mm 2mm !important;
+    vertical-align: middle !important;
+    text-align: left;
+  }
+
+  .mes-report th,
+  .mes-report-table th,
+  .summary-table-wrap th {
+    background: #001f3f !important;
+    color: white !important;
+    font-weight: 700 !important;
+    font-size: 8pt !important;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .mes-report td.num,
+  .mes-report-table td.num {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mes-report tfoot td,
+  .mes-report-table tfoot td {
+    font-weight: 700 !important;
+    background: #f1f5f9 !important;
+  }
+
+  .mes-report tr {
+    page-break-inside: avoid;
+  }
+
+  .mes-report-colorway-head {
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin: 3mm 0 1mm 0 !important;
+    page-break-after: avoid;
+  }
+
+  .mes-report-footer {
+    display: flex !important;
+    justify-content: space-between;
+    border-top: 1px solid #cbd5e1;
+    padding-top: 2mm;
+    margin-top: 6mm;
+    font-size: 8pt;
+    color: #64748b;
+    page-break-before: avoid;
+  }
+
+  .summary-colorway-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 6mm;
+    border: 1px solid #d1d5db !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .summary-header-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #d1d5db !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .summary-scroll-area {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
+
+  .screen-remarks-input {
+    display: none !important;
+  }
+
+  .print-only-remarks {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  /* Order Completion — print full detail panel, hide entry templates */
+  #order-completion-print-root .mes-report-section-allow-break {
+    page-break-inside: auto !important;
+  }
+
+  #order-completion-print-root .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  #order-completion-print-root .cut-to-ship-log-grid {
+    display: block !important;
+  }
+
+  #order-completion-print-root .mes-report-matrix {
+    table-layout: fixed !important;
+  }
+
+  #order-completion-print-root .mes-report-matrix th,
+  #order-completion-print-root .mes-report-matrix td {
+    text-align: center !important;
+    word-break: break-word;
+  }
+
+  #order-completion-print-root .cut-to-ship-section-title {
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #001f3f !important;
+    border-bottom: 1px solid #94a3b8;
+    padding-bottom: 1.5mm;
+    margin: 4mm 0 2mm 0 !important;
+  }
+
+  #order-completion-print-root .cut-to-ship-detail {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  #order-completion-print-root .mes-report-header {
+    padding-bottom: 2mm;
+    margin-bottom: 3mm;
+  }
+
+  #order-completion-print-root > .oc-layout-grid {
+    display: block !important;
+  }
+
+  #order-completion-print-root .oc-print-product-bar {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid #d1d5db;
+    margin-bottom: 4mm;
+    page-break-inside: avoid;
+  }
+
+  #order-completion-print-root .oc-print-product-bar > div {
+    padding: 2mm 3mm;
+    border-right: 1px solid #e2e8f0;
+  }
+
+  #order-completion-print-root .oc-print-product-bar > div:last-child {
+    border-right: none;
+  }
+
+  #order-completion-print-root .oc-print-product-label {
+    font-size: 7pt;
+    text-transform: uppercase;
+    color: #64748b;
+    letter-spacing: 0.03em;
+  }
+
+  #order-completion-print-root .oc-print-product-value {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #0f172a;
+    margin-top: 1mm;
+  }
+
+  #order-completion-print-root .cut-to-ship-detail {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  #order-completion-print-root table.mes-report-matrix,
+  #order-completion-print-root table.mes-report-table {
+    display: table !important;
+    width: 100% !important;
+  }
+
+  #order-completion-print-root .mes-report-matrix thead {
+    background: #001f3f !important;
+    color: white !important;
+  }
+
+  #style-report-print-root {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  #style-report-print-root .mes-report-header,
+  #style-report-print-root .mes-report-footer {
+    display: flex !important;
+  }
+
+  #style-report-print-root .recharts-responsive-container,
+  #style-report-print-root canvas {
+    display: none !important;
+  }
+}

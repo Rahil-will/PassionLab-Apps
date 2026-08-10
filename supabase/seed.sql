@@ -1,0 +1,1 @@
+-- Empty seed — baseline migration defines schema; no demo data required for CI gate.

@@ -1,0 +1,97 @@
+/**
+ * Production Planning Summary — screen + print overrides.
+ * Core ERP print rules live in mes-report.print.css (A4 portrait).
+ */
+
+.print-only-remarks {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  .summary-modal-overlay {
+    position: static !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  #planning-summary-print-root {
+    max-height: none !important;
+    overflow: visible !important;
+    font-size: 11pt !important;
+  }
+
+  .summary-scroll-area {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+  }
+
+  .summary-colorway-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 6mm;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .summary-colorway-block > .border-t {
+    border-top: 1px solid #d1d5db !important;
+    background: white !important;
+    padding: 2mm 0 !important;
+  }
+
+  .summary-table-wrap {
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .summary-table-wrap table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 9pt !important;
+    border-collapse: collapse !important;
+  }
+
+  .summary-table-wrap th,
+  .summary-table-wrap td {
+    padding: 1.5mm 2mm !important;
+    border: 1px solid #d1d5db !important;
+  }
+
+  .summary-table-wrap thead th {
+    background: #001f3f !important;
+    color: white !important;
+    font-weight: 700 !important;
+    font-size: 8pt !important;
+    text-transform: uppercase;
+  }
+
+  .summary-table-wrap tfoot td {
+    font-weight: 700 !important;
+    background: #f1f5f9 !important;
+  }
+
+  .summary-table-wrap tr {
+    page-break-inside: avoid;
+  }
+
+  .summary-table-wrap .bg-red-50,
+  .summary-table-wrap .bg-slate-50\/40,
+  .summary-table-wrap .bg-white {
+    background: white !important;
+  }
+
+  .summary-table-wrap .text-blue-700 {
+    color: #1d4ed8 !important;
+  }
+
+  .summary-table-wrap .text-violet-700 {
+    color: #6d28d9 !important;
+  }
+}

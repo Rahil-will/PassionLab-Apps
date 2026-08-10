@@ -1,0 +1,161 @@
+# PRODIGI Implementation Map
+
+## 1. Operations
+
+- **`supabase/migrations/20260704100000_v3_foundation.sql`** — Migration defining the `operations` table (`factory_id`, `department_id`, `name`, `step_type`, `capture_app`, `is_active`, `archived_at`, `superseded_by_id`) and active-name unique index.
+- **`lib/operationsDb.ts`**
+  - `fetchOperationsForDepartment` — Load active operations for a department.
+  - `fetchOperationsForFactory` / `fetchAllOperationsForFactory` — Load active/all operations for a factory.
+  - `operationsByDepartmentId` — Group operations by `department_id`.
+  - `resolveOperationDefId` — Resolve a catalog operation id from department and label.
+  - `upsertOperation` — Insert or update an operation in place; all edits keep the same id.
+  - `archiveOperation` — Soft-archive an operation by setting `is_active = false` (true retirement only).
+  - `fetchAppConfiguration` — Return allowed capture apps per `step_type`.
+- **`lib/departmentOperationsSync.ts`**
+  - `diffDepartmentOperations` — Compare baseline and draft operations; choose archive (removed rows) or upsert (new/edited rows, including name/step_type/capture_app changes).
+  - `syncDepartmentOperationsToDb` — Persist operations using archive or in-place upsert only.
+- **`stores/settingsStore.ts`**
+  - `loadDepartmentOperations` / `setDepartmentOperationsDraft` — Manage draft/baseline state for department operations.
+  - `syncDepartmentOperations` — Persist operations via `syncDepartmentOperationsToDb`.
+  - `fetchCatalogOperations` / `fetchAppConfiguration` — Load catalog data for UIs.
+- **`components/settings/DepartmentOperationsPanel.tsx`**
+  - `submitOperation` — Add or update an operation in local draft and propagate changes.
+- **`components/settings/DepartmentEditor.tsx`**
+  - `handleOperationsChange` — Receive operation changes and update derived department apps/production path.
+- **`pages/system/WorkCenterDepartments.tsx`**
+  - `handleSave` — Trigger `syncDepartmentOperations` to persist department operation changes.
+- **`lib/ensureDepartmentReferenceOperation.ts`**
+  - `ensureReferenceOperationForDepartment` — Ensure store/outsource work centers have a catalog reference operation, updating `capture_app` in place via `upsertOperation`.
+- **`supabase/migrations/20260716700000_operation_access_history.sql`** — Historical migration adding `grant_ended_at` to `floor_user_access` and `supersede_operation_catalog`.
+- **`supabase/migrations/20260716800000_supersede_order_and_grant_semantics.sql`** — Historical migration redefining `supersede_operation_catalog`.
+- **`supabase/migrations/20260721130000_save_order_routing_freeze_op_attrs.sql`** — Drops `supersede_operation_catalog`; operation ids are now immutable.
+
+## 2. Process Flow Build
+
+- **`supabase/migrations/current/09_process_flows.sql`** — Migration defining the `process_flows` table with `steps` as inline `jsonb` and RLS policies.
+- **`lib/processFlowDb.ts`**
+  - `processFlowToDbRow` / `processFlowUpdatePayload` — Map `ProcessFlow` to/from database row shapes.
+  - `mapProcessFlowFromDbInline` — Read process flow steps from the `steps` JSONB column.
+  - `newOperationStep` — Build a new `ProcessFlowStep` for a department.
+  - `buildColorwayFlowClone` / `buildOrderFlowClone` — Deep-copy a template for order or colorway routing.
+  - `resolveColorwayProcessFlow` / `resolveOrderProcessFlow` / `resolveFlowToDisplay` — Resolve a template for display.
+- **`components/settings/ProcessFlowEditor.tsx`**
+  - `stepFromCatalogOp` — Build a process flow step from a catalog operation.
+  - `setSteps` — Update form steps, assign `visit_id`s, and pin visit order.
+  - `addDepartmentVisit` / `addOperationToVisit` — Add department visits and operations to the route.
+- **`pages/system/WorkCenterProcessFlows.tsx`**
+  - `handleSave` — Normalize steps, validate, and save the process flow template.
+  - `validateBeforeSave` — Validate capture apps, catalog operations, and visit structure.
+- **`lib/visitPlanning.ts`**
+  - `ensureStepVisitIds` / `normalizeRouteVisitIds` / `groupStepsByVisit` — Assign and group steps into visits.
+  - `validateNoAdjacentSameDeptVisits` / `validateNoDuplicateRouteOperations` / `validateVisitSteps` — Route structure validation.
+  - `ensureRoutingVisitIds` / `groupRoutingRowsByVisit` — Visit helpers for routing rows.
+- **`lib/processFlowStepFlags.ts`**
+  - `ensureVisitIds` / `pinRouteVisitOrder` — Ensure visit ids and pin origin/terminal order.
+  - `primaryOutputIndices` / `transactionIndices` — Compute primary output and handover transaction flags.
+  - `ensureEndpointSteps` — Seed initial origin and terminal steps.
+  - `adjustInsertForProduceLast` / `validateInsertStep` / `resolveInsertIndex` / `resolveNewVisitInsertIndex` — Insert helpers.
+
+## 3. Order Routing
+
+- **`supabase/migrations/current/05_order_routing_steps.sql`** — Migration defining the `order_routing_steps` table (`operation_def_id`, `dept_id`, `dept_name`, `step_label`, `step_type`, `capture_app`, `operation_name`, `transaction_app`, `is_primary_output`, `visit_id`). No `source_template_id` — templates are reference-only for quick injection.
+- **`supabase/migrations/current/10_rpc_save_order_routing.sql`** — Canonical source-of-truth for the `save_order_routing` RPC; freezes `operation_name`, `step_type`, and `capture_app` from the operations catalog on every save.
+- **`supabase/migrations/20260721130000_save_order_routing_freeze_op_attrs.sql`** — Incremental migration applying the frozen-attrs `save_order_routing`, dropping `supersede_operation_catalog`, and aligning `order_routing_steps` columns/checks.
+- **`supabase/migrations/20260721140000_runtime_rpcs_use_frozen_routing_attrs.sql`** — Rewrites all runtime RPCs (`get_factory_production_summary`, `get_factory_schedule_actuals`, `standard_production_alloc_grid`, `get_line_allocation_actuals`, `order_dept_progress_rows`, `get_order_detail_bundle`, `resolve_capture_order_route_id`, `sync_order_route_primary_flags`) to use frozen columns from `order_routing_steps` — no live `operations` joins. Backfills frozen attrs for pre-existing rows. Drops `source_template_id` column.
+- **`supabase/migrations/20260721150000_operations_drop_archived_superseded.sql`** — Drops unused `archived_at` and `superseded_by_id` columns from `operations` (operations use `is_active = false` for archive).
+- **`supabase/migrations/20260721160000_trim_process_flow_steps_jsonb.sql`** — Trims `process_flows.steps` JSONB to minimal shape: `seq`, `operation_def_id`, `name`, `visit_number`.
+- **`lib/orderRoutingEditor.ts`**
+  - `routingStepsFromTemplate` — Convert `ProcessFlow` steps to `OrderRoutingStepRow`s.
+  - `templateStepToRow` — Map a single `ProcessFlowStep` to a routing row.
+  - `enrichRoutingStepDept` — Resolve `dept_id` from `dept_name`.
+  - `enrichRoutingStepFromCatalog` / `enrichRoutingStepsWithCatalog` — Backfill missing `operation_def_id`/label/type/app from the catalog; frozen `order_routing_steps` values take precedence.
+  - `applyTransactionAppFlags` / `computeTransactionAppFlags` — Mark handover transaction flags at end of each visit.
+  - `resequenceRoutingSteps` — Renumber sequence after reorder.
+  - `stabilizeRoutingStepIds` — Reuse existing row ids when visit/operation/app are unchanged.
+  - `fetchOrderRoutingSteps` — Load existing routing steps with slim/legacy column fallback.
+- **`lib/colorwayRouting.ts`**
+  - `buildOrderRoutingStepPayload` — Build routing rows from a template and resolve `operation_def_id` from the catalog.
+  - `toRpcRoutingStep` — Map a routing row to the `save_order_routing` RPC payload.
+  - `saveOrderRoutingAtomic` — Call the `save_order_routing` RPC.
+  - `applyTemplateToOrder` — Apply a process flow template to an order and persist via RPC.
+  - `saveOrderRoutingSteps` — Persist edited routing steps with full replace via RPC.
+- **`components/planning/OrderRoutingEditor.tsx`**
+  - `applyTemplateToDraft` — Replace draft steps with a selected template.
+  - `handleTemplateChange` — Select template and apply to draft.
+  - `buildStepsToSave` — Build final step list for persistence.
+  - `moveVisitDrag` / `removeStep` / `removeVisit` / `updateStep` — Reorder and edit route steps. Origin (first) and terminal (last) visits are pinned and cannot be removed or reordered.
+  - `handleSave` — Persist routing via `saveOrderRoutingSteps`.
+- **`pages/production/StyleDetails.tsx`** — `StyleDetails` page displaying order matrix using `order.routingSteps`.
+- **`pages/production/StyleColorDetails.tsx`** — `StyleColorDetails` page displaying colorway production matrix using `order.routingSteps`.
+- **`lib/orderRoutingFlow.ts`**
+  - `visitPipelineCellsFromRouting` — Build visit pipeline cells from routing steps.
+  - `terminalVisitFromRouting` — Identify the terminal visit from routing steps.
+  - `routingStepsToPipelineRefs` / `routingStepsToFlowRefs` — Convert routing steps to flow/pipeline refs.
+  - `resolveRoutingDeptId` — Resolve `dept_id` from `dept_name`.
+- **`lib/productionMatrixHeaders.ts`**
+  - `matrixColumnsFromRoutingSteps` — Build matrix columns per routing step.
+  - `buildMatrixDeptHeaderGroups` — Group columns by `visit_id`.
+  - `primaryStepIdForVisit` — Determine primary produce step per visit.
+- **`lib/orderSizeProgress.ts`**
+  - `buildSizeProgressLookup` / `buildRouteSizeProgressLookup` — Aggregate production by department and by routing step id across capture tables.
+- **`lib/orderProgressApi.ts`** — Aggregates production summary by order/colorway/department/operation using `order_routing_steps` for route lookup.
+- **`lib/floorBoardApi.ts`**
+  - `fetchFloorDayBoard` — Reads frozen `operation_name`/`step_type`/`capture_app`/`dept_id` from `order_routing_steps`; no live `operations` join for produced-row name resolution.
+- **`stores/dataStore.ts`**
+  - Factory data load — Selects frozen routing-step columns and maps them directly into `order.routing_steps`; no live operations catalog enrichment.
+- **`lib/allocationUtils.ts`**
+  - `routingStepsForAllocation` — Resolve routing steps for a line allocation by `visit_id` or `operationId`.
+  - `allocationRoutingStep` / `allocationDepartmentId` / `allocationDepartmentName` — Get primary routing step and department for an allocation.
+- **`lib/ganttFabricActuals.ts`**
+  - `fetchGanttFabricActuals` — Reads `cutting_sessions.order_route_id` and returns `orderRouteId` for visit-scoped fabric cards.
+- **`lib/mesCapture.ts`**
+  - `logShipmentCapture` / `logRejectionCapture` — Capture shipment/rejection data referencing routing step `operation_id` and `visit_id`.
+
+## 4. User Management / Floor User Access
+
+- **`supabase/migrations/20260714200000_floor_user_access_unified.sql`** — Migration unifying `floor_user_access` table, RLS, `floor_user_operation_ids_json`, `floor_user_derived_apps`, `replace_floor_user_access`, and floor login RPCs.
+- **`supabase/migrations/20260714800000_profiles_floor_access_simplify.sql`** — Migration adding `shipment_qa_enabled`/`preferred_resource_ids`, defining `profile_floor_flags_for_assignment`, `replace_floor_user_access`, `floor_user_derived_apps`, `profile_dept_has_app`, `get_floor_users`, `verify_floor_pin`, and `create_factory_floor_user`.
+- **`supabase/migrations/20260716700000_operation_access_history.sql`** — Migration adding `grant_ended_at` to `floor_user_access` and defining `supersede_operation_catalog`.
+- **`supabase/migrations/20260716800000_supersede_order_and_grant_semantics.sql`** — Migration redefining `replace_floor_user_access` with grant ending/reopening and `floor_user_operation_ids_json` / `floor_user_derived_apps`.
+- **`supabase/migrations/20260716300000_remap_floor_access_on_operation_supersede.sql`** — Migration remapping `floor_user_access` grants when an operation is superseded.
+- **`supabase/migrations/_archive/20260608100000_floor_login_by_email.sql`** — Legacy migration defining `verify_floor_login_by_email`.
+- **`pages/system/UserManagement.tsx`**
+  - `UserManagement` — Main user list and edit panel.
+  - `fetchUsers` — Load profiles and `floor_user_access` operation assignments.
+  - `handleCreateUser` — Validate and create a floor user via `createFactoryUser`.
+  - `handleUpdateUser` — Persist floor access via `replaceFloorUserAccess` and update `profiles`.
+  - `handleToggleStatus` — Activate or deactivate a user.
+  - `requestDeleteUser` / `confirmDeleteUser` — Delete a user via `deleteFactoryUser`.
+  - `openEditPanel` / `openAddPanel` — Open side panel for editing/adding users.
+  - `resolveProfilePayloadForSave` — Compute `assignedApps` and `assignedOperationIds` for save.
+  - `ensureDepartmentAppsForAssigned` — Ensure department flags support assigned apps.
+- **`lib/floorUserAccessDb.ts`**
+  - `fetchFloorUserOperationIdsByProfile` — Read current `floor_user_access` rows per profile.
+  - `fetchFloorUserOperationIds` — Read current operation ids for a single profile.
+  - `replaceFloorUserAccess` — Call `replace_floor_user_access` RPC to update profile flags and operation grants.
+  - `fetchFloorUserArchivedOperations` — Read archived operations from grant history.
+  - `profileFloorFlagsFromRow` / `profileShipmentQaFromRow` / `profilePreferredResourceIdsFromRow` / `profileCanLogWorkforceFromRow` — Map profile row fields.
+- **`lib/floorUserUtils.ts`**
+  - `isTerminalDepartment` / `isFloorLoginRole` / `isSupervisorFloorUser` — Department and role predicates.
+  - `dispatchOperationForDepartment` / `defaultTerminalAssignedOperationIds` — Terminal dispatch operation helpers.
+  - `deriveAssignedAppsForUser` / `deriveAssignedAppsFromOperations` — Derive `assigned_apps` from operations and flags.
+  - `formatAssignedOperationsLabel` / `formatAssignedAppsLabel` — Format assignment labels for UI.
+  - `defaultAssignedOperationIds` / `clampAssignedOperationIds` — Default and clamp operation assignments.
+  - `clampFloorDeptFlags` / `clampSupervisorFloorFlags` / `supervisorFloorExtrasForDepartment` — Clamp flags by department type.
+  - `validateFloorUserPayload` — Validate user creation/update form state.
+  - `resolveFloorTileAccess` — Build floor home tile access from profile data.
+- **`lib/createFactoryUser.ts`**
+  - `createFactoryUser` — Calls `create_factory_floor_user` RPC, falling back to `admin-create-user` Edge Function.
+- **`lib/deleteFactoryUser.ts`**
+  - `deleteFactoryUser` — Calls `admin-delete-user` Edge Function, falling back to `profiles` delete.
+- **`supabase/functions/admin-create-user/index.ts`** — Edge function creating auth user and profile and calling `replace_floor_user_access`.
+- **`supabase/functions/admin-delete-user/index.ts`** — Edge function deleting auth user after factory-admin check.
+
+## Key Joins Using Operation IDs
+
+- **`floor_user_derived_apps(profile_id)`** — Joins `floor_user_access` to `operations` on `operation_id` to collect `capture_app`s for assigned operations (live permission check, unchanged).
+- **`profile_dept_has_app(user_id, factory_id, app)`** — Joins `floor_user_access` to `operations` to validate produce or shipment-qa app access (live permission check, unchanged).
+- **`fetchFloorDayBoard`** (`lib/floorBoardApi.ts`) — Uses frozen `order_routing_steps.operation_name`/`dept_id`/`dept_name`; no live `operations` join for produced-row display.
+- **`save_order_routing` RPC** — Persists `order_routing_steps` with `operation_def_id` (stable lineage pointer) and freezes `dept_id`, `dept_name`, `step_label`, `step_type`, `capture_app`, `operation_name`, `visit_id`, `transaction_app`, `is_primary_output` at save time. No `source_template_id` is stored.
+- **`sync_order_route_primary_flags`** — Uses frozen `step_type` directly from `order_routing_steps`; no `operations` join.
+- **All runtime read RPCs** — Use frozen columns from `order_routing_steps` for `operation_name`, `step_type`, `capture_app`, `dept_id`, `dept_name`, `is_primary_output`. Operations catalog is only consulted at route-save time for freezing.

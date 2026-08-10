@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Production Planning Summary — Reference</title>
+  <link rel="stylesheet" href="planning-summary.print.css" />
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f1f5f9; padding: 24px; }
+    #planning-summary-print-root { position: relative; max-width: 1100px; margin: 0 auto; background: white; padding: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th, td { border: 1px solid #e2e8f0; padding: 6px 8px; }
+    th { background: #f1f5f9; text-align: left; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .text-blue { color: #1d4ed8; }
+    .header-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 24px; font-size: 11px; }
+    .label { font-size: 9px; color: #94a3b8; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div id="planning-summary-print-root">
+  <section class="summary-header-card" style="display:flex;gap:16px;padding:16px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px;">
+    <div style="width:80px;height:80px;background:#f1f5f9;border-radius:8px;"></div>
+    <div class="header-grid" style="flex:1;">
+      <div><span class="label">Style</span><br><strong>Womens Cropped Tee</strong></div>
+      <div><span class="label">PO</span><br><strong>PO-0212113</strong></div>
+      <div><span class="label">Buyer</span><br><strong>Vindoff</strong></div>
+      <div><span class="label">Delivery</span><br><strong class="text-blue">2026-06-30</strong></div>
+      <div><span class="label">SAM</span><br><strong>7 min</strong></div>
+      <div><span class="label">Garment</span><br><strong>Top</strong></div>
+      <div><span class="label">Colorway</span><br><strong>Blue</strong></div>
+      <div><span class="label">Adj Qty</span><br><strong class="text-blue">535 pcs</strong></div>
+    </div>
+  </section>
+
+  <section class="summary-colorway-block" style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px;">
+    <div style="padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+      <strong>Blue</strong> — Adj qty 535 pcs
+    </div>
+    <div class="summary-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Dept</th><th>Resource</th><th class="text-center">WF</th>
+            <th class="text-center">Start</th><th class="text-center">End</th>
+            <th class="text-right">Qty</th><th class="text-center">Days</th>
+            <th class="text-center">Daily</th><th class="text-center">Hourly</th>
+            <th class="text-right">Eff%</th><th class="text-right">Prod</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Cutting</td><td>1</td><td class="text-center">10</td><td class="text-center">24 Jun</td><td class="text-center">25 Jun</td><td class="text-right text-blue">535</td><td class="text-center">2</td><td class="text-center">268</td><td class="text-center">34</td><td class="text-right">85.0%</td><td class="text-right">53.5</td></tr>
+          <tr><td>Sewing</td><td>1</td><td class="text-center">10</td><td class="text-center">26 Jun</td><td class="text-center">27 Jun</td><td class="text-right text-blue">535</td><td class="text-center">2</td><td class="text-center">268</td><td class="text-center">34</td><td class="text-right">85.0%</td><td class="text-right">53.5</td></tr>
+          <tr><td>Finishing</td><td>1</td><td class="text-center">10</td><td class="text-center">29 Jun</td><td class="text-center">29 Jun</td><td class="text-right text-blue">535</td><td class="text-center">1</td><td class="text-center">535</td><td class="text-center">67</td><td class="text-right">85.0%</td><td class="text-right">53.5</td></tr>
+        </tbody>
+        <tfoot>
+          <tr style="background:#eff6ff;font-weight:bold;">
+            <td colspan="5">Total Planned</td>
+            <td class="text-right text-blue">535</td>
+            <td colspan="5"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid #e2e8f0;">
+      <div class="label">Remarks — Blue</div>
+      <p style="margin:4px 0 0;font-size:11px;">Sample remarks text for this colorway.</p>
+    </div>
+  </section>
+  </div>
+</body>
+</html>
