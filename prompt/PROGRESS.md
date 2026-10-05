@@ -18,7 +18,7 @@ Source of truth: `PROMPT/IDE_PROMPT_FABRIC_V4_UI.md`, `PROMPT/MM_FABRIC_V4_DB_CO
 
 - [x] **2.1a–d** Material setup (facilities, stages, process rules, test field rules) — `14e8896`, `29435dd`
 - [x] **2.2a** Mill batches list (`mm_mill_list_batches_v4`), routes, hub link when fabric_v4 ON
-- [ ] **2.2b** New batch form (`mm_mill_save_batch_v4` + roll grid)
+- [x] **2.2b** New batch form (`mm_mill_save_batch_v4` + roll grid + machine/shift/forms) — general batch; style create deferred to Allocated fabrics / next pass
 - [ ] **2.2c** Batch detail + bulk actions
 - [ ] **2.3** Processing (gate v4 on fabric_v4)
 - [ ] **2.4** Quality shared
