@@ -6,6 +6,7 @@ import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { MmSegmentControl } from '../../components/MmSegmentControl';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
+import { MmProcReportsV4Panel } from './MmProcReportsV4Panel';
 import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
@@ -20,6 +21,7 @@ const th =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
 const td = 'px-2 py-1.5 text-[11px] text-slate-700 border-b border-slate-100';
 
+type PageTab = 'challans' | 'reports';
 type Tab = 'pending' | 'returned' | 'all';
 
 function processLabel(value: unknown): string {
@@ -45,6 +47,7 @@ export default function MmProcChallanListV4Page() {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const { data: v4 } = useMmV4Config(true);
 
+  const [pageTab, setPageTab] = useState<PageTab>('challans');
   const [tab, setTab] = useState<Tab>('pending');
   const [side, setSide] = useState<'' | MmV4ProcSide>('');
   const [unitId, setUnitId] = useState('');
@@ -90,7 +93,7 @@ export default function MmProcChallanListV4Page() {
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
-    enabled: Boolean(factoryId),
+    enabled: Boolean(factoryId && pageTab === 'challans'),
   });
 
   const rows = useMemo(() => {
@@ -108,8 +111,21 @@ export default function MmProcChallanListV4Page() {
   }, [listQ.data, tab]);
 
   return (
-    <PageShell loading={listQ.isLoading} skeleton="table">
+    <PageShell loading={pageTab === 'challans' && listQ.isLoading} skeleton="table">
       <div className="flex flex-col gap-3 p-4">
+        <MmSegmentControl<PageTab>
+          value={pageTab}
+          onChange={setPageTab}
+          options={[
+            { value: 'challans', label: 'Challans' },
+            { value: 'reports', label: 'Reports' },
+          ]}
+        />
+
+        {pageTab === 'reports' ? (
+          <MmProcReportsV4Panel />
+        ) : (
+          <>
         <div className="flex flex-wrap items-center gap-2">
           <MmSegmentControl<Tab>
             value={tab}
@@ -252,6 +268,8 @@ export default function MmProcChallanListV4Page() {
             </table>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       <MmProcSendModalV4

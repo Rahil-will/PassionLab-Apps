@@ -23,9 +23,9 @@ Source of truth: `PROMPT/IDE_PROMPT_FABRIC_V4_UI.md`, `PROMPT/MM_FABRIC_V4_DB_CO
 - [x] **2.3** Processing v4 list/detail/send/return/lots/void; OFF keeps existing process pages — `98933a1`
 - [x] **2.4** Quality: test/inspect/passport modals + mill/warehouse QC queues — `67f61f7`
 - [x] **2.5** Warehouse: v4 vendor GRN fields + readiness tab + v4 send from stock — `81700c5`
-- [x] **2.6** Store challan CUT_GATE + readiness preview + cut-at-risk
-- [ ] **2.7** Reports
-- [ ] **2.8** fabric_v4 toggle
+- [x] **2.6** Store challan CUT_GATE + readiness preview + cut-at-risk — `ece55db`
+- [x] **2.7** Process reports tab (loss + quality by machine)
+- [x] **2.8** fabric_v4 toggle next to In-house mill (admin confirm; do not flip real factories)
 
 ## Testing / Final
 
