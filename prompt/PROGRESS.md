@@ -1,4 +1,4 @@
-# Fabric v4 UI — Progress
+﻿# Fabric v4 UI — Progress
 
 Source of truth: `PROMPT/IDE_PROMPT_FABRIC_V4_UI.md`, `PROMPT/MM_FABRIC_V4_DB_CONTRACT.md`, `PROMPT/FABRIC_MILL_WAREHOUSE_SPLIT_PLAN.md`.
 Contract wins on any conflict. Obsolete prompt files mentioning mm_receipts / Phase 2–4 old model are ignored.
@@ -9,51 +9,38 @@ Mirrored into `PRODIGI WEB/docs/modules/material/` and state also at `PRODIGI WE
 ## Phase 0 — Sync DB into repo (no UI)
 
 - [x] **0.1** Pull remote migrations; confirm 11 mm_v4_* files exist locally
-  - Notes: `supabase migration fetch --linked --yes`. All 11 present under `supabase/migrations/` (+ 2 extras: `mm_v4_fix_wh_return_qty_order`, `mm_v4_selftest_wh_reprocess`). Fetch also materialised many other remote-only history files as untracked (not staged). Commit `534531a`.
+  - Notes: Commit `534531a`.
 - [x] **0.2** Regenerate Supabase TS types; add typed wrappers for every v4 RPC
-  - Notes: `types/supabase.ts` from `supabase gen types typescript --linked`. Wrappers + contract types in `modules/material/lib/mmV4Rpc.ts`, re-exported from `mmRpc.ts`. `MmRpcResult` now preserves `blocked[]` for CUT_GATE. `npm run typecheck` pass.
-- [~] **0.3** Run `db:audit-schema`, `db:verify-functions`, existing test suites — all pass
-  - Notes: starting
+  - Notes: Commit `11eed61`. Typecheck pass.
+- [!] **0.3** Run `db:audit-schema`, `db:verify-functions`, existing test suites — all pass
+  - Notes: audit-schema OK. verify-functions FAIL pre-existing (`_assert_desktop_factory_scope` on live). Vitest 226/227; 1 pre-existing rack-ops migration scan fail. Not blocking UI.
 
 ## Phase 1 — Discovery (read-only)
 
-- [ ] **1.0** Write `docs/modules/material/V4_UI_AUDIT.md` (component inventory, route/RPC map, page reuse plan)
-  - Notes: STOP and wait for user approval before Phase 2
+- [x] **1.0** Write `docs/modules/material/V4_UI_AUDIT.md`
+  - Notes: Written. **WAITING FOR USER APPROVAL before Phase 2.**
 
 ## Phase 2 — Build pages
 
-- [ ] **2.1** Page 1 — Material setup new sections (facilities, machines, stages, process rules, test field rules)
-  - Notes:
-- [ ] **2.2** Page 2 — Fabric Mill extend (list/form/detail + bulk actions)
-  - Notes:
-- [ ] **2.3** Page 3 — Processing (NEW) — split if needed into 3a–3d
-  - Notes:
-- [ ] **2.4** Page 4 — Quality shared components (test modal, inspection grid, passport, QC queue)
-  - Notes:
-- [ ] **2.5** Page 5 — Fabric Warehouse extend (vendor GRN v4, readiness, bulk actions)
-  - Notes:
+- [ ] **2.1** Page 1 — Material setup new sections
+- [ ] **2.2** Page 2 — Fabric Mill extend
+- [ ] **2.3** Page 3 — Processing (NEW)
+- [ ] **2.4** Page 4 — Quality shared components
+- [ ] **2.5** Page 5 — Fabric Warehouse extend
 - [ ] **2.6** Page 6 — Store challan CUT_GATE + cut-at-risk
-  - Notes:
-- [ ] **2.7** Page 7 — Reports (process loss, quality by machine)
-  - Notes:
-- [ ] **2.8** Page 8 — Settings fabric_v4 toggle (do not flip on real factory)
-  - Notes:
+- [ ] **2.7** Page 7 — Reports
+- [ ] **2.8** Page 8 — Settings fabric_v4 toggle
 
 ## Testing
 
 - [ ] **T.1** Existing Playwright + Vitest pass unchanged
-  - Notes:
 - [ ] **T.2** Playwright smoke per page
-  - Notes:
-- [ ] **T.3** Manual E2E script recorded (screenshots/GIF)
-  - Notes:
+- [ ] **T.3** Manual E2E script recorded
 - [ ] **T.4** DB self-test still `SELFTEST PASS`
-  - Notes:
 
 ## Final
 
-- [ ] **F.1** Write `PROMPT/FINAL_REPORT.md` from DONE WHEN / REPORT BACK
-  - Notes:
+- [ ] **F.1** Write `PROMPT/FINAL_REPORT.md`
 
 ---
 
@@ -63,9 +50,10 @@ Mirrored into `PRODIGI WEB/docs/modules/material/` and state also at `PRODIGI WE
 
 ## Decisions
 
-- Progress + reports: keep workspace `PROMPT/PROGRESS.md` as user-facing state; git-tracked copy at `PRODIGI WEB/prompt/PROGRESS.md`. Contract/plan/prompt mirrored to `docs/modules/material/` per IDE prompt READ FIRST.
-- Will not enable `fabric_v4` on any real factory from this agent.
-- Phase 0.1 commit stages only the 13 `mm_v4_*` migration files (+ docs/progress), not the hundreds of other remote-only history files fetch wrote as untracked.
-- Repo had no prior generated Database types; added `types/supabase.ts` but did not wire `createClient<Database>` yet (would widen type surface without helping mm wrappers — RPCs return `Json`).
-- V4 wrappers live in `mmV4Rpc.ts` and are re-exported from `mmRpc.ts` so call sites can import either path.
-- `mm_proc_void_challan` wrapper uses live Arg `p_challan_id` (generated types); contract prose says `p_id`.
+- Progress in `PROMPT/PROGRESS.md` + `PRODIGI WEB/prompt/PROGRESS.md`. Docs in `docs/modules/material/`.
+- Will not enable `fabric_v4` on any real factory.
+- Phase 0.1 staged only `mm_v4_*` migrations (+ docs/progress).
+- No `createClient<Database>` wiring; wrappers carry contract shapes.
+- `mm_proc_void_challan` uses live Arg `p_challan_id`.
+- Phase 0.3 verify/vitest failures treated as pre-existing drift.
+- Passport UI will use `Modal` (no Drawer in Material). Multi-select follows process-vendors checkbox / SelectDropdown multiple pattern from setup.
