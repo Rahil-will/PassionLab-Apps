@@ -1,6 +1,7 @@
 export type RoutePath =
   | "#/dashboard"
   | "#/create-order"
+  | "#/create-order/colors"
   | "#/style-details/:id"
   | "#/style-color-details/:id/:colorId"
   | "#/line-assignment"
@@ -14,17 +15,61 @@ export type RoutePath =
   | "#/work-centers/departments"
   | "#/work-centers/buyers"
   | "#/work-centers/process-flows"
+  | "#/work-centers/material"
+  | "#/material-management"
+  | "#/material/mill"
+  | "#/material/mill/batches"
+  | "#/material/mill/batches/new"
+  | "#/material/mill/batches/:batchId"
+  | "#/material/mill/styles"
+  | "#/material/mill/history"
+  | "#/material/mill/stock"
+  | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId"
+  | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/assign"
+  | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/dispatch"
+  | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/challan/:id"
+  | "#/material/mill/unallocated"
+  | "#/material/mill/unallocated/dispatch"
+  | "#/material/mill/unallocated/allocate"
+  | "#/material/mill/unallocated/:batchId"
+  | "#/material/mill/unallocated/:batchId/allocate"
+  | "#/material/process"
+  | "#/material/process/:id"
+  | "#/material/warehouse"
+  | "#/material/warehouse/expected"
+  | "#/material/warehouse/receive-unallocated"
+  | "#/material/warehouse/internal"
+  | "#/material/warehouse/external"
+  | "#/material/warehouse/roll/:kind/:id"
+  | "#/material/warehouse/style/:orderId"
+  | "#/material/warehouse/styles"
+  | "#/material/warehouse/racks"
+  | "#/material/warehouse/racks/move"
+  | "#/material/warehouse/store"
+  | "#/material/warehouse/store/:id"
+  | "#/material/warehouse/dispatch"
+  | "#/material/warehouse/dispatch/:orderId/:colorwayId/:fabricLineId"
+  | "#/material/warehouse/dispatch/:orderId/:colorwayId/:fabricLineId/send"
+  | "#/material/warehouse/testing"
+  | "#/material/warehouse/testing/:id"
+  | "#/material/warehouse/stock"
+  | "#/material/warehouse/returns"
+  | "#/material/warehouse/returns/:id"
+  | "#/material/warehouse/end-bits"
+  | "#/material/warehouse/movements"
   | "#/user-management"
   | "#/reports"
   | "#/reports/day"
   | "#/reports/style"
   | "#/reports/department"
   | "#/production/order-completion"
-  | "#/planning/transaction-report";
+  | "#/planning/transaction-report"
+  | "#/mm";
 
 export const RoutePath = {
   DASHBOARD: "#/dashboard",
   CREATE_ORDER: "#/create-order",
+  CREATE_ORDER_COLOR: "#/create-order/colors",
   STYLE_DETAILS: "#/style-details/:id",
   STYLE_COLOR_DETAILS: "#/style-color-details/:id/:colorId",
   LINE_ASSIGNMENT: "#/line-assignment",
@@ -38,6 +83,48 @@ export const RoutePath = {
   WORK_CENTER_DEPARTMENTS: "#/work-centers/departments",
   WORK_CENTER_BUYERS: "#/work-centers/buyers",
   WORK_CENTER_PROCESS_FLOWS: "#/work-centers/process-flows",
+  WORK_CENTER_MATERIAL: "#/work-centers/material",
+  MATERIAL_MANAGEMENT: "#/material-management",
+  MATERIAL_MILL: "#/material/mill",
+  MATERIAL_MILL_BATCHES: "#/material/mill/batches",
+  MATERIAL_MILL_BATCH_NEW: "#/material/mill/batches/new",
+  MATERIAL_MILL_BATCH_DETAIL: "#/material/mill/batches/:batchId",
+  MATERIAL_MILL_STYLES: "#/material/mill/styles",
+  MATERIAL_MILL_HISTORY: "#/material/mill/history",
+  MATERIAL_MILL_STOCK: "#/material/mill/stock",
+  MATERIAL_MILL_LINE: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId",
+  MATERIAL_MILL_ASSIGN: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/assign",
+  MATERIAL_MILL_DISPATCH: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/dispatch",
+  MATERIAL_MILL_CHALLAN: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/challan/:id",
+  MATERIAL_MILL_UNALLOCATED: "#/material/mill/unallocated",
+  MATERIAL_MILL_UNALLOCATED_DISPATCH: "#/material/mill/unallocated/dispatch",
+  MATERIAL_MILL_UNALLOCATED_ALLOCATE: "#/material/mill/unallocated/allocate",
+  MATERIAL_MILL_UNALLOCATED_LINE: "#/material/mill/unallocated/:batchId",
+  MATERIAL_MILL_UNALLOCATED_LINE_ALLOCATE: "#/material/mill/unallocated/:batchId/allocate",
+  MATERIAL_PROCESS: "#/material/process",
+  MATERIAL_PROCESS_DETAIL: "#/material/process/:id",
+  MATERIAL_WAREHOUSE: "#/material/warehouse",
+  MATERIAL_WAREHOUSE_EXPECTED: "#/material/warehouse/expected",
+  MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED: "#/material/warehouse/receive-unallocated",
+  MATERIAL_WAREHOUSE_INTERNAL: "#/material/warehouse/internal",
+  MATERIAL_WAREHOUSE_EXTERNAL: "#/material/warehouse/external",
+  MATERIAL_WAREHOUSE_ROLL: "#/material/warehouse/roll/:kind/:id",
+  MATERIAL_WAREHOUSE_STYLE: "#/material/warehouse/style/:orderId",
+  MATERIAL_WAREHOUSE_STYLES: "#/material/warehouse/styles",
+  MATERIAL_WAREHOUSE_RACKS: "#/material/warehouse/racks",
+  MATERIAL_WAREHOUSE_RACKS_MOVE: "#/material/warehouse/racks/move",
+  MATERIAL_WAREHOUSE_STORE: "#/material/warehouse/store",
+  MATERIAL_WAREHOUSE_STORE_DETAIL: "#/material/warehouse/store/:id",
+  MATERIAL_WAREHOUSE_DISPATCH: "#/material/warehouse/dispatch",
+  MATERIAL_WAREHOUSE_DISPATCH_LINE: "#/material/warehouse/dispatch/:orderId/:colorwayId/:fabricLineId",
+  MATERIAL_WAREHOUSE_DISPATCH_SEND: "#/material/warehouse/dispatch/:orderId/:colorwayId/:fabricLineId/send",
+  MATERIAL_WAREHOUSE_TESTING: "#/material/warehouse/testing",
+  MATERIAL_WAREHOUSE_TESTING_DETAIL: "#/material/warehouse/testing/:id",
+  MATERIAL_WAREHOUSE_STOCK: "#/material/warehouse/stock",
+  MATERIAL_WAREHOUSE_RETURNS: "#/material/warehouse/returns",
+  MATERIAL_WAREHOUSE_RETURNS_DETAIL: "#/material/warehouse/returns/:id",
+  MATERIAL_WAREHOUSE_END_BITS: "#/material/warehouse/end-bits",
+  MATERIAL_WAREHOUSE_MOVEMENTS: "#/material/warehouse/movements",
   USER_MANAGEMENT: "#/user-management",
   REPORTS: "#/reports",
   REPORTS_DAY: "#/reports/day",
@@ -45,6 +132,7 @@ export const RoutePath = {
   REPORTS_DEPARTMENT: "#/reports/department",
   ORDER_COMPLETION: "#/production/order-completion",
   TRANSACTION_REPORT: "#/planning/transaction-report",
+  MM_HOME: "#/mm",
 } as const;
 
 export type Department =
