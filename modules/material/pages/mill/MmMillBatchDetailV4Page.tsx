@@ -10,6 +10,7 @@ import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { MmAllocateRollsModal } from '../../components/MmAllocateRollsModal';
+import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
 import { MmRollEntryGrid } from '../../components/MmRollEntryGrid';
 import {
   blankDraftRoll,
@@ -113,6 +114,7 @@ export default function MmMillBatchDetailV4Page() {
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [challanNo, setChallanNo] = useState('');
@@ -189,7 +191,7 @@ export default function MmMillBatchDetailV4Page() {
   };
 
   const laterAction = (label: string) => {
-    showNotification(`${label} opens with Processing / Quality (next pages)`);
+    showNotification(`${label} opens with Quality (next page)`);
   };
 
   const runDispatch = async () => {
@@ -375,7 +377,13 @@ export default function MmMillBatchDetailV4Page() {
                 : ''}
             </span>
             <DesktopWriteGate>
-              <Button type="button" size="sm" variant="secondary" onClick={() => laterAction('Send to processing')}>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={selectedAtMill.length === 0}
+                onClick={() => setSendOpen(true)}
+              >
                 Send to processing
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={() => laterAction('Test')}>
@@ -499,6 +507,18 @@ export default function MmMillBatchDetailV4Page() {
               : 'Assigned to style.',
             'success',
           );
+          setSelected({});
+          void refresh();
+        }}
+      />
+
+      <MmProcSendModalV4
+        open={sendOpen}
+        side="mill"
+        preselectedRollIds={selectedAtMill.map((r) => r.roll_id)}
+        onClose={() => setSendOpen(false)}
+        onSent={() => {
+          setSendOpen(false);
           setSelected({});
           void refresh();
         }}
