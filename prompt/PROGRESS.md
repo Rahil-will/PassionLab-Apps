@@ -29,18 +29,20 @@ Source of truth: `PROMPT/IDE_PROMPT_FABRIC_V4_UI.md`, `PROMPT/MM_FABRIC_V4_DB_CO
 
 ## Testing / Final
 
-- [ ] **T.1–T.4**, **F.1**
+- [x] **T** typecheck green after Phase 2; vitest migration-scan / verify-functions left as pre-existing `[!]`
+- [x] **F.1** `prompt/FINAL_REPORT.md`
 
 ---
 
 ## Contract gaps
 
-(none)
+(none blocking)
 
 ## Decisions
 
 - Untracked remote-only migrations from fetch: leave untracked; never stage in fabric v4 commits.
-- Passport = Modal; process/mill v4 UIs gated on `fabric_v4`; OFF keeps today.
-- Do not flip `fabric_v4` on real factories.
+- Passport = Modal (max-w-5xl); process/mill v4 UIs gated on `fabric_v4`; OFF keeps today.
+- Do not flip `fabric_v4` on real factories (toggle UI only).
 - Vitest rack-ops pre-existing at `b258dcb` (`20260922290000_mm_live_stale_replay.sql`, `\bVOLATILE\b`).
 - Smoke skips placeholder admin creds.
+- Style mill batch create deferred on form (general batch + Allocated fabrics path).
