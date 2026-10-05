@@ -16,6 +16,54 @@ export const queryKeys = {
   workforceRates: (factoryId: string) => ['settings', factoryId, 'workforceRates'] as const,
   appConfiguration: (factoryId: string) => ['settings', factoryId, 'appConfiguration'] as const,
 
+  factoryModules: (factoryId: string) => ['factoryModules', factoryId] as const,
+  mmConfigBundle: (factoryId: string) => ['mm', factoryId, 'configBundle'] as const,
+  mmV4Config: (factoryId: string) => ['mm', factoryId, 'v4Config'] as const,
+  mmFactoryFeatures: (factoryId: string) => ['mm', factoryId, 'factoryFeatures'] as const,
+  mmTrimParams: (factoryId: string) => ['mm', factoryId, 'trimParams'] as const,
+  mmRequirementCatalog: (factoryId: string) => ['mm', factoryId, 'requirementCatalog'] as const,
+  mmOps: (factoryId: string) => ['mm', factoryId, 'ops'] as const,
+  mmWarehouseDashboard: (factoryId: string) => ['mm', factoryId, 'ops', 'warehouseDashboard'] as const,
+  mmInChallans: (factoryId: string, source: string, status: string) =>
+    ['mm', factoryId, 'ops', 'inChallans', source, status] as const,
+  mmInChallan: (factoryId: string, id: string) => ['mm', factoryId, 'ops', 'inChallan', id] as const,
+  mmStoreChallans: (factoryId: string, status: string) =>
+    ['mm', factoryId, 'ops', 'storeChallans', status] as const,
+  mmStoreChallan: (factoryId: string, id: string) => ['mm', factoryId, 'ops', 'storeChallan', id] as const,
+  mmStoreStock: (factoryId: string, styleMaterialId: string) =>
+    ['mm', factoryId, 'ops', 'storeStock', styleMaterialId] as const,
+  mmOrderFabricLines: (factoryId: string, orderId: string) =>
+    ['mm', factoryId, 'ops', 'fabricLines', orderId] as const,
+  mmMillBoard: (factoryId: string, orderIds: string) =>
+    ['mm', factoryId, 'ops', 'millBoard', orderIds] as const,
+  mmWarehouseBoard: (factoryId: string, orderIds: string) =>
+    ['mm', factoryId, 'ops', 'warehouseBoard', orderIds] as const,
+  mmMillLine: (factoryId: string, orderId: string, colorwayId: string, fabricLineId: string) =>
+    ['mm', factoryId, 'ops', 'millLine', 'cat', orderId, colorwayId, fabricLineId] as const,
+  mmStyleWarehouse: (factoryId: string, orderId: string) =>
+    ['mm', factoryId, 'ops', 'styleWarehouse', orderId] as const,
+  mmStyleReconciliation: (factoryId: string, orderId: string) =>
+    ['mm', factoryId, 'ops', 'styleReconciliation', orderId] as const,
+  mmRackMaster: (factoryId: string) => ['mm', factoryId, 'config', 'rackMaster'] as const,
+  mmRackOpsBoard: (factoryId: string) => ['mm', factoryId, 'ops', 'rackOpsBoard'] as const,
+  mmWarehouseDispatch: (factoryId: string, orderId: string) =>
+    ['mm', factoryId, 'ops', 'warehouseDispatch', orderId] as const,
+  mmWarehouseStock: (
+    factoryId: string,
+    search: string,
+    location: string,
+    buyer: string,
+    page: number,
+  ) => ['mm', factoryId, 'ops', 'warehouseStock', search, location, buyer, page] as const,
+  mmStockMovements: (factoryId: string, search: string, kind: string, page: number) =>
+    ['mm', factoryId, 'ops', 'stockMovements', search, kind, page] as const,
+  mmExpectedBoard: (factoryId: string, status: string, search: string, page: number) =>
+    ['mm', factoryId, 'ops', 'expectedBoard', status, search, page] as const,
+  mmUnallocatedMill: (factoryId: string) => ['mm', factoryId, 'ops', 'unallocatedMill'] as const,
+  mmMillStock: (factoryId: string, search: string, alloc: string, place: string, page: number) =>
+    ['mm', factoryId, 'ops', 'millStock', search, alloc, place, page] as const,
+  mmFptSummary: (factoryId: string) => ['mm', factoryId, 'ops', 'fptSummary'] as const,
+
   resources: (factoryId: string) => ['resources', factoryId] as const,
 
   ordersList: (
@@ -64,6 +112,9 @@ export const queryKeys = {
 
   reportDay: (factoryId: string, dateFrom: string, dateTo: string, deptId?: string) =>
     ['reports', factoryId, 'day', dateFrom, dateTo, deptId ?? 'all'] as const,
+
+  reportDayAudits: (factoryId: string, dateFrom: string, dateTo: string, deptId?: string) =>
+    ['reports', factoryId, 'day', dateFrom, dateTo, deptId ?? 'all', 'audits'] as const,
 
   reportMeta: (factoryId: string) => ['reports', factoryId, 'meta'] as const,
 };
