@@ -105,7 +105,6 @@ export default function MmMillBatchesV4Page() {
             size="sm"
             icon={Plus}
             onClick={() => requestNavigate(RoutePath.MATERIAL_MILL_BATCH_NEW)}
-            title="Batch form ships in the next slice"
           >
             New batch
           </Button>

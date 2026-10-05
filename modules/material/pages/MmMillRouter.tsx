@@ -16,6 +16,7 @@ import MmMillDispatchHistoryPage from './mill/MmMillDispatchHistoryPage';
 import MmMillStockPage from './mill/MmMillStockPage';
 import MmMillBatchesV4Page from './mill/MmMillBatchesV4Page';
 import MmMillBatchFormV4Page from './mill/MmMillBatchFormV4Page';
+import MmMillBatchDetailV4Page from './mill/MmMillBatchDetailV4Page';
 import MmWarehouseRollDetail from './warehouse/MmWarehouseRollDetail';
 
 export default function MmMillRouter() {
@@ -41,9 +42,7 @@ export default function MmMillRouter() {
   if (route === RoutePath.MATERIAL_MILL_STOCK) return <MmMillStockPage />;
   if (route === RoutePath.MATERIAL_MILL_STYLES) return <MmMillBoardPage />;
   if (route === RoutePath.MATERIAL_MILL_BATCH_NEW) return <MmMillBatchFormV4Page />;
-  if (route === RoutePath.MATERIAL_MILL_BATCHES || route === RoutePath.MATERIAL_MILL_BATCH_DETAIL) {
-    // DETAIL still uses list until Page 2c batch detail lands.
-    return <MmMillBatchesV4Page />;
-  }
+  if (route === RoutePath.MATERIAL_MILL_BATCH_DETAIL) return <MmMillBatchDetailV4Page />;
+  if (route === RoutePath.MATERIAL_MILL_BATCHES) return <MmMillBatchesV4Page />;
   return <MmMillLanding />;
 }
