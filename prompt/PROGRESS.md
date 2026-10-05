@@ -9,11 +9,11 @@ Mirrored into `PRODIGI WEB/docs/modules/material/` and state also at `PRODIGI WE
 ## Phase 0 — Sync DB into repo (no UI)
 
 - [x] **0.1** Pull remote migrations; confirm 11 mm_v4_* files exist locally
-  - Notes: `supabase migration fetch --linked --yes`. All 11 present under `supabase/migrations/` (+ 2 extras: `mm_v4_fix_wh_return_qty_order`, `mm_v4_selftest_wh_reprocess`). Fetch also materialised many other remote-only history files as untracked (not staged).
-- [~] **0.2** Regenerate Supabase TS types; add typed wrappers for every v4 RPC
-  - Notes: starting — wrappers go in `modules/material/lib/mmRpc.ts` (existing pattern); no prior generated Database types in repo
-- [ ] **0.3** Run `db:audit-schema`, `db:verify-functions`, existing test suites — all pass
-  - Notes:
+  - Notes: `supabase migration fetch --linked --yes`. All 11 present under `supabase/migrations/` (+ 2 extras: `mm_v4_fix_wh_return_qty_order`, `mm_v4_selftest_wh_reprocess`). Fetch also materialised many other remote-only history files as untracked (not staged). Commit `534531a`.
+- [x] **0.2** Regenerate Supabase TS types; add typed wrappers for every v4 RPC
+  - Notes: `types/supabase.ts` from `supabase gen types typescript --linked`. Wrappers + contract types in `modules/material/lib/mmV4Rpc.ts`, re-exported from `mmRpc.ts`. `MmRpcResult` now preserves `blocked[]` for CUT_GATE. `npm run typecheck` pass.
+- [~] **0.3** Run `db:audit-schema`, `db:verify-functions`, existing test suites — all pass
+  - Notes: starting
 
 ## Phase 1 — Discovery (read-only)
 
@@ -66,3 +66,6 @@ Mirrored into `PRODIGI WEB/docs/modules/material/` and state also at `PRODIGI WE
 - Progress + reports: keep workspace `PROMPT/PROGRESS.md` as user-facing state; git-tracked copy at `PRODIGI WEB/prompt/PROGRESS.md`. Contract/plan/prompt mirrored to `docs/modules/material/` per IDE prompt READ FIRST.
 - Will not enable `fabric_v4` on any real factory from this agent.
 - Phase 0.1 commit stages only the 13 `mm_v4_*` migration files (+ docs/progress), not the hundreds of other remote-only history files fetch wrote as untracked.
+- Repo had no prior generated Database types; added `types/supabase.ts` but did not wire `createClient<Database>` yet (would widen type surface without helping mm wrappers — RPCs return `Json`).
+- V4 wrappers live in `mmV4Rpc.ts` and are re-exported from `mmRpc.ts` so call sites can import either path.
+- `mm_proc_void_challan` wrapper uses live Arg `p_challan_id` (generated types); contract prose says `p_id`.
