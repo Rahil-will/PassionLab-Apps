@@ -21,6 +21,8 @@ export type RoutePath =
   | "#/material/mill/batches"
   | "#/material/mill/batches/new"
   | "#/material/mill/batches/:batchId"
+  | "#/material/mill/qc"
+  | "#/material/warehouse/qc"
   | "#/material/mill/styles"
   | "#/material/mill/history"
   | "#/material/mill/stock"
@@ -89,6 +91,7 @@ export const RoutePath = {
   MATERIAL_MILL_BATCHES: "#/material/mill/batches",
   MATERIAL_MILL_BATCH_NEW: "#/material/mill/batches/new",
   MATERIAL_MILL_BATCH_DETAIL: "#/material/mill/batches/:batchId",
+  MATERIAL_MILL_QC: "#/material/mill/qc",
   MATERIAL_MILL_STYLES: "#/material/mill/styles",
   MATERIAL_MILL_HISTORY: "#/material/mill/history",
   MATERIAL_MILL_STOCK: "#/material/mill/stock",
@@ -120,6 +123,7 @@ export const RoutePath = {
   MATERIAL_WAREHOUSE_DISPATCH_SEND: "#/material/warehouse/dispatch/:orderId/:colorwayId/:fabricLineId/send",
   MATERIAL_WAREHOUSE_TESTING: "#/material/warehouse/testing",
   MATERIAL_WAREHOUSE_TESTING_DETAIL: "#/material/warehouse/testing/:id",
+  MATERIAL_WAREHOUSE_QC: "#/material/warehouse/qc",
   MATERIAL_WAREHOUSE_STOCK: "#/material/warehouse/stock",
   MATERIAL_WAREHOUSE_RETURNS: "#/material/warehouse/returns",
   MATERIAL_WAREHOUSE_RETURNS_DETAIL: "#/material/warehouse/returns/:id",

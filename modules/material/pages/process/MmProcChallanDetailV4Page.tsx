@@ -7,6 +7,7 @@ import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
+import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
 import { MmSegmentControl } from '../../components/MmSegmentControl';
 import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
@@ -83,6 +84,7 @@ export default function MmProcChallanDetailV4Page() {
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [reprocessOpen, setReprocessOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   const [lotNo, setLotNo] = useState('');
   const [lotMachineId, setLotMachineId] = useState('');
   const [lotLineIds, setLotLineIds] = useState<string[]>([]);
@@ -326,12 +328,7 @@ export default function MmProcChallanDetailV4Page() {
           </div>
           <DesktopWriteGate>
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => showNotification('Test opens with Quality (next page)')}
-              >
+              <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
                 Test this challan
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={() => setReprocessOpen(true)}>
@@ -794,6 +791,18 @@ export default function MmProcChallanDetailV4Page() {
         onSent={(newId) => {
           setReprocessOpen(false);
           requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: newId });
+        }}
+      />
+
+      <MmQcTestModalV4
+        open={testOpen}
+        scopeKind="process_challan"
+        scopeId={id}
+        defaultSiteSide="processing"
+        onClose={() => setTestOpen(false)}
+        onSaved={() => {
+          setTestOpen(false);
+          void refresh();
         }}
       />
     </PageShell>

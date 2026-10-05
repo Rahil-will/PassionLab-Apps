@@ -476,6 +476,13 @@ export default function MmMillLanding() {
                 />
               </HubGroup>
               <HubGroup label="Quality" tone="quality">
+                {fabricV4 ? (
+                  <HubLink
+                    title="QC queue"
+                    subtitle="Rolls at mill that still need test or inspection"
+                    onClick={() => requestNavigate(RoutePath.MATERIAL_MILL_QC)}
+                  />
+                ) : null}
                 <HubLink
                   title="Mill testing"
                   subtitle="Test parameters and shade on a mill batch"

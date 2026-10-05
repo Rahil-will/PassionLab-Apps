@@ -188,6 +188,13 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     isParameterized: true,
     subtitle: 'Batch rolls, custody, tests, and process challans.',
   },
+  [RoutePath.MATERIAL_MILL_QC]: {
+    path: RoutePath.MATERIAL_MILL_QC,
+    displayName: 'Mill QC queue',
+    parent: RoutePath.MATERIAL_MILL,
+    section: 'Material',
+    subtitle: 'Rolls at the mill that still need test or inspection.',
+  },
   [RoutePath.MATERIAL_MILL]: {
     path: RoutePath.MATERIAL_MILL,
     displayName: 'Fabric Mill',
@@ -424,6 +431,13 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     section: 'Material',
     subtitle: 'Adjust warehouse values, then pass or fail each roll',
     isParameterized: true,
+  },
+  [RoutePath.MATERIAL_WAREHOUSE_QC]: {
+    path: RoutePath.MATERIAL_WAREHOUSE_QC,
+    displayName: 'Warehouse QC queue',
+    parent: RoutePath.MATERIAL_WAREHOUSE,
+    section: 'Material',
+    subtitle: 'Warehouse rolls that still need test or inspection.',
   },
   [RoutePath.MATERIAL_WAREHOUSE_RETURNS]: {
     path: RoutePath.MATERIAL_WAREHOUSE_RETURNS,

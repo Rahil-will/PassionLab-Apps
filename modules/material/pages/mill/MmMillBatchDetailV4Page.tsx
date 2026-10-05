@@ -11,7 +11,10 @@ import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { MmAllocateRollsModal } from '../../components/MmAllocateRollsModal';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
+import { MmQcInspectModalV4 } from '../../components/MmQcInspectModalV4';
+import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
 import { MmRollEntryGrid } from '../../components/MmRollEntryGrid';
+import { MmRollPassportModalV4 } from '../../components/MmRollPassportModalV4';
 import {
   blankDraftRoll,
   draftsToRollWrites,
@@ -115,6 +118,9 @@ export default function MmMillBatchDetailV4Page() {
   const [tagOpen, setTagOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const [passportId, setPassportId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [challanNo, setChallanNo] = useState('');
@@ -188,10 +194,6 @@ export default function MmMillBatchDetailV4Page() {
     const next: Record<string, boolean> = {};
     for (const roll of rolls) next[roll.roll_id] = true;
     setSelected(next);
-  };
-
-  const laterAction = (label: string) => {
-    showNotification(`${label} opens with Quality (next page)`);
   };
 
   const runDispatch = async () => {
@@ -386,10 +388,10 @@ export default function MmMillBatchDetailV4Page() {
               >
                 Send to processing
               </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={() => laterAction('Test')}>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
                 Test
               </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={() => laterAction('Inspect')}>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setInspectOpen(true)}>
                 Inspect
               </Button>
               <Button
@@ -463,7 +465,15 @@ export default function MmMillBatchDetailV4Page() {
                           aria-label={`Select ${roll.roll_code}`}
                         />
                       </td>
-                      <td className={`${td} font-semibold text-slate-900`}>{roll.roll_code}</td>
+                      <td className={`${td} font-semibold text-slate-900`}>
+                        <button
+                          type="button"
+                          className="hover:underline"
+                          onClick={() => setPassportId(roll.roll_id)}
+                        >
+                          {roll.roll_code}
+                        </button>
+                      </td>
                       <td className={td}>
                         {roll.stage_code ? <Badge variant="outline">{roll.stage_code}</Badge> : '—'}
                       </td>
@@ -522,6 +532,36 @@ export default function MmMillBatchDetailV4Page() {
           setSelected({});
           void refresh();
         }}
+      />
+
+      <MmQcTestModalV4
+        open={testOpen}
+        scopeKind={selectedRolls.length > 0 ? 'rolls' : 'mill_batch'}
+        scopeId={selectedRolls.length > 0 ? null : batchId}
+        rollIds={selectedRolls.length > 0 ? selectedRolls.map((r) => r.roll_id) : undefined}
+        defaultSiteSide="mill"
+        onClose={() => setTestOpen(false)}
+        onSaved={() => {
+          setTestOpen(false);
+          void refresh();
+        }}
+      />
+      <MmQcInspectModalV4
+        open={inspectOpen}
+        scopeKind={selectedRolls.length > 0 ? 'rolls' : 'mill_batch'}
+        scopeId={selectedRolls.length > 0 ? null : batchId}
+        rollIds={selectedRolls.length > 0 ? selectedRolls.map((r) => r.roll_id) : undefined}
+        defaultSiteSide="mill"
+        onClose={() => setInspectOpen(false)}
+        onSaved={() => {
+          setInspectOpen(false);
+          void refresh();
+        }}
+      />
+      <MmRollPassportModalV4
+        open={Boolean(passportId)}
+        rollId={passportId}
+        onClose={() => setPassportId(null)}
       />
 
       <Modal isOpen={dispatchOpen} onClose={busy ? () => undefined : () => setDispatchOpen(false)} className="max-w-lg">
