@@ -5,6 +5,7 @@ import { useNavigationStore } from '../../stores';
 import { useSupportDropdownsCatalog, useSizeGroupsCatalog } from '../../lib/queries/settingsSlices';
 import { dropdownValuesForCategory } from '../../lib/supportDropdownValues';
 import { ShipmentDropdownChips } from './ShipmentDropdownChips';
+import { SizeChipsInput } from './SizeChipsInput';
 import { DesktopWriteGate } from '../DesktopWriteGate';
 import { catalogDef } from '../../lib/supportDropdownCatalog';
 
@@ -38,7 +39,7 @@ export const BuyerEditor: React.FC<BuyerEditorProps> = ({ formData, setFormData 
 
   const localSizeGroups = (formData._sizeGroups as Array<Record<string, unknown>>) || [];
   const [newSizeGroupName, setNewSizeGroupName] = useState('');
-  const [newSizesStr, setNewSizesStr] = useState('');
+  const [draftSizes, setDraftSizes] = useState<string[]>([]);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
 
   const buyerTypes = dropdownValuesForCategory(supportDropdowns, 'buyer_type');
@@ -79,7 +80,7 @@ export const BuyerEditor: React.FC<BuyerEditorProps> = ({ formData, setFormData 
   const patch = (fields: Record<string, unknown>) => setFormData({ ...formData, ...fields });
 
   const addSizeGroup = () => {
-    if (!newSizeGroupName || !newSizesStr) return;
+    if (!newSizeGroupName || draftSizes.length === 0) return;
     const exists = localSizeGroups.some(
       (sg) =>
         String(sg.name).toLowerCase() === newSizeGroupName.toLowerCase() && sg.id !== editingGroup,
@@ -88,7 +89,8 @@ export const BuyerEditor: React.FC<BuyerEditorProps> = ({ formData, setFormData 
       alert(`Size Group name "${newSizeGroupName}" already exists for this buyer.`);
       return;
     }
-    const sizesArray = newSizesStr.split(',').map((s) => s.trim()).filter(Boolean);
+    const sizesArray = draftSizes.map((s) => s.trim()).filter(Boolean);
+    if (sizesArray.length === 0) return;
     if (editingGroup) {
       patch({
         _sizeGroups: localSizeGroups.map((sg) =>
@@ -111,7 +113,7 @@ export const BuyerEditor: React.FC<BuyerEditorProps> = ({ formData, setFormData 
       });
     }
     setNewSizeGroupName('');
-    setNewSizesStr('');
+    setDraftSizes([]);
   };
 
   return (
@@ -263,27 +265,35 @@ export const BuyerEditor: React.FC<BuyerEditorProps> = ({ formData, setFormData 
           </div>
           {/* Add / Edit form at top */}
           <DesktopWriteGate>
-          <div className="shrink-0 p-4 border-b border-slate-100 bg-slate-50/40 space-y-2">
+          <div className="shrink-0 p-4 border-b border-slate-100 bg-slate-50/40 space-y-3">
             <Input
-              placeholder="Group name"
+              placeholder="Group name (e.g. GGS)"
               value={newSizeGroupName}
               onChange={(e) => setNewSizeGroupName(e.target.value)}
               className="bg-white"
             />
-            <Input
-              placeholder="Sizes: S, M, L…"
-              value={newSizesStr}
-              onChange={(e) => setNewSizesStr(e.target.value)}
-              className="bg-white"
-            />
+            <SizeChipsInput sizes={draftSizes} onChange={setDraftSizes} />
             <Button
               className="w-full"
               icon={editingGroup ? undefined : Plus}
               onClick={addSizeGroup}
-              disabled={!newSizeGroupName || !newSizesStr}
+              disabled={!newSizeGroupName.trim() || draftSizes.length === 0}
             >
               {editingGroup ? 'Update group' : 'Add group'}
             </Button>
+            {editingGroup && (
+              <button
+                type="button"
+                className="w-full text-[10px] font-medium text-slate-500 hover:text-slate-700"
+                onClick={() => {
+                  setEditingGroup(null);
+                  setNewSizeGroupName('');
+                  setDraftSizes([]);
+                }}
+              >
+                Cancel edit
+              </button>
+            )}
           </div>
           </DesktopWriteGate>
           {/* Groups list below */}
@@ -311,7 +321,7 @@ export const BuyerEditor: React.FC<BuyerEditorProps> = ({ formData, setFormData 
                   <Button size="sm" variant="ghost" icon={Edit} onClick={() => {
                     setEditingGroup(sg.id as string);
                     setNewSizeGroupName(String(sg.name));
-                    setNewSizesStr((Array.isArray(sg.sizes) ? sg.sizes : []).join(', '));
+                    setDraftSizes([...(Array.isArray(sg.sizes) ? (sg.sizes as string[]) : [])]);
                   }} />
                   <Button
                     size="sm"

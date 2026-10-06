@@ -1,8 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { FabricCutQtyComponentRow } from '../../lib/fabricCutQtyDisplay';
+import {
+  fabricComponentQty,
+  resolveCuttingCellDisplay,
+} from '../../lib/fabricCutQtyDisplay';
 
 interface FabricOutputBreakdownPopoverProps {
+  /** Primary-fabric headline qty from size progress (0 when primary not cut). */
   value: number;
   components: FabricCutQtyComponentRow[];
   size?: string;
@@ -18,6 +23,12 @@ export const FabricOutputBreakdownPopover: React.FC<FabricOutputBreakdownPopover
   const anchorRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { displayQty, secondaryOnly } = resolveCuttingCellDisplay({
+    primaryValue: value,
+    components,
+    size,
+  });
 
   const updatePosition = () => {
     const rect = anchorRef.current?.getBoundingClientRect();
@@ -50,14 +61,20 @@ export const FabricOutputBreakdownPopover: React.FC<FabricOutputBreakdownPopover
     if (closeTimer.current) clearTimeout(closeTimer.current);
   }, []);
 
-  if (components.length === 0) {
-    return value > 0 ? <>{value.toLocaleString()}</> : <span className="text-slate-200">—</span>;
+  if (displayQty <= 0) {
+    return <span className="text-slate-200">—</span>;
   }
 
-  const rows = components.map((component) => ({
-    ...component,
-    value: size ? Number(component.by_size?.[size]) || 0 : component.total,
-  }));
+  if (components.length === 0) {
+    return <>{displayQty.toLocaleString()}</>;
+  }
+
+  const rows = components
+    .map((component) => ({
+      ...component,
+      value: fabricComponentQty(component, size),
+    }))
+    .filter((component) => component.value > 0);
 
   const popover = open ? (
     <div
@@ -69,6 +86,7 @@ export const FabricOutputBreakdownPopover: React.FC<FabricOutputBreakdownPopover
     >
       <p className="mb-2 text-[8px] font-semibold uppercase tracking-wider text-slate-400">
         Fabric output{size ? ` · Size ${size}` : ''}
+        {secondaryOnly ? ' · secondary only' : ''}
       </p>
       <div className="space-y-1">
         {rows.map((component) => (
@@ -80,6 +98,11 @@ export const FabricOutputBreakdownPopover: React.FC<FabricOutputBreakdownPopover
           </div>
         ))}
       </div>
+      {secondaryOnly && (
+        <p className="mt-2 text-[9px] leading-snug text-slate-400">
+          Primary fabric not cut yet — showing secondary cut qty.
+        </p>
+      )}
     </div>
   ) : null;
 
@@ -88,7 +111,16 @@ export const FabricOutputBreakdownPopover: React.FC<FabricOutputBreakdownPopover
       <button
         ref={anchorRef}
         type="button"
-        className="font-inherit tabular-nums text-inherit underline decoration-dotted underline-offset-2 hover:text-blue-700"
+        className={`font-inherit tabular-nums underline decoration-dotted underline-offset-2 ${
+          secondaryOnly
+            ? 'text-slate-400 hover:text-slate-600'
+            : 'text-inherit hover:text-blue-700'
+        }`}
+        title={
+          secondaryOnly
+            ? 'Secondary fabric cut (primary not entered yet)'
+            : undefined
+        }
         onMouseEnter={show}
         onMouseLeave={hide}
         onClick={(event) => {
@@ -97,7 +129,7 @@ export const FabricOutputBreakdownPopover: React.FC<FabricOutputBreakdownPopover
           setOpen((current) => !current);
         }}
       >
-        {value > 0 ? value.toLocaleString() : '—'}
+        {displayQty.toLocaleString()}
       </button>
       {popover && createPortal(popover, document.body)}
     </>

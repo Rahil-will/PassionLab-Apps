@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     }
 
     const admin = getServiceClient();
-    if (departmentId) {
+    if (userRole !== 'viewer' && departmentId) {
       const opError = await validateAssignedOperationsForDepartment(
         admin,
         factoryId,
@@ -56,7 +56,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    const password = crypto.randomUUID();
+    const password = userRole === 'viewer'
+      ? (body.password?.trim() ?? '')
+      : crypto.randomUUID();
 
     const { data: authData, error: authError } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
@@ -94,8 +96,9 @@ Deno.serve(async (req) => {
       full_name: fullName.trim(),
       email: email.trim().toLowerCase(),
       user_role: userRole,
-      floor_pin: hashedPin,
+      floor_pin: userRole === 'viewer' ? null : hashedPin,
       status,
+      department_id: userRole === 'viewer' ? null : departmentId,
     });
 
     if (profileError) {
@@ -107,24 +110,26 @@ Deno.serve(async (req) => {
     const opIds = (assignedOperationIds ?? [])
       .filter((id) => typeof id === 'string' && /^[0-9a-fA-F-]{36}$/.test(id));
 
-    const shipmentQa = appsSet.has('shipment_log')
-      || appsSet.has('final_rejection_log')
-      || appsSet.has('shipment_audit');
+    if (userRole !== 'viewer') {
+      const shipmentQa = appsSet.has('shipment_log')
+        || appsSet.has('final_rejection_log')
+        || appsSet.has('shipment_audit');
 
-    const userClient = getUserClient(req.headers.get('authorization'));
-    const { error: grantsError } = await userClient.rpc('replace_floor_user_access', {
-      p_profile_id: userId,
-      p_department_id: departmentId || null,
-      p_handover_enabled: appsSet.has('transaction'),
-      p_workforce_enabled: appsSet.has('supervisor') || appsSet.has('workforce'),
-      p_audit_enabled: appsSet.has('audit'),
-      p_operation_ids: opIds,
-      p_shipment_qa_enabled: shipmentQa,
-    });
+      const userClient = getUserClient(req.headers.get('authorization'));
+      const { error: grantsError } = await userClient.rpc('replace_floor_user_access', {
+        p_profile_id: userId,
+        p_department_id: departmentId || null,
+        p_handover_enabled: appsSet.has('transaction'),
+        p_workforce_enabled: appsSet.has('supervisor') || appsSet.has('workforce'),
+        p_audit_enabled: appsSet.has('audit'),
+        p_operation_ids: opIds,
+        p_shipment_qa_enabled: shipmentQa,
+      });
 
-    if (grantsError) {
-      await admin.auth.admin.deleteUser(userId);
-      return jsonResponse({ error: grantsError.message }, 400);
+      if (grantsError) {
+        await admin.auth.admin.deleteUser(userId);
+        return jsonResponse({ error: grantsError.message }, 400);
+      }
     }
 
     return jsonResponse({ id: userId }, 201);

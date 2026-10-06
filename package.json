@@ -19,7 +19,10 @@
     "db:probe-read-rpcs": "npx supabase db query --linked --file scripts/probe_desktop_read_rpcs.sql",
     "db:verify-functions": "npx supabase db query --linked --file scripts/verify_live_functions.sql",
     "db:verify-functions:local": "npx supabase db query --local --file scripts/verify_live_functions.sql",
-    "db:audit-schema": "npx supabase db query --linked --file scripts/audit_live_schema_inventory.sql -o json"
+    "db:audit-schema": "npx supabase db query --linked --file scripts/audit_live_schema_inventory.sql -o json",
+    "db:test-phase1-modules": "npx supabase db query --linked --file scripts/test_phase1_factory_modules.sql",
+    "db:test-phase2-mm-schema": "npx supabase db query --linked --file scripts/test_phase2_mm_schema.sql",
+    "lint:module-boundaries": "node scripts/check-module-boundaries.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

@@ -430,23 +430,41 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
 
     const opLabel = (step: ProcessFlowStep) => step.operation_name || step.dept_name || '';
 
+    const visitPlannedTotal = (visit: PlanningVisitGroup): number =>
+        rowsForVisit(planningRows, visit).reduce(
+            (sum, r) => sum + Math.max(0, r.plannedQty || 0),
+            0,
+        );
+
     const getVisitMaxQty = (visitIndex: number): number => {
         if (visitIndex <= 0) return totalAdjQty;
         const prevVisit = planningVisits[visitIndex - 1];
-        const prevTotal = rowsForVisit(planningRows, prevVisit).reduce(
-            (sum, r) => sum + (r.plannedQty || 0),
-            0,
-        );
-        return Math.min(prevTotal, totalAdjQty);
+        const prevTotal = visitPlannedTotal(prevVisit);
+        return Math.min(Math.max(0, prevTotal), totalAdjQty);
     };
 
     const getVisitRemainingQty = (visit: PlanningVisitGroup, visitIndex: number): number => {
         const maxQty = getVisitMaxQty(visitIndex);
-        const planned = rowsForVisit(planningRows, visit).reduce(
-            (sum, r) => sum + (r.plannedQty || 0),
-            0,
-        );
+        const planned = visitPlannedTotal(visit);
         return Math.max(0, maxQty - planned);
+    };
+
+    const findVisitIndexForRow = (row: PlanningRow): number =>
+        planningVisits.findIndex((v) => rowsForVisit([row], v).length > 0);
+
+    const otherRowsQtyInVisit = (row: PlanningRow, excludeId: string): number => {
+        const visitIdx = findVisitIndexForRow(row);
+        if (visitIdx < 0) return 0;
+        const visit = planningVisits[visitIdx];
+        return rowsForVisit(planningRows, visit)
+            .filter((r) => r.id !== excludeId)
+            .reduce((sum, r) => sum + Math.max(0, r.plannedQty || 0), 0);
+    };
+
+    const getRowMaxAllowed = (row: PlanningRow, excludeId: string = row.id): number => {
+        const visitIdx = findVisitIndexForRow(row);
+        const visitMax = visitIdx >= 0 ? getVisitMaxQty(visitIdx) : totalAdjQty;
+        return Math.max(0, visitMax - otherRowsQtyInVisit(row, excludeId));
     };
 
     const getOpResources = (step: ProcessFlowStep) => {
@@ -490,17 +508,8 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
             const newRow = { ...row, ...updates };
 
             if (updates.plannedQty !== undefined) {
-                const visitIdx = planningVisits.findIndex((v) => rowsForVisit([row], v).length > 0);
-                const otherRowsQty = planningRows
-                    .filter(
-                        (r) =>
-                            r.id !== id &&
-                            (r.visitId === row.visitId || r.department === row.department),
-                    )
-                    .reduce((sum, r) => sum + (r.plannedQty || 0), 0);
-                const maxAllowed =
-                    (visitIdx >= 0 ? getVisitMaxQty(visitIdx) : totalAdjQty) - otherRowsQty;
-                newRow.plannedQty = Math.min(updates.plannedQty, maxAllowed);
+                const maxAllowed = getRowMaxAllowed(row, id);
+                newRow.plannedQty = Math.max(0, Math.min(updates.plannedQty, maxAllowed));
             }
 
             if (updates.endDate && newRow.startDate) {
@@ -549,6 +558,10 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
         onRowsChange(planningRows.filter((row) => row.id !== id));
     };
 
+    const clearAllPlanning = () => {
+        onRowsChange([]);
+    };
+
     // Effective delivery date: color-specific shipment dates, then order-level plan, then legacy deliveryDate
     const effectiveDeliveryDate = (deliveryDates && deliveryDates.length > 0)
         ? deliveryDates.slice().sort()[0]
@@ -562,12 +575,17 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
             (sum: number, s: any) => sum + sizeAdjQty(s),
             0,
         );
+        if (totalQty <= 0) return;
 
-        const newRows: PlanningRow[] = [];
-        let currentEndDate = workingDayBefore(deliveryDateStr);
-
+        // Fresh plan every click: wipe current table rows for schedulable visits, then refill.
         const schedulableVisits = planningVisits.filter(
             (v) => v.profile === 'produce' || v.profile === 'window' || v.profile === 'loading',
+        );
+        const schedulableVisitIds = new Set(
+            schedulableVisits.map((v) => v.visitId).filter(Boolean),
+        );
+        const preserved = planningRows.filter(
+            (r) => !r.visitId || !schedulableVisitIds.has(r.visitId),
         );
 
         const subtractWorkingDays = (endIso: string, count: number): string => {
@@ -580,37 +598,19 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
             return d.toISOString().split('T')[0];
         };
 
+        const newRows: PlanningRow[] = [];
+        let currentEndDate = workingDayBefore(deliveryDateStr);
+        const stamp = Date.now();
+
+        // Back-schedule from delivery. Every visit gets the full order qty — do not reuse
+        // leftover / partial planned qtys from the previous table state.
         for (const visit of [...schedulableVisits].reverse()) {
             const planStep = visit.planRouteStep;
             const deptResources = getOpResources(planStep);
             if (deptResources.length === 0) continue;
 
             const resource = deptResources[0];
-            const visitIndex = planningVisits.findIndex((v) => v.visitId === visit.visitId);
-            const mergedForCap = [
-                ...planningRows.filter(
-                    (r) => !newRows.some((nr) => nr.visitId && nr.visitId === r.visitId),
-                ),
-                ...newRows,
-            ];
-            let visitQty = totalQty;
-            if (visitIndex > 0) {
-                const prevVisit = planningVisits[visitIndex - 1];
-                const prevTotal = rowsForVisit(mergedForCap, prevVisit).reduce(
-                    (sum, r) => sum + (r.plannedQty || 0),
-                    0,
-                );
-                visitQty = Math.min(visitQty, prevTotal > 0 ? prevTotal : totalQty);
-            }
-            for (let j = visitIndex + 1; j < planningVisits.length; j++) {
-                const downstream = planningVisits[j];
-                const downTotal = rowsForVisit(newRows, downstream).reduce(
-                    (sum, r) => sum + (r.plannedQty || 0),
-                    0,
-                );
-                if (downTotal > 0) visitQty = Math.min(visitQty, downTotal);
-            }
-            if (visitQty <= 0) continue;
+            const visitQty = totalQty;
 
             let endDate = currentEndDate;
             if (endDate > deliveryDateStr) endDate = workingDayBefore(deliveryDateStr);
@@ -619,7 +619,7 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                 const windowDays = visit.profile === 'loading' ? 1 : 3;
                 const startDate = subtractWorkingDays(endDate, windowDays);
                 newRows.push({
-                    id: `temp-${Date.now()}-${visit.label}`,
+                    id: `temp-${stamp}-${visit.visitId}`,
                     department: visit.label,
                     visitId: visit.visitId,
                     operationId: planStep.id,
@@ -647,7 +647,7 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
             const dailyTarget = Math.min(Math.ceil(visitQty / actualWorkingDays), visitQty);
 
             newRows.push({
-                id: `temp-${Date.now()}-${visit.label}`,
+                id: `temp-${stamp}-${visit.visitId}`,
                 department: visit.label,
                 visitId: visit.visitId,
                 operationId: planStep.id,
@@ -667,10 +667,6 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
             currentEndDate = workingDayBefore(startDate);
         }
 
-        const scheduledVisitIds = new Set(
-            newRows.map((r) => r.visitId).filter((id): id is string => Boolean(id)),
-        );
-        const preserved = planningRows.filter((r) => !r.visitId || !scheduledVisitIds.has(r.visitId));
         onRowsChange([...preserved, ...[...newRows].reverse()]);
     };
 
@@ -686,18 +682,29 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                             Allocate resources, quantities, and dates for each department in the process flow
                         </p>
                     </div>
-                    <Button
-                        size="sm"
-                        onClick={runAutoSchedule}
-                        disabled={!effectiveDeliveryDate}
-                        title={
-                            effectiveDeliveryDate
-                                ? `Back-schedule from ${effectiveDeliveryDate} using reference SAM and workforce`
-                                : 'Add a shipment date to use auto schedule'
-                        }
-                    >
-                        Auto Schedule
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={clearAllPlanning}
+                            disabled={planningRows.length === 0}
+                            title="Remove all resource allocations from this table"
+                        >
+                            Clear All
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={runAutoSchedule}
+                            disabled={!effectiveDeliveryDate}
+                            title={
+                                effectiveDeliveryDate
+                                    ? `Clear this table and back-schedule every visit from ${effectiveDeliveryDate} at full order qty`
+                                    : 'Add a shipment date to use auto schedule'
+                            }
+                        >
+                            Auto Schedule
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto no-scrollbar">
@@ -741,7 +748,7 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                                     })),
                                 ];
 
-                                const rowMax = getVisitMaxQty(visitIdx);
+                                const visitMax = getVisitMaxQty(visitIdx);
 
                                 if (rows.length === 0) {
                                     return (
@@ -750,7 +757,7 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                                                 <VisitDeptCell
                                                     visit={visit}
                                                     remaining={remaining}
-                                                    maxQty={rowMax}
+                                                    maxQty={visitMax}
                                                 />
                                             </td>
                                             <td colSpan={DATA_COL_COUNT} className="px-3 py-2 border border-slate-200">
@@ -774,7 +781,8 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                                         {rows.map((row, rowIdx) => {
                                             const resource = resources.find((r: any) => r.id === row.resourceId);
                                             const kpis = rowKpis(row, resource, selectedOrder, dailyShiftHours);
-                                            const fieldErrors = getRowFieldErrors(row, rowMax, kpis, profile);
+                                            const rowMaxAllowed = getRowMaxAllowed(row);
+                                            const fieldErrors = getRowFieldErrors(row, rowMaxAllowed, kpis, profile);
                                             const hourlyTarget =
                                                 row.dailyTarget > 0
                                                     ? hourlyTargetFromDaily(row.dailyTarget, dailyShiftHours)
@@ -787,7 +795,7 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                                                             <VisitDeptCell
                                                                 visit={visit}
                                                                 remaining={remaining}
-                                                                maxQty={rowMax}
+                                                                maxQty={visitMax}
                                                             />
                                                         </td>
                                                     )}
@@ -829,7 +837,7 @@ export const PlanningTable: React.FC<PlanningTableProps> = ({
                                                                 plannedQty: parseInt(e.target.value, 10) || 0,
                                                             })
                                                         }
-                                                        max={rowMax}
+                                                        max={rowMaxAllowed}
                                                         className={`${cellInputCenter} font-medium text-slate-800 pr-8 ${
                                                             fieldErrors.plannedQty ? cellInputError : ''
                                                         }`}

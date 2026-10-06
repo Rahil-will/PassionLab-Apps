@@ -1,27 +1,56 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Filter, Lock, Search } from 'lucide-react';
-import { Button, Card, Modal, SelectDropdown } from '../../../../components/ui';
+import { Badge, Button, Card, Modal, SelectDropdown } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { Pagination } from '../../../../components/Pagination';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { useDebouncedValue } from '../../../../hooks/useDebouncedValue';
+import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { mmDispositionRejected, mmHoldRolls, mmReleaseRolls, type MmStockMovementRow, type MmWarehouseStockRow } from '../../lib/mmRpc';
 import { MmSendToProcessModal } from '../../components/MmSendToProcessModal';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
-import { MmWarehouseReadinessPanel } from '../../components/MmWarehouseReadinessPanel';
+import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
 import { useMmStockMovements, useMmWarehouseStock } from '../../lib/useMmOps';
 import { useFabricV4Enabled } from '../../lib/useMmV4Config';
+import { mmWhListReadiness, type MmV4RollRow } from '../../lib/mmV4Rpc';
 import { formatQtyM, formatWhen } from '../../lib/mmRollDraft';
-import { MmSegmentControl } from '../../components/MmSegmentControl';
 
 const PAGE_SIZE = 50;
 
 type StockView = 'stock' | 'movements';
-type StockMode = 'on_hand' | 'readiness';
 type LocationFilter = '' | 'pending_test' | 'receiving' | 'rack' | 'red_label' | 'cutting' | 'unallocated';
 type KindFilter = '' | 'received' | 'qc' | 'putaway' | 'dispatch' | 'allocation' | 'other';
+
+function statusBadgeVariant(
+  status: string | null | undefined,
+): 'default' | 'success' | 'warning' | 'danger' {
+  const s = String(status ?? 'NONE').toUpperCase();
+  if (s === 'PASS') return 'success';
+  if (s === 'FAILED') return 'danger';
+  if (s === 'STALE' || s === 'INCOMPLETE' || s === 'HOLD') return 'warning';
+  return 'default';
+}
+
+function gateLabel(code: string): string {
+  const map: Record<string, string> = {
+    STAGE_NOT_CUTTABLE: "Stage can't be cut",
+    TEST_MISSING: 'Not tested',
+    TEST_STALE: 'Retest after processing',
+    TEST_FAILED: 'Test failed',
+    TEST_HOLD: 'Test hold',
+    TEST_INCOMPLETE: 'Test incomplete',
+    INSPECTION_MISSING: 'Not inspected',
+    INSPECTION_STALE: 'Re-inspect after processing',
+    INSPECTION_FAILED: 'Inspection failed',
+    NOT_AVAILABLE: 'Not available',
+    ON_HOLD: 'On hold',
+    NOT_ALLOCATED: 'Not allocated',
+  };
+  return map[code] ?? code;
+}
 
 const thCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
@@ -71,26 +100,6 @@ function openStockRow(
   if (row.order_id) {
     navigate(RoutePath.MATERIAL_WAREHOUSE_STYLE, { orderId: row.order_id });
   }
-}
-
-function ViewSwitch({ view }: { view: StockView }) {
-  const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-  return (
-    <MmSegmentControl<StockView>
-      value={view}
-      onChange={(next) =>
-        requestNavigate(
-          next === 'stock' ? RoutePath.MATERIAL_WAREHOUSE_STOCK : RoutePath.MATERIAL_WAREHOUSE_MOVEMENTS,
-        )
-      }
-      options={
-        [
-          { value: 'stock', label: 'Stock on hand' },
-          { value: 'movements', label: 'Movements' },
-        ] satisfies { value: StockView; label: string }[]
-      }
-    />
-  );
 }
 
 function minuteKey(iso: string | null): string {
@@ -210,8 +219,8 @@ function MovementDetailModal({
 
 export default function MmWarehouseStockPage({ view }: { view: StockView }) {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
+  const factoryId = useNavigationStore((s) => s.factoryId);
   const fabricV4 = useFabricV4Enabled();
-  const [stockMode, setStockMode] = useState<StockMode>('on_hand');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLocation, setFilterLocation] = useState<LocationFilter>('');
   const [filterBuyer, setFilterBuyer] = useState('');
@@ -226,11 +235,11 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
   const [dispBusy, setDispBusy] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [processOpen, setProcessOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   const [holdReason, setHoldReason] = useState('');
   const [holdBusy, setHoldBusy] = useState(false);
   const { showNotification } = useNotificationStore();
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
-  const showReadiness = fabricV4 && view === 'stock' && stockMode === 'readiness';
 
   useEffect(() => {
     setPage(1);
@@ -242,9 +251,29 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     filterLocation,
     filterBuyer,
     page,
-    view === 'stock' && !showReadiness,
+    view === 'stock',
   );
   const moveQuery = useMmStockMovements(debouncedSearch, filterKind, page, view === 'movements');
+
+  const readinessQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'whReadiness', 'stockPage'] as const,
+    queryFn: async () => {
+      const res = await mmWhListReadiness({ search: null, only_blocked: false });
+      if (res.ok === false) throw new Error(res.message);
+      return res.data.rows ?? [];
+    },
+    enabled: Boolean(factoryId && fabricV4 && view === 'stock'),
+  });
+
+  const readinessByUnit = useMemo(() => {
+    const map = new Map<string, MmV4RollRow>();
+    for (const row of readinessQ.data ?? []) {
+      if (row.stock_unit_id) map.set(row.stock_unit_id, row);
+      map.set(row.roll_id, row);
+      if (row.roll_code) map.set(row.roll_code, row);
+    }
+    return map;
+  }, [readinessQ.data]);
 
   const activeQuery = view === 'stock' ? stockQuery : moveQuery;
   const total = activeQuery.data?.total ?? 0;
@@ -263,7 +292,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     {
       subtitle:
         view === 'stock'
-          ? 'One row per roll. Location is where it sits. Putaway, move, and allocate are on Rack.'
+          ? 'One row per roll with location and cut readiness. Putaway, move, and allocate are on Rack.'
           : 'Each row is a batch of rolls moved at the same time. Open a row for the rolls, or the challan when there is one.',
     },
     [view],
@@ -350,10 +379,12 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     }
   };
 
+  const stockColSpan = fabricV4 ? 19 : 14;
+
   return (
     <PageShell
-      loading={!showReadiness && activeQuery.isLoading}
-      error={showReadiness ? null : activeQuery.error}
+      loading={activeQuery.isLoading}
+      error={activeQuery.error}
       onRetry={() => void activeQuery.refetch()}
       skeleton="table"
       className="w-full pb-20"
@@ -361,69 +392,52 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
       <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
         <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-3 bg-slate-50/50">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <ViewSwitch view={view} />
-              {fabricV4 && view === 'stock' ? (
-                <MmSegmentControl<StockMode>
-                  value={stockMode}
-                  onChange={setStockMode}
-                  options={[
-                    { value: 'on_hand', label: 'On hand' },
-                    { value: 'readiness', label: 'Readiness' },
-                  ]}
-                />
-              ) : null}
+            <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
+              <Search size={14} className="text-slate-400 shrink-0" />
+              <input
+                className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
+                placeholder={
+                  view === 'stock'
+                    ? 'Search roll, style, fabric, rack, challan…'
+                    : 'Search roll, style, action, document…'
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            {!showReadiness ? (
-              <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0 sm:ml-auto">
-                <Search size={14} className="text-slate-400 shrink-0" />
-                <input
-                  className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-                  placeholder={
-                    view === 'stock'
-                      ? 'Search roll, style, fabric, rack, challan…'
-                      : 'Search roll, style, action, document…'
-                  }
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+            {view === 'stock' ? (
+              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
+                <SelectDropdown
+                  value={filterLocation}
+                  onChange={(v) => setFilterLocation(v as LocationFilter)}
+                  options={[
+                    { value: '', label: 'All warehouse' },
+                    { value: 'pending_test', label: 'Pending test' },
+                    { value: 'receiving', label: 'Waiting putaway' },
+                    { value: 'rack', label: 'On rack' },
+                    { value: 'red_label', label: 'Red label' },
+                    { value: 'unallocated', label: 'Unallocated' },
+                    { value: 'cutting', label: 'Cutting store' },
+                  ]}
+                  icon={Filter}
+                  className="w-44"
+                />
+                <SelectDropdown
+                  value={filterBuyer}
+                  onChange={setFilterBuyer}
+                  options={[
+                    { value: '', label: 'All Buyers' },
+                    ...buyers.map((name) => ({ value: name, label: name })),
+                  ]}
+                  icon={Filter}
+                  className="w-full sm:w-36"
                 />
               </div>
-            ) : null}
-          </div>
-          {showReadiness ? null : view === 'stock' ? (
-            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+            ) : (
               <SelectDropdown
-                value={filterLocation}
-                onChange={(v) => setFilterLocation(v as LocationFilter)}
+                value={filterKind}
+                onChange={(v) => setFilterKind(v as KindFilter)}
                 options={[
-                  { value: '', label: 'All warehouse' },
-                  { value: 'pending_test', label: 'Pending test' },
-                  { value: 'receiving', label: 'Waiting putaway' },
-                  { value: 'rack', label: 'On rack' },
-                  { value: 'red_label', label: 'Red label' },
-                  { value: 'unallocated', label: 'Unallocated' },
-                  { value: 'cutting', label: 'Cutting store' },
-                ]}
-                icon={Filter}
-                className="w-44"
-              />
-              <SelectDropdown
-                value={filterBuyer}
-                onChange={setFilterBuyer}
-                options={[
-                  { value: '', label: 'All Buyers' },
-                  ...buyers.map((name) => ({ value: name, label: name })),
-                ]}
-                icon={Filter}
-                className="w-full sm:w-36"
-              />
-            </div>
-          ) : (
-            <MmSegmentControl<KindFilter>
-              value={filterKind}
-              onChange={setFilterKind}
-              options={
-                [
                   { value: '', label: 'All' },
                   { value: 'received', label: 'Received' },
                   { value: 'qc', label: '4-point' },
@@ -431,15 +445,13 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                   { value: 'dispatch', label: 'Dispatch' },
                   { value: 'allocation', label: 'Allocate' },
                   { value: 'other', label: 'Other' },
-                ] satisfies { value: KindFilter; label: string }[]
-              }
-            />
-          )}
+                ]}
+                icon={Filter}
+                className="w-36 sm:ml-auto"
+              />
+            )}
+          </div>
         </div>
-        {showReadiness ? (
-          <MmWarehouseReadinessPanel />
-        ) : (
-          <>
         {(total > PAGE_SIZE || debouncedSearch || filterLocation || filterBuyer || filterKind) && (
           <div className="px-4 py-1.5 border-b border-slate-100 bg-white text-[10px] text-slate-500">
             Page {pagination.page} of {pagination.pageCount} ({pagination.start}-{pagination.end} of {total}{' '}
@@ -455,6 +467,11 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
               </Button>
             ) : (
               <div className="flex items-center gap-2">
+                {fabricV4 ? (
+                  <Button type="button" size="sm" variant="secondary" disabled={picked.length === 0} onClick={() => setTestOpen(true)}>
+                    Test
+                  </Button>
+                ) : null}
                 <Button type="button" size="sm" variant="secondary" disabled={picked.length === 0 || holdBusy} onClick={() => void submitRelease()}>
                   Release
                 </Button>
@@ -486,22 +503,31 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
         ) : null}
         {view === 'stock' ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1480px] table-fixed border-collapse">
+            <table className={`w-full table-fixed border-collapse ${fabricV4 ? 'min-w-[1780px]' : 'min-w-[1480px]'}`}>
               <colgroup>
                 <col style={{ width: '3%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '12%' }} />
                 <col style={{ width: '7%' }} />
-                <col style={{ width: '6%' }} />
-                <col style={{ width: '6%' }} />
-                <col style={{ width: '6%' }} />
-                <col style={{ width: '11%' }} />
-                <col style={{ width: '6%' }} />
-                <col style={{ width: '6%' }} />
                 <col style={{ width: '10%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '5%' }} />
                 <col style={{ width: '8%' }} />
                 <col style={{ width: '7%' }} />
-                <col style={{ width: '4%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '5%' }} />
+                {fabricV4 ? (
+                  <>
+                    <col style={{ width: '4%' }} />
+                    <col style={{ width: '5%' }} />
+                    <col style={{ width: '5%' }} />
+                    <col style={{ width: '7%' }} />
+                    <col style={{ width: '5%' }} />
+                  </>
+                ) : null}
               </colgroup>
               <thead>
                 <tr>
@@ -519,17 +545,29 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                   <th className={thCenterCls}>Status</th>
                   <th className={thCls}>Challan / GRN</th>
                   <th className={thCls}>Received</th>
+                  {fabricV4 ? (
+                    <>
+                      <th className={thCenterCls}>Stage</th>
+                      <th className={thCenterCls}>Test</th>
+                      <th className={thCenterCls}>Invoice insp.</th>
+                      <th className={thCls}>Gate</th>
+                      <th className={thCenterCls}>Cut-ready</th>
+                    </>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={14} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    <td colSpan={stockColSpan} className="px-4 py-10 text-center text-[11px] text-slate-400">
                       No rolls match this filter.
                     </td>
                   </tr>
                 )}
-                {rows.map((row) => (
+                {rows.map((row) => {
+                  const gate = readinessByUnit.get(row.id) ?? (row.unit_code ? readinessByUnit.get(row.unit_code) : undefined);
+                  const codes = gate?.gate?.codes ?? [];
+                  return (
                   <tr
                     key={row.id}
                     className="hover:bg-slate-50/80 cursor-pointer"
@@ -589,8 +627,46 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                     </td>
                     <td className={tdCls}>{docLabel(row.challan_source, row.challan_no)}</td>
                     <td className={tdCls}>{formatWhen(row.received_at)}</td>
+                    {fabricV4 ? (
+                      <>
+                        <td className={tdCenterCls}>
+                          {gate?.stage_code ? <Badge variant="outline">{gate.stage_code}</Badge> : '—'}
+                        </td>
+                        <td className={tdCenterCls}>
+                          <Badge variant={statusBadgeVariant(gate?.test_status)}>
+                            {String(gate?.test_status ?? '—')}
+                          </Badge>
+                        </td>
+                        <td className={tdCenterCls}>
+                          <Badge variant={statusBadgeVariant(gate?.inspection_status)}>
+                            {String(gate?.inspection_status ?? '—')}
+                          </Badge>
+                        </td>
+                        <td className={tdCls}>
+                          <div className="flex flex-wrap gap-1">
+                            {codes.length === 0 ? (
+                              <span className="text-slate-400">—</span>
+                            ) : (
+                              codes.map((code) => (
+                                <Badge key={code} variant="warning">
+                                  {gateLabel(code)}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className={tdCenterCls}>
+                          {gate?.gate?.cut_ready ? (
+                            <Badge variant="success">Cut-ready</Badge>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                      </>
+                    ) : null}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -650,8 +726,6 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
           </div>
         )}
         <Pagination {...pagination} />
-          </>
-        )}
       </Card>
       <Modal isOpen={dispositionOpen} onClose={() => setDispositionOpen(false)} className="max-w-md">
         <div className="p-5 flex flex-col gap-3">
@@ -733,6 +807,21 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
           }}
         />
       )}
+      {fabricV4 ? (
+        <MmQcTestModalV4
+          open={testOpen}
+          scopeKind="rolls"
+          rollIds={picked}
+          defaultSiteSide="warehouse"
+          onClose={() => setTestOpen(false)}
+          onSaved={() => {
+            setTestOpen(false);
+            setPicked([]);
+            void stockQuery.refetch();
+            void readinessQ.refetch();
+          }}
+        />
+      ) : null}
       <MovementDetailModal
         group={openGroup}
         onClose={() => setOpenGroup(null)}

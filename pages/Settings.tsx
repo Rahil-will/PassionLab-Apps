@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   useSettingsStore,
   useNavigationStore,
@@ -14,6 +14,7 @@ import {
   Loader2,
   ListChecks,
   Building2,
+  Save,
 } from 'lucide-react';
 import { Button, Spinner, Modal } from '../components/ui';
 import { PageShell } from '../components/layout/PageShell';
@@ -26,14 +27,16 @@ import { DesktopWriteGate } from '../components/DesktopWriteGate';
 import { SUPPORT_DROPDOWN_CATALOG } from '../lib/supportDropdownCatalog';
 import { duplicateNameError } from '../lib/settingsValidation';
 import type { SupportDropdown } from '../types/settings';
+import { RoutePath } from '../types';
 
 type SupportDropdownForm = SupportDropdown & { id: string };
+type SettingsTab = 'factory' | 'support';
 
 export function Settings() {
   const addSupportDropdown = useSettingsStore((s) => s.addSupportDropdown);
   const updateSupportDropdown = useSettingsStore((s) => s.updateSupportDropdown);
   const deleteSupportDropdown = useSettingsStore((s) => s.deleteSupportDropdown);
-  const { factoryId, setUnsaved: setNavUnsaved } = useNavigationStore();
+  const { factoryId, setUnsaved: setNavUnsaved, routeParams, requestNavigate } = useNavigationStore();
   const { supportDropdowns } = useSupportDropdownsCatalog(factoryId);
   const settingsLoading = useSettingsScopeLoading(factoryId, 'full');
   const { showNotification } = useNotificationStore();
@@ -47,16 +50,30 @@ export function Settings() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  const [activeTab, setActiveTab] = useState<'factory' | 'support'>('factory');
+  const initialTab = (routeParams.tab as string) || 'factory';
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    initialTab === 'support' ? 'support' : 'factory',
+  );
+  const [factorySave, setFactorySave] = useState<{ save: () => void; saving: boolean } | null>(null);
 
-  const requestTab = (tab: 'factory' | 'support') => {
+  React.useEffect(() => {
+    const t = routeParams.tab as string | undefined;
+    if (t === 'support') setActiveTab('support');
+    else setActiveTab('factory');
+  }, [routeParams.tab]);
+
+  const requestTab = (tab: SettingsTab) => {
     if (tab === activeTab) return;
+    const go = () => {
+      setActiveTab(tab);
+      requestNavigate(RoutePath.SETTINGS, tab === 'factory' ? {} : { tab });
+    };
     if (isUnsaved) {
-      setPendingAction(() => () => setActiveTab(tab));
+      setPendingAction(() => go);
       setShowUnsavedDialog(true);
       return;
     }
-    setActiveTab(tab);
+    go();
   };
 
   const listItems = useMemo(() => supportDropdowns, [supportDropdowns]);
@@ -236,8 +253,8 @@ export function Settings() {
   };
 
   return (
-    <PageShell loading={settingsLoading} skeleton="list" className="flex flex-col h-[calc(100vh-2rem)] overflow-hidden bg-slate-50">
-      <div className="shrink-0 z-20 bg-slate-50 pt-3 pb-3">
+    <PageShell loading={settingsLoading} skeleton="list" className="-mt-[0.15rem] flex flex-col h-[calc(100vh-2rem)] overflow-hidden bg-slate-50">
+      <div className="shrink-0 z-20 bg-slate-50 pt-[0.36rem] pb-[0.6rem]">
         <div className="flex items-center justify-between bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-1 px-1.5">
             {[
@@ -249,8 +266,8 @@ export function Settings() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => requestTab(tab.id as 'factory' | 'support')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                  onClick={() => requestTab(tab.id as SettingsTab)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
@@ -262,12 +279,25 @@ export function Settings() {
               );
             })}
           </div>
+          {activeTab === 'factory' && factorySave && (
+            <DesktopWriteGate>
+              <button
+                type="button"
+                onClick={factorySave.save}
+                disabled={factorySave.saving}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {factorySave.saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save Changes
+              </button>
+            </DesktopWriteGate>
+          )}
         </div>
       </div>
 
       {activeTab === 'factory' && (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <FactorySettingsPanel />
+          <FactorySettingsPanel onSaveReady={setFactorySave} />
         </div>
       )}
 

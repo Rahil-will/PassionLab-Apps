@@ -18,7 +18,6 @@ AS $$
     ''
   );
 $$;
-
 CREATE OR REPLACE FUNCTION public.is_factory_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -28,7 +27,6 @@ SET search_path TO 'public'
 AS $$
   SELECT public.current_user_role() IN ('admin', 'superadmin');
 $$;
-
 CREATE OR REPLACE FUNCTION public.is_superadmin()
 RETURNS boolean
 LANGUAGE sql
@@ -38,7 +36,6 @@ SET search_path TO 'public'
 AS $$
   SELECT public.current_user_role() = 'superadmin';
 $$;
-
 CREATE OR REPLACE FUNCTION public.current_factory_id()
 RETURNS uuid
 LANGUAGE sql
@@ -57,12 +54,10 @@ AS $$
     (SELECT p.factory_id FROM public.profiles p WHERE p.id = auth.uid() LIMIT 1)
   );
 $$;
-
 DROP POLICY IF EXISTS factories_select ON public.factories;
 CREATE POLICY factories_select ON public.factories
   FOR SELECT TO authenticated
   USING (id = current_factory_id() OR is_superadmin());
-
 DROP POLICY IF EXISTS profiles_insert_own ON public.profiles;
 CREATE POLICY profiles_insert_own ON public.profiles
   FOR INSERT TO authenticated
@@ -71,19 +66,16 @@ CREATE POLICY profiles_insert_own ON public.profiles
     AND user_role NOT IN ('admin', 'superadmin')
     AND (factory_id IS NULL OR factory_id = current_factory_id())
   );
-
 -- ---------------------------------------------------------------------------
 -- B. fabric_components — code collision, primary slot, index
 -- ---------------------------------------------------------------------------
 UPDATE public.fabric_components
 SET is_primary = false
 WHERE is_active = false AND is_primary;
-
 DROP INDEX IF EXISTS public.fabric_components_primary_uidx;
 CREATE UNIQUE INDEX fabric_components_primary_uidx
   ON public.fabric_components (factory_id)
   WHERE is_primary AND is_active;
-
 CREATE OR REPLACE FUNCTION public.save_fabric_components(
   p_factory_id uuid,
   p_origin_department_id uuid,
@@ -187,7 +179,6 @@ BEGIN
   ORDER BY fc.created_at ASC, fc.fabric_type ASC;
 END;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- C. log_audit_event — trust caller RPCs; warn instead of silent skip
 -- ---------------------------------------------------------------------------
@@ -230,9 +221,7 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.log_audit_event(uuid, text, text, uuid, jsonb) FROM PUBLIC;
-
 -- D. delete_desktop_shipment: shipment_audits has no FK to shipments (order/colorway keyed only).
 --    Hard delete in delete_desktop_shipment remains safe — no cascade change needed.
 

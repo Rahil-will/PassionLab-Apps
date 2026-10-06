@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.save_order_routing(
 )
 RETURNS void
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE

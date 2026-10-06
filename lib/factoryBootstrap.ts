@@ -14,11 +14,14 @@ const SETTINGS_ONLY_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.WORK_CENTER_BUYERS,
   RoutePath.WORK_CENTER_DEPARTMENTS,
   RoutePath.WORK_CENTER_PROCESS_FLOWS,
+  RoutePath.MATERIAL_MANAGEMENT,
 ]);
 
 const ORDERS_LIST_PREFETCH_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.STATUS_TRACKER,
   RoutePath.LINE_ASSIGNMENT,
+  RoutePath.MATERIAL_MILL_STYLES,
+  RoutePath.MATERIAL_WAREHOUSE_STYLES,
 ]);
 
 function isStyleDetailRoute(route: string): boolean {

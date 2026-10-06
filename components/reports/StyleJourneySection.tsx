@@ -6,6 +6,7 @@ import { Badge, Card } from '../ui';
 import { OrderPriorityChip } from '../../lib/orderPriority';
 import type { StyleJourneyDept, StyleJourneyReport } from '../../lib/mesReportsApi';
 import { daysBetween } from '../../lib/orderDateUtils';
+import { shipmentFlowDisplayQty } from '../../lib/orderFlowMetrics';
 
 function formatDisplayDate(iso: string | null): string {
   if (!iso) return '—';
@@ -77,7 +78,9 @@ const FlowDeptCard: React.FC<FlowDeptCardProps> = ({
   onToggleLines,
 }) => {
   const producedLabel = dept.isQcDept ? 'Passed' : 'Produced';
-  const progressPct = adjQty > 0 ? Math.min(100, (dept.produced / adjQty) * 100) : 0;
+  const cols = shipmentFlowDisplayQty(dept);
+  const shippedOrProduced = cols.isShipment ? cols.sent : dept.produced;
+  const progressPct = adjQty > 0 ? Math.min(100, (shippedOrProduced / adjQty) * 100) : 0;
   const passPct =
     dept.isQcDept && adjQty > 0 ? Math.min(100, (dept.produced / adjQty) * 100) : null;
 
@@ -103,10 +106,10 @@ const FlowDeptCard: React.FC<FlowDeptCardProps> = ({
       <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mb-4">
         <FlowMetric label="Received" value={dept.received} show={!isFirst} />
         {!isFirst && <span className="text-slate-300 hidden sm:inline">→</span>}
-        <FlowMetric label={producedLabel} value={dept.produced} />
-        <span className="text-slate-300 hidden sm:inline">→</span>
-        <FlowMetric label="Sent" value={dept.sent} show={!isLast} />
-        {!isLast && <span className="text-slate-300 hidden sm:inline">→</span>}
+        <FlowMetric label={producedLabel} value={cols.produced} show={!cols.isShipment} />
+        {!cols.isShipment && <span className="text-slate-300 hidden sm:inline">→</span>}
+        <FlowMetric label="Sent" value={cols.sent} show={cols.isShipment || !isLast} />
+        {(!isLast || cols.isShipment) && <span className="text-slate-300 hidden sm:inline">→</span>}
         <FlowMetric label="Remaining" value={dept.remaining} />
       </div>
 

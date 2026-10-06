@@ -6,6 +6,8 @@ interface EditorSplitLayoutProps {
   right: React.ReactNode;
   /** Panel row height when scrollable or panelHeight is set. */
   panelHeight?: string;
+  /** Fill the parent height instead of panelHeight. */
+  fillHeight?: boolean;
   /** When false, content grows naturally with no inner scroll. */
   scrollable?: boolean;
   /** Override scroll on the left form column (defaults to scrollable). */
@@ -21,6 +23,7 @@ export const EditorSplitLayout: React.FC<EditorSplitLayoutProps> = ({
   left,
   right,
   panelHeight = 'min(360px, 42vh)',
+  fillHeight = false,
   scrollable = true,
   leftScrollable,
   rightScrollable,
@@ -28,31 +31,35 @@ export const EditorSplitLayout: React.FC<EditorSplitLayoutProps> = ({
 }) => {
   const leftScroll = leftScrollable ?? scrollable;
   const rightScroll = rightScrollable ?? scrollable;
-  const fixedHeight = scrollable || leftScroll || rightScroll;
+  const lockedHeight = fillHeight || scrollable || leftScroll || rightScroll;
 
   return (
     <div
-      className="grid gap-4 min-h-0"
+      className={`grid gap-4 min-h-0 w-full ${fillHeight ? 'flex-1 min-h-0' : ''}`}
       style={{
         gridTemplateColumns: columnTemplate,
-        ...(fixedHeight ? { height: panelHeight } : {}),
+        ...(fillHeight
+          ? { height: '100%' }
+          : lockedHeight
+            ? { height: panelHeight }
+            : {}),
       }}
     >
-      <div className={fixedHeight ? 'min-h-0' : ''}>
+      <div className={lockedHeight ? 'min-h-0' : ''}>
         <div
           className={`rounded-xl border border-slate-200 bg-slate-50/50 p-4 ${
-            fixedHeight ? 'h-full' : ''
+            lockedHeight ? 'h-full' : ''
           } ${leftScroll ? 'overflow-y-auto thin-scrollbar' : 'overflow-hidden'}`}
         >
           {left}
         </div>
       </div>
       <div
-        className={`rounded-xl border border-slate-200 bg-white overflow-hidden ${
-          fixedHeight && rightScroll ? 'min-h-0 flex flex-col' : ''
+        className={`rounded-xl border border-slate-200 bg-white overflow-hidden min-w-0 ${
+          lockedHeight && rightScroll ? 'min-h-0 flex flex-col' : ''
         }`}
       >
-        <div className={fixedHeight && rightScroll ? 'flex-1 min-h-0 overflow-hidden' : ''}>
+        <div className={lockedHeight && rightScroll ? 'flex-1 min-h-0 overflow-hidden' : ''}>
           {right}
         </div>
       </div>

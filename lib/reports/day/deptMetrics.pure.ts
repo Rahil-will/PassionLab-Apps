@@ -64,6 +64,29 @@ export function buildResourceWorkforceDetails(
   return result;
 }
 
+/**
+ * Average daily headcount straight from workforce_logs, grouped by day — for
+ * departments (e.g. origin/cutting) where output rows don't reliably carry a
+ * resource_id matching the workforce log (cutting sessions are often logged
+ * without an assigned cutter/resource), so `computeDayDeptMetricsFromRows`'s
+ * row-based workforce lookup silently comes up empty. Sums every resource's
+ * headcount once per day, then averages across the days present — same
+ * semantics as the row-based workforce KPI, just sourced from the logs
+ * directly instead of via row.resourceId.
+ */
+export function averageDailyHeadcountFromLogs(
+  workforceByDate: Map<string, Map<string, { total: number }>>,
+): number {
+  const days = [...workforceByDate.values()];
+  if (days.length === 0) return 0;
+  const total = days.reduce((sum, dayMap) => {
+    let dayTotal = 0;
+    for (const wf of dayMap.values()) dayTotal += wf.total;
+    return sum + dayTotal;
+  }, 0);
+  return total / days.length;
+}
+
 export function allocRowKey(orderId: string, colorwayId: string | null, resourceId: string): string {
   return `${orderId}|${colorwayId ?? ''}|${resourceId}`;
 }
@@ -223,8 +246,18 @@ export function enrichDayResourceRows(
     const wf = resourceWorkforce.get(row.resourceId);
     row.workforce = wf && wf.total > 0 ? wf.total : null;
     row.workforceBreakdown = wf?.breakdown ?? [];
+    // Loading is a receiving / WIP-start acknowledgement, not SAM-measured
+    // production — never assign it a SAM or fold it into a resource's
+    // produced-minutes/output aggregate, or it fabricates efficiency for a
+    // step that has none.
+    if (row.stepType === 'loading') {
+      row.sam = null;
+      row.producedMins = 0;
+      continue;
+    }
     const key = allocRowKey(row.orderId, row.colorwayId, row.resourceId);
     const sam = samByAllocKey.get(key) ?? sewingSamByOrder.get(row.orderId) ?? 0;
+    row.sam = sam > 0 ? sam : null;
     row.producedMins = row.total * sam;
     const agg = resourceAgg.get(row.resourceId) ?? { output: 0, producedMins: 0 };
     agg.output += row.total;
@@ -233,6 +266,12 @@ export function enrichDayResourceRows(
   }
 
   for (const row of rows) {
+    if (row.stepType === 'loading') {
+      row.resourceAvailableMins = 0;
+      row.efficiencyPct = null;
+      row.productivity = null;
+      continue;
+    }
     const workforce = row.workforce;
     const agg = resourceAgg.get(row.resourceId);
     const availableMins =
@@ -253,30 +292,61 @@ export function enrichDayResourceRows(
   }
 }
 
+/**
+ * Department KPIs for a set of hourly-output rows, which may span a single day
+ * (one section, one date) or a whole date range (multiple sections merged, or
+ * one section's rows concatenated across days).
+ *
+ * - `output`: cumulative pieces produced across every row — always a straight
+ *   sum, since it's genuinely additive across styles, resources, and days.
+ * - `efficiency`: total produced minutes ÷ total available minutes. Both sides
+ *   are sums-of-sums (available minutes counted once per resource-per-day, via
+ *   `seenResourceDays`), so this ratio is valid for one day or a whole range
+ *   without any rescaling.
+ * - `workforce` (displayed KPI): the period's AVERAGE daily headcount, not a
+ *   sum across days — for one day this is just that day's headcount; for a
+ *   range, each day's distinct-resource headcount is summed once (so a
+ *   resource running several styles the same day isn't double-counted) and
+ *   then averaged across the days present.
+ * - `productivity`: output ÷ total person-days worked (`workforcePersonDays`,
+ *   the same per-day sums as `workforce` but NOT divided by day count). This
+ *   keeps productivity a ratio-of-sums like efficiency, so a 10-day range
+ *   with steady headcount reports the same per-worker rate as a single day —
+ *   dividing by the *averaged* `workforce` instead would inflate it by
+ *   roughly the number of days in the range.
+ */
 export function computeDayDeptMetricsFromRows(
   rows: DayResourceHourRow[],
 ): { output: number; workforce: number; efficiency: number | null; productivity: number | null } {
   let output = 0;
   let producedMins = 0;
   let availableMins = 0;
-  let workforce = 0;
-  const seenResources = new Set<string>();
+  const seenResourceDays = new Set<string>();
+  const workforceByDay = new Map<string, number>();
 
   for (const row of rows) {
     output += row.total;
     producedMins += row.producedMins;
-    if (!row.resourceId || seenResources.has(row.resourceId)) continue;
-    seenResources.add(row.resourceId);
-    workforce += row.workforce || 0;
+    if (!row.resourceId) continue;
+    const logDate = row.logDate ?? '';
+    const resourceDayKey = `${logDate}|${row.resourceId}`;
+    if (seenResourceDays.has(resourceDayKey)) continue;
+    seenResourceDays.add(resourceDayKey);
     availableMins += row.resourceAvailableMins;
+    workforceByDay.set(logDate, (workforceByDay.get(logDate) ?? 0) + (row.workforce || 0));
   }
+
+  const dayCount = workforceByDay.size;
+  const workforcePersonDays = [...workforceByDay.values()].reduce((sum, v) => sum + v, 0);
+  const workforce = dayCount > 0 ? workforcePersonDays / dayCount : 0;
 
   return {
     output,
     workforce,
     efficiency:
       producedMins > 0 && availableMins > 0 ? (producedMins / availableMins) * 100 : null,
-    productivity: workforce > 0 && output > 0 ? output / workforce : null,
+    productivity:
+      workforcePersonDays > 0 && output > 0 ? output / workforcePersonDays : null,
   };
 }
 
@@ -287,18 +357,27 @@ export function aggregateDeptDayKpi(
   'target' | 'dhu' | 'wip'
 > {
   let target = 0;
-  let wip = 0;
   let dhuSum = 0;
   let dhuWeight = 0;
+  const latestDateByOrder = new Map<string, string>();
 
   for (const row of rows) {
     target += row.daily_target || 0;
-    wip += row.wip_qty || 0;
+    const orderKey = `${row.order_id}|${row.department_id}`;
+    const prev = latestDateByOrder.get(orderKey);
+    if (!prev || row.log_date > prev) latestDateByOrder.set(orderKey, row.log_date);
     if (row.dhu != null) {
       const weight = row.daily_output > 0 ? row.daily_output : 1;
       dhuSum += Number(row.dhu) * weight;
       dhuWeight += weight;
     }
+  }
+
+  let wip = 0;
+  for (const row of rows) {
+    const orderKey = `${row.order_id}|${row.department_id}`;
+    if (row.log_date !== latestDateByOrder.get(orderKey)) continue;
+    wip += row.wip_qty || 0;
   }
 
   return {

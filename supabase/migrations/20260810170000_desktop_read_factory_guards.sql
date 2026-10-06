@@ -17,10 +17,8 @@ BEGIN
   END IF;
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public._assert_desktop_factory_scope(uuid)
   FROM PUBLIC, anon, authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_department_kpis — live fallback RPC (was missing from numbered migrations)
 -- ---------------------------------------------------------------------------
@@ -46,10 +44,8 @@ BEGIN
   ORDER BY v.log_date, v.shift_name, v.order_id;
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_department_kpis(uuid, uuid, date, date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_department_kpis(uuid, uuid, date, date) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- cutting_component_progress_rows
 -- ---------------------------------------------------------------------------
@@ -57,7 +53,6 @@ ALTER FUNCTION public.cutting_component_progress_rows(uuid, uuid)
   RENAME TO cutting_component_progress_rows_inner;
 REVOKE ALL ON FUNCTION public.cutting_component_progress_rows_inner(uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.cutting_component_progress_rows(
   p_factory_id uuid DEFAULT NULL::uuid,
   p_order_id uuid DEFAULT NULL::uuid
@@ -78,10 +73,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.cutting_component_progress_rows_inner(p_factory_id, p_order_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.cutting_component_progress_rows(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cutting_component_progress_rows(uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- operation_progress_rows
 -- ---------------------------------------------------------------------------
@@ -89,7 +82,6 @@ ALTER FUNCTION public.operation_progress_rows(uuid, uuid)
   RENAME TO operation_progress_rows_inner;
 REVOKE ALL ON FUNCTION public.operation_progress_rows_inner(uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.operation_progress_rows(
   p_factory_id uuid DEFAULT NULL::uuid,
   p_order_id uuid DEFAULT NULL::uuid
@@ -110,10 +102,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.operation_progress_rows_inner(p_factory_id, p_order_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.operation_progress_rows(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.operation_progress_rows(uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- order_dept_progress_rows
 -- ---------------------------------------------------------------------------
@@ -121,7 +111,6 @@ ALTER FUNCTION public.order_dept_progress_rows(uuid, uuid)
   RENAME TO order_dept_progress_rows_inner;
 REVOKE ALL ON FUNCTION public.order_dept_progress_rows_inner(uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.order_dept_progress_rows(
   p_factory_id uuid DEFAULT NULL::uuid,
   p_order_id uuid DEFAULT NULL::uuid
@@ -145,10 +134,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.order_dept_progress_rows_inner(p_factory_id, p_order_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.order_dept_progress_rows(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.order_dept_progress_rows(uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_factory_production_summary
 -- ---------------------------------------------------------------------------
@@ -156,7 +143,6 @@ ALTER FUNCTION public.get_factory_production_summary(uuid)
   RENAME TO get_factory_production_summary_inner;
 REVOKE ALL ON FUNCTION public.get_factory_production_summary_inner(uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_factory_production_summary(p_factory_id uuid)
 RETURNS TABLE(
   order_id uuid, colorway_id uuid, department_id uuid, operation_id uuid,
@@ -171,10 +157,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.get_factory_production_summary_inner(p_factory_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_factory_production_summary(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_factory_production_summary(uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_factory_schedule_actuals
 -- ---------------------------------------------------------------------------
@@ -182,7 +166,6 @@ ALTER FUNCTION public.get_factory_schedule_actuals(uuid)
   RENAME TO get_factory_schedule_actuals_inner;
 REVOKE ALL ON FUNCTION public.get_factory_schedule_actuals_inner(uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_factory_schedule_actuals(p_factory_id uuid)
 RETURNS TABLE(
   line_allocation_id uuid, order_id uuid, colorway_id uuid, department_id uuid,
@@ -197,10 +180,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.get_factory_schedule_actuals_inner(p_factory_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_factory_schedule_actuals(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_factory_schedule_actuals(uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_order_colorway_actuals
 -- ---------------------------------------------------------------------------
@@ -208,7 +189,6 @@ ALTER FUNCTION public.get_order_colorway_actuals(uuid, uuid, uuid)
   RENAME TO get_order_colorway_actuals_inner;
 REVOKE ALL ON FUNCTION public.get_order_colorway_actuals_inner(uuid, uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_order_colorway_actuals(
   p_factory_id uuid, p_order_id uuid, p_colorway_id uuid DEFAULT NULL::uuid
 )
@@ -225,10 +205,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.get_order_colorway_actuals_inner(p_factory_id, p_order_id, p_colorway_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_order_colorway_actuals(uuid, uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_order_colorway_actuals(uuid, uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_style_kpis
 -- ---------------------------------------------------------------------------
@@ -236,7 +214,6 @@ ALTER FUNCTION public.get_style_kpis(uuid, uuid)
   RENAME TO get_style_kpis_inner;
 REVOKE ALL ON FUNCTION public.get_style_kpis_inner(uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_style_kpis(p_factory_id uuid, p_order_id uuid)
 RETURNS SETOF public.v_department_kpis_by_shift
 LANGUAGE plpgsql
@@ -248,10 +225,8 @@ BEGIN
   RETURN QUERY SELECT * FROM public.get_style_kpis_inner(p_factory_id, p_order_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_style_kpis(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_style_kpis(uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_order_detail_bundle
 -- ---------------------------------------------------------------------------
@@ -259,7 +234,6 @@ ALTER FUNCTION public.get_order_detail_bundle(uuid, uuid)
   RENAME TO get_order_detail_bundle_inner;
 REVOKE ALL ON FUNCTION public.get_order_detail_bundle_inner(uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_order_detail_bundle(p_factory_id uuid, p_order_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -271,10 +245,8 @@ BEGIN
   RETURN public.get_order_detail_bundle_inner(p_factory_id, p_order_id);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_order_detail_bundle(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_order_detail_bundle(uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_order_dept_progress
 -- ---------------------------------------------------------------------------
@@ -282,7 +254,6 @@ ALTER FUNCTION public.get_order_dept_progress(uuid, uuid, uuid, uuid, date)
   RENAME TO get_order_dept_progress_inner;
 REVOKE ALL ON FUNCTION public.get_order_dept_progress_inner(uuid, uuid, uuid, uuid, date)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_order_dept_progress(
   p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid,
   p_date date DEFAULT CURRENT_DATE
@@ -299,10 +270,8 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_order_dept_progress(uuid, uuid, uuid, uuid, date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_order_dept_progress(uuid, uuid, uuid, uuid, date) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_audit_report
 -- ---------------------------------------------------------------------------
@@ -310,7 +279,6 @@ ALTER FUNCTION public.get_audit_report(uuid, date, date, uuid, uuid, uuid)
   RENAME TO get_audit_report_inner;
 REVOKE ALL ON FUNCTION public.get_audit_report_inner(uuid, date, date, uuid, uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_audit_report(
   p_factory_id uuid, p_date_from date, p_date_to date,
   p_colorway_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid,
@@ -332,10 +300,8 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_audit_report(uuid, date, date, uuid, uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_audit_report(uuid, date, date, uuid, uuid, uuid) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_cut_to_ship_report
 -- ---------------------------------------------------------------------------
@@ -343,7 +309,6 @@ ALTER FUNCTION public.get_cut_to_ship_report(uuid, date, date, uuid, boolean)
   RENAME TO get_cut_to_ship_report_inner;
 REVOKE ALL ON FUNCTION public.get_cut_to_ship_report_inner(uuid, date, date, uuid, boolean)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_cut_to_ship_report(
   p_factory_id uuid, p_date_from date DEFAULT NULL::date, p_date_to date DEFAULT NULL::date,
   p_buyer_id uuid DEFAULT NULL::uuid, p_balanced_only boolean DEFAULT NULL::boolean
@@ -367,10 +332,8 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_cut_to_ship_report(uuid, date, date, uuid, boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_cut_to_ship_report(uuid, date, date, uuid, boolean) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- get_handover_report
 -- ---------------------------------------------------------------------------
@@ -378,7 +341,6 @@ ALTER FUNCTION public.get_handover_report(uuid, date, date, uuid, uuid, text, uu
   RENAME TO get_handover_report_inner;
 REVOKE ALL ON FUNCTION public.get_handover_report_inner(uuid, date, date, uuid, uuid, text, uuid, uuid, text)
   FROM PUBLIC, anon, authenticated;
-
 CREATE OR REPLACE FUNCTION public.get_handover_report(
   p_factory_id uuid, p_date_from date DEFAULT NULL::date, p_date_to date DEFAULT NULL::date,
   p_from_department_id uuid DEFAULT NULL::uuid, p_to_department_id uuid DEFAULT NULL::uuid,
@@ -409,7 +371,6 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_handover_report(uuid, date, date, uuid, uuid, text, uuid, uuid, text)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_handover_report(uuid, date, date, uuid, uuid, text, uuid, uuid, text)

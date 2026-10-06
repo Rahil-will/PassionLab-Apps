@@ -327,8 +327,14 @@ export function buildPlanningVisitGroups(
 export function rowsForVisit(rows: PlanningRow[], visit: PlanningVisitGroup): PlanningRow[] {
   return rows.filter((r) => {
     if (r.visitId && visit.visitId) return r.visitId === visit.visitId;
+    // Row is pinned to another visit — never fall back to dept/operation name matching.
+    if (r.visitId) return false;
     if (r.operationId && visit.planRouteStep.id) return r.operationId === visit.planRouteStep.id;
-    return r.department === visit.label || r.department === visit.planRouteStep.operation_name;
+    if (r.department === visit.label) return true;
+    if (visit.planRouteStep.operation_name && r.department === visit.planRouteStep.operation_name) {
+      return true;
+    }
+    return false;
   });
 }
 

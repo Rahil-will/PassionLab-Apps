@@ -10,6 +10,8 @@ export interface UserProfile {
   fullName: string;
   email: string;
   userRole: string;
+  /** profiles.assigned_apps — module permission keys (mm_*). Default []. */
+  assignedApps: string[];
 }
 
 interface RouteHistoryEntry {
@@ -31,7 +33,8 @@ interface NavigationState {
   isAuthenticated: boolean;
   factoryId: string | null;
   userProfile: UserProfile | null;
-  pendingSaveAction: (() => Promise<void>) | null;
+  pendingSaveAction: (() => Promise<boolean | void>) | null;
+  pendingDiscardAction: (() => void) | null;
   pendingNavigation: PendingNavigation | null;
   navigate: (route: RoutePath, params?: Record<string, string>) => void;
   requestNavigate: (route: RoutePath, params?: Record<string, string>) => boolean;
@@ -42,7 +45,8 @@ interface NavigationState {
   setAuthenticated: (status: boolean) => void;
   setFactoryId: (factoryId: string | null) => void;
   setUserProfile: (profile: UserProfile | null) => void;
-  setPendingSaveAction: (action: (() => Promise<void>) | null) => void;
+  setPendingSaveAction: (action: (() => Promise<boolean | void>) | null) => void;
+  setPendingDiscardAction: (action: (() => void) | null) => void;
 }
 
 export const useNavigationStore = create<NavigationState>()(
@@ -57,6 +61,7 @@ export const useNavigationStore = create<NavigationState>()(
       factoryId: null,
       userProfile: null,
       pendingSaveAction: null,
+      pendingDiscardAction: null,
       pendingNavigation: null,
       navigate: (route, params = {}) => {
         // Extract internal flag before storing in routeParams
@@ -115,11 +120,15 @@ export const useNavigationStore = create<NavigationState>()(
         const { route, params } = parseRouteHash(hash);
         set({ currentRoute: route as RoutePath, routeParams: params });
       },
-      setUnsaved: (unsaved) => set({ isUnsaved: unsaved }),
+      setUnsaved: (unsaved) => {
+        if (get().isUnsaved === unsaved) return;
+        set({ isUnsaved: unsaved });
+      },
       setAuthenticated: (status) => set({ isAuthenticated: status }),
       setFactoryId: (factoryId) => set({ factoryId }),
       setUserProfile: (profile) => set({ userProfile: profile }),
       setPendingSaveAction: (action) => set({ pendingSaveAction: action }),
+      setPendingDiscardAction: (action) => set({ pendingDiscardAction: action }),
     }),
     {
       name: "navigation-storage",

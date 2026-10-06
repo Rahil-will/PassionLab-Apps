@@ -35,7 +35,17 @@ describe('profileToUserProfile', () => {
       fullName: 'Jane Admin',
       email: 'jane@factory.com',
       userRole: 'admin',
+      assignedApps: [],
     });
+  });
+
+  it('maps assigned_apps when present', () => {
+    expect(
+      profileToUserProfile(
+        { ...activeAdminProfile, assigned_apps: ['mm_reports', 'mm_qc'] },
+        'fallback@example.com',
+      ).assignedApps,
+    ).toEqual(['mm_reports', 'mm_qc']);
   });
 
   it('falls back to email when name or email are missing', () => {
@@ -50,6 +60,7 @@ describe('profileToUserProfile', () => {
       fullName: 'ops',
       email: 'ops@factory.com',
       userRole: 'viewer',
+      assignedApps: [],
     });
   });
 });

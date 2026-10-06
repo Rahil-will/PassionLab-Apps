@@ -1,5 +1,4 @@
 import type { CutToShipRow } from './mesReportsApi';
-import { isColorwayClosed } from './orderCompletionRules';
 import type { ColorwayCompletionStatus } from '../types';
 
 export interface FulfillmentSnapshot {
@@ -46,18 +45,21 @@ export function formatFulfillmentPct(value: number | null | undefined): string {
   return `${value.toFixed(1)}%`;
 }
 
-export function formatFulfillmentBool(
-  value: boolean | null | undefined,
-  isClosed: boolean,
-): string {
-  if (!isClosed || value == null) return '—';
+export function formatFulfillmentBool(value: boolean | null | undefined): string {
+  if (value == null) return '—';
   return value ? 'Yes' : 'No';
+}
+
+export function fulfillmentBoolTone(value: string): 'yes' | 'no' | 'neutral' {
+  if (value === 'Yes') return 'yes';
+  if (value === 'No') return 'no';
+  return 'neutral';
 }
 
 export function buildFulfillmentSnapshot(
   row: CutToShipRow,
   deliveryDate: string | null | undefined,
-  completionStatus: ColorwayCompletionStatus,
+  _completionStatus: ColorwayCompletionStatus,
   options?: {
     /** Buyer order qty — denominator for Order → Ship and in-full checks. */
     orderQty?: number;
@@ -81,7 +83,6 @@ export function buildFulfillmentSnapshot(
   // duplicate cutting visits); only fall back to the raw reconciliation total when unresolved.
   const cutQty = originCutQty > 0 ? originCutQty : reconCut;
   const shippedQty = row.shipped_qty || 0;
-  const closed = isColorwayClosed(completionStatus);
 
   const firstOpQty = options?.firstOperationProduced ?? 0;
   const lastOpQty = options?.lastOperationProduced ?? 0;
@@ -93,26 +94,12 @@ export function buildFulfillmentSnapshot(
       ? pctOf(lastOpQty, firstOpQty)
       : pctOf(shippedQty, cutQty);
 
-  if (!closed) {
-    return {
-      orderQty,
-      cutQty,
-      shippedQty,
-      orderToCutPct,
-      orderToShipPct,
-      cutToShipPct,
-      onTime: null,
-      inFull: null,
-      onTimeInFull: null,
-    };
-  }
-
   const delivery = toYmd(deliveryDate);
   const lastShip = toYmd(row.last_shipment_date);
   const inFull = orderQty > 0 ? shippedQty >= orderQty : false;
   const onTime =
     delivery && lastShip ? lastShip <= delivery : delivery ? false : null;
-  const onTimeInFull = onTime === true && inFull;
+  const onTimeInFull = onTime == null ? null : onTime && inFull;
 
   return {
     orderQty,
@@ -131,7 +118,8 @@ export function aggregateFulfillmentKpis(snapshots: FulfillmentSnapshot[]): Fulf
   let orderQty = 0;
   let cutQty = 0;
   let shippedQty = 0;
-  let closedCount = 0;
+  let onTimeEvaluable = 0;
+  let inFullEvaluable = 0;
   let onTimeCount = 0;
   let inFullCount = 0;
   let onTimeInFullCount = 0;
@@ -140,10 +128,11 @@ export function aggregateFulfillmentKpis(snapshots: FulfillmentSnapshot[]): Fulf
     orderQty += s.orderQty;
     cutQty += s.cutQty;
     shippedQty += s.shippedQty;
+    inFullEvaluable++;
+    if (s.inFull) inFullCount++;
     if (s.onTime != null) {
-      closedCount++;
+      onTimeEvaluable++;
       if (s.onTime) onTimeCount++;
-      if (s.inFull) inFullCount++;
       if (s.onTimeInFull) onTimeInFullCount++;
     }
   }
@@ -155,13 +144,13 @@ export function aggregateFulfillmentKpis(snapshots: FulfillmentSnapshot[]): Fulf
     orderToCutPct: pctOf(cutQty, orderQty),
     orderToShipPct: pctOf(shippedQty, orderQty),
     cutToShipPct: pctOf(shippedQty, cutQty),
-    closedCount,
+    closedCount: onTimeEvaluable,
     onTimeCount,
     inFullCount,
     onTimeInFullCount,
-    onTimePct: closedCount > 0 ? pctOf(onTimeCount, closedCount) : null,
-    inFullPct: closedCount > 0 ? pctOf(inFullCount, closedCount) : null,
-    onTimeInFullPct: closedCount > 0 ? pctOf(onTimeInFullCount, closedCount) : null,
+    onTimePct: onTimeEvaluable > 0 ? pctOf(onTimeCount, onTimeEvaluable) : null,
+    inFullPct: inFullEvaluable > 0 ? pctOf(inFullCount, inFullEvaluable) : null,
+    onTimeInFullPct: onTimeEvaluable > 0 ? pctOf(onTimeInFullCount, onTimeEvaluable) : null,
   };
 }
 

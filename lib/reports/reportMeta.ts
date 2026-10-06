@@ -259,76 +259,146 @@ async function fetchColorwayRowsForOrderIds(
 
     if (error) throw error;
 
-    for (const row of data ?? []) {
-      labels.push({
-        id: row.id as string,
-        orderId: row.order_id as string,
-        name: (row.name as string) || '',
-        colorCode: (row.color_code as string) || null,
-      });
-    }
+    labels.push(...mapColorwayLabelRows(data ?? []));
   }
 
   return labels;
 }
 
-/** Distinct order ids with capture activity for a department and date window. */
+function mapColorwayLabelRows(
+  rows: Array<{ id: unknown; order_id: unknown; name: unknown; color_code: unknown }>,
+): ColorwayLabel[] {
+  return rows.map((row) => ({
+    id: row.id as string,
+    orderId: row.order_id as string,
+    name: (row.name as string) || '',
+    colorCode: (row.color_code as string) || null,
+  }));
+}
+
+/** Fill in colorway names for ids that were not in the scoped label set. */
+export async function resolveColorwayMap(
+  factoryId: string,
+  existing: ColorwayLabel[],
+  colorwayIds: Iterable<string | null | undefined>,
+): Promise<Map<string, ColorwayLabel>> {
+  const map = new Map(existing.map((color) => [color.id, color]));
+  const missing = [
+    ...new Set(
+      [...colorwayIds].filter((id): id is string => typeof id === 'string' && id.length > 0 && !map.has(id)),
+    ),
+  ];
+  if (missing.length === 0) return map;
+
+  const batchSize = 40;
+  for (let i = 0; i < missing.length; i += batchSize) {
+    const batch = missing.slice(i, i + batchSize);
+    const { data, error } = await supabase
+      .from('colorways')
+      .select('id, name, color_code, order_id')
+      .eq('factory_id', factoryId)
+      .in('id', batch);
+    if (error) throw error;
+    for (const label of mapColorwayLabelRows(data ?? [])) {
+      map.set(label.id, label);
+    }
+  }
+  return map;
+}
+
+/** Distinct order ids with capture activity for a department and date window.
+ *  Includes hourly/QC/batch plus native capture (cutting sessions, shipments, outsource).
+ */
 export async function fetchColorwayLabelOrderIdsForDeptRange(
   factoryId: string,
   departmentId: string,
   dateFrom: string,
   dateTo: string,
 ): Promise<string[]> {
-  const [hourlyRes, qcRes, batchRes, handoverRes] = await Promise.all([
-    supabase
-      .from('hourly_counts')
-      .select('order_id')
-      .eq('factory_id', factoryId)
-      .eq('department_id', departmentId)
-      .gte('log_date', dateFrom)
-      .lte('log_date', dateTo),
-    supabase
-      .from('inspection_sessions')
-      .select('order_id')
-      .eq('factory_id', factoryId)
-      .eq('department_id', departmentId)
-      .gte('log_date', dateFrom)
-      .lte('log_date', dateTo),
-    supabase
-      .from('batch_production')
-      .select('order_id')
-      .eq('factory_id', factoryId)
-      .eq('department_id', departmentId)
-      .gte('log_date', dateFrom)
-      .lte('log_date', dateTo),
-    supabase
-      .from('handover_slips')
-      .select('order_id, from_department_id, to_department_id')
-      .eq('factory_id', factoryId)
-      .gte('sent_at', `${dateFrom}T00:00:00`)
-      .lte('sent_at', `${dateTo}T23:59:59`),
-  ]);
+  const [hourlyRes, qcRes, batchRes, handoverRes, cuttingRes, shipmentRes, outsourceRes, auditRes] =
+    await Promise.all([
+      supabase
+        .from('hourly_counts')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .eq('department_id', departmentId)
+        .gte('log_date', dateFrom)
+        .lte('log_date', dateTo),
+      supabase
+        .from('inspection_sessions')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .eq('department_id', departmentId)
+        .gte('log_date', dateFrom)
+        .lte('log_date', dateTo),
+      supabase
+        .from('batch_production')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .eq('department_id', departmentId)
+        .gte('log_date', dateFrom)
+        .lte('log_date', dateTo),
+      supabase
+        .from('handover_slips')
+        .select('order_id, from_department_id, to_department_id')
+        .eq('factory_id', factoryId)
+        .gte('sent_at', `${dateFrom}T00:00:00`)
+        .lte('sent_at', `${dateTo}T23:59:59`),
+      supabase
+        .from('cutting_sessions')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .eq('department_id', departmentId)
+        .gte('log_date', dateFrom)
+        .lte('log_date', dateTo),
+      supabase
+        .from('shipments')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .gte('shipment_date', dateFrom)
+        .lte('shipment_date', dateTo),
+      supabase
+        .from('outsource_work_movements')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .eq('department_id', departmentId)
+        .gte('occurred_at', `${dateFrom}T00:00:00`)
+        .lte('occurred_at', `${dateTo}T23:59:59`),
+      supabase
+        .from('audit_sessions')
+        .select('order_id')
+        .eq('factory_id', factoryId)
+        .eq('department_id', departmentId)
+        .eq('status', 'completed')
+        .gte('logged_at', `${dateFrom}T00:00:00`)
+        .lte('logged_at', `${dateTo}T23:59:59.999`),
+    ]);
 
   if (hourlyRes.error) throw hourlyRes.error;
   if (qcRes.error) throw qcRes.error;
   if (batchRes.error) throw batchRes.error;
   if (handoverRes.error) throw handoverRes.error;
+  if (cuttingRes.error) throw cuttingRes.error;
+  if (shipmentRes.error) throw shipmentRes.error;
+  if (outsourceRes.error) throw outsourceRes.error;
+  if (auditRes.error) throw auditRes.error;
 
   const ids = new Set<string>();
-  for (const row of hourlyRes.data ?? []) {
-    if (row.order_id) ids.add(row.order_id as string);
-  }
-  for (const row of qcRes.data ?? []) {
-    if (row.order_id) ids.add(row.order_id as string);
-  }
-  for (const row of batchRes.data ?? []) {
-    if (row.order_id) ids.add(row.order_id as string);
-  }
+  const addOrderId = (orderId: unknown) => {
+    if (orderId) ids.add(String(orderId));
+  };
+  for (const row of hourlyRes.data ?? []) addOrderId(row.order_id);
+  for (const row of qcRes.data ?? []) addOrderId(row.order_id);
+  for (const row of batchRes.data ?? []) addOrderId(row.order_id);
+  for (const row of cuttingRes.data ?? []) addOrderId(row.order_id);
+  for (const row of shipmentRes.data ?? []) addOrderId(row.order_id);
+  for (const row of outsourceRes.data ?? []) addOrderId(row.order_id);
+  for (const row of auditRes.data ?? []) addOrderId(row.order_id);
   for (const row of handoverRes.data ?? []) {
     const fromId = row.from_department_id as string | null;
     const toId = row.to_department_id as string | null;
     if (fromId === departmentId || toId === departmentId) {
-      if (row.order_id) ids.add(row.order_id as string);
+      addOrderId(row.order_id);
     }
   }
 

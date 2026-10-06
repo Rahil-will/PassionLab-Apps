@@ -1,12 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { get, set, del } from 'idb-keyval';
 import { useNavigationStore, useDataStore, useNotificationStore } from '../../stores';
+import {
+    allowOrderDraftWrites,
+    clearOrderDraft,
+    consumeOrderDraftDiscarded,
+    currentOrderDraftEpoch,
+    isOrderDraftWriteBlocked,
+    markOrderDraftDiscarded,
+    orderDraftStorageKey,
+    shouldSkipOrderDraftHydrate,
+} from '../../lib/orderDraftStorage';
 import { useOrderFormSettings } from '../../lib/queries/settingsSlices';
 import { RoutePath, ORDER_TYPE_LABELS } from '../../types';
 import { Save, X, Trash2, CheckCircle2, AlertTriangle, Loader2, Edit2 } from 'lucide-react';
 import { OrderMasterDetailSkeleton } from '../../components/production/OrderMasterDetailSkeleton';
 import { ShipmentPlanPanel, type ShipmentPlanPanelHandle } from '../../components/production/ShipmentPlanPanel';
 import { Button, Card, Modal } from '../../components/ui';
+import { UnsavedChangesModal } from '../../components/settings/UnsavedChangesModal';
 import { DesktopWriteGate } from '../../components/DesktopWriteGate';
 import { PageShell } from '../../components/layout/PageShell';
 import { daysBetween, formatDateDDMMYYYY, todayIso } from '../../lib/orderDateUtils';
@@ -31,6 +42,7 @@ import {
     parseSizeLabels,
     pruneSizeColumnIfAllZero,
     pruneOrphanSizesFromTemplate,
+    sizeGroupTemplateValue,
 } from '../../lib/orderSizeGroupSelection';
 import {
     EMPTY_ORDER_SHIPMENT_PLAN,
@@ -54,13 +66,12 @@ import { useShipmentReducer } from './create-order/hooks/useShipmentReducer';
 import { useValidationReducer } from './create-order/hooks/useValidationReducer';
 import type { StyleOrder } from '../../types';
 
-const orderDraftStorageKey = (factoryId: string) => `prodigi:draft-order:${factoryId}`;
-
 type OrderDraftPayload = {
     id: string;
     header: Record<string, unknown>;
     colorways: StyleOrder['colorways'];
     shipmentPlan: OrderShipmentPlan;
+    epoch?: number;
 };
 
 export const CreateOrderMaster: React.FC = () => {
@@ -70,6 +81,7 @@ export const CreateOrderMaster: React.FC = () => {
         isUnsaved,
         setUnsaved,
         setPendingSaveAction,
+        setPendingDiscardAction,
     } = useNavigationStore();
     const factoryId = useNavigationStore((s) => s.factoryId);
     const { addOrder, updateOrder, deleteOrder, wipOrder, setWipOrder } = useDataStore();
@@ -139,10 +151,7 @@ export const CreateOrderMaster: React.FC = () => {
     };
 
     const clearDraft = (factoryIdToUse = factoryId) => {
-        if (!factoryIdToUse) return;
-        const key = orderDraftStorageKey(factoryIdToUse);
-        void del(key);
-        localStorage.removeItem(key);
+        void clearOrderDraft(factoryIdToUse);
     };
 
     const populateState = (order: StyleOrder) => {
@@ -153,6 +162,18 @@ export const CreateOrderMaster: React.FC = () => {
         const snapshottedSizeKeys = order.sizeLabels
             ? parseSizeLabels(order.sizeLabels)
             : orderedSizeKeys(order.colorways?.[0]?.sizes, collectSizeKeysFromColorways(order.colorways || []));
+        const matchedGroup = order.sizeGroup
+            ? sizeGroups.find((g) => g.id === order.sizeGroup)
+            : sizeGroups.find((g) => g.name === order.sizeGroupName);
+        const restoredSizeGroup = isEditingExistingOrder
+            ? SIZE_GROUP_SNAPSHOT
+            : matchedGroup
+                ? sizeGroupTemplateValue(matchedGroup.id)
+                : order.sizeGroup
+                    ? sizeGroupTemplateValue(order.sizeGroup)
+                    : (order.sizeLabels || (order.colorways?.length ?? 0) > 0)
+                        ? SIZE_GROUP_SNAPSHOT
+                        : '';
 
         headerDispatch({
             type: 'hydrate',
@@ -163,7 +184,7 @@ export const CreateOrderMaster: React.FC = () => {
                 selectedBuyer: buyerObj?.id || '',
                 orderDate: order.orderDate || '',
                 jobCardDate: order.jobCardDate || order.orderDate || todayIso(),
-                sizeGroupSelection: isEditingExistingOrder ? SIZE_GROUP_SNAPSHOT : '',
+                sizeGroupSelection: restoredSizeGroup,
                 snapshottedGroupName: order.sizeGroupName || '',
                 snapshottedSizeKeys,
                 sewingSam: order.sewingSam?.toString() || order.sam?.toString() || '',
@@ -204,7 +225,38 @@ export const CreateOrderMaster: React.FC = () => {
     };
 
     useEffect(() => {
-        if (editOrderId) return;
+        if (editOrderId) {
+            const wipMatches = Boolean(wipOrder) && wipOrder.id === editOrderId;
+            if (wipMatches && wipOrder) {
+                const wipKey = `wip:${wipOrder.id}`;
+                if (hydratedIdRef.current === wipKey) return;
+                draftOrderIdRef.current = wipOrder.id;
+                populateState(wipOrder);
+                hydratedIdRef.current = wipKey;
+                setOrderHydrated(true);
+                setUnsaved(true);
+            }
+            return;
+        }
+
+        if (!factoryId) return;
+
+        if (shouldSkipOrderDraftHydrate(factoryId)) {
+            useDataStore.getState().setWipOrder(null);
+            allowOrderDraftWrites();
+            void clearOrderDraft(factoryId).then(() => consumeOrderDraftDiscarded(factoryId));
+            if (hydratedIdRef.current !== 'new' || wipOrder) {
+                headerDispatch({ type: 'reset' });
+                colorwayDispatch({ type: 'reset' });
+                shipmentDispatch({ type: 'reset' });
+                validationDispatch({ type: 'reset' });
+            }
+            draftOrderIdRef.current = crypto.randomUUID();
+            hydratedIdRef.current = 'new';
+            setUnsaved(false);
+            setOrderHydrated(true);
+            return;
+        }
 
         if (wipOrder) {
             const wipKey = `wip:${wipOrder.id}`;
@@ -213,11 +265,13 @@ export const CreateOrderMaster: React.FC = () => {
             populateState(wipOrder);
             hydratedIdRef.current = wipKey;
             setOrderHydrated(true);
+            setUnsaved(true);
             return;
         }
 
-        if (!factoryId) return;
         if (hydratedIdRef.current === 'new') return;
+
+        allowOrderDraftWrites();
 
         let cancelled = false;
         const storageKey = orderDraftStorageKey(factoryId);
@@ -255,9 +309,14 @@ export const CreateOrderMaster: React.FC = () => {
 
             if (cancelled) return;
 
-            if (draft) {
+            const draftIsStale = typeof draft?.epoch === 'number' && draft.epoch < currentOrderDraftEpoch();
+            if (draft && !draftIsStale) {
                 populateDraft(draft);
             } else {
+                if (draft) {
+                    void del(storageKey);
+                    localStorage.removeItem(storageKey);
+                }
                 draftOrderIdRef.current = crypto.randomUUID();
             }
             hydratedIdRef.current = 'new';
@@ -269,6 +328,8 @@ export const CreateOrderMaster: React.FC = () => {
     }, [editOrderId, wipOrder?.id, factoryId]);
 
     useEffect(() => {
+        const wipMatches = Boolean(wipOrder) && (!editOrderId || wipOrder.id === editOrderId);
+        if (wipMatches) return;
         if (!editOrderId) return;
         const existing = editOrder;
         if (!existing) return;
@@ -279,7 +340,7 @@ export const CreateOrderMaster: React.FC = () => {
         setOrderHydrated(true);
         setUnsaved(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [editOrderId, editOrder, buyers]);
+    }, [editOrderId, editOrder, buyers, wipOrder]);
 
     useEffect(() => {
         if (!factoryId) return;
@@ -305,6 +366,43 @@ export const CreateOrderMaster: React.FC = () => {
         () => dropdownValuesForCategory(supportDropdowns, 'season'),
         [supportDropdowns],
     );
+
+    const newOrderHasContent = useMemo(() => {
+        if (isEditingExistingOrder) return false;
+        return Boolean(
+            header.styleName.trim()
+            || header.styleRef.trim()
+            || header.poNumber.trim()
+            || header.selectedBuyer
+            || header.sizeGroupSelection
+            || header.merchantName.trim()
+            || header.season.trim()
+            || header.remarks.trim()
+            || header.garmentType
+            || header.sewingSam.trim()
+            || header.styleImage
+            || colorway.colorways.length > 0,
+        );
+    }, [
+        isEditingExistingOrder,
+        header.styleName,
+        header.styleRef,
+        header.poNumber,
+        header.selectedBuyer,
+        header.sizeGroupSelection,
+        header.merchantName,
+        header.season,
+        header.remarks,
+        header.garmentType,
+        header.sewingSam,
+        header.styleImage,
+        colorway.colorways.length,
+    ]);
+
+    useEffect(() => {
+        if (isEditingExistingOrder) return;
+        setUnsaved(newOrderHasContent);
+    }, [isEditingExistingOrder, newOrderHasContent, setUnsaved]);
 
     const selectedBuyerObj = useMemo(
         () => buyers.find((b) => b.id === header.selectedBuyer),
@@ -367,9 +465,12 @@ export const CreateOrderMaster: React.FC = () => {
     const totalAllowancePct = header.cuttingAllowance + (header.applyExtraAllowance ? buyerExtraPct : 0);
 
     const existingOrder = editOrderId ? (editOrder ?? null) : null;
+    const wipMatchesEdit = Boolean(wipOrder) && (!editOrderId || wipOrder.id === editOrderId);
     const isOrderLoading = Boolean(editOrderId)
+        && !wipMatchesEdit
         && (settingsLoading || editOrderLoading || !orderHydrated || !existingOrder);
     const isOrderMissing = Boolean(editOrderId)
+        && !wipMatchesEdit
         && !settingsLoading
         && !editOrderLoading
         && !existingOrder;
@@ -396,14 +497,32 @@ export const CreateOrderMaster: React.FC = () => {
 
     useEffect(() => {
         if (!factoryId || editOrderId) return;
+        if (isOrderDraftWriteBlocked()) return;
+        const epoch = currentOrderDraftEpoch();
         const timeout = setTimeout(() => {
+            if (isOrderDraftWriteBlocked()) return;
+            if (epoch !== currentOrderDraftEpoch()) return;
             const payload: OrderDraftPayload = {
                 id: draftOrderIdRef.current || '',
                 header: (({ factoryCode: _, ...rest }) => rest)(header),
                 colorways: colorway.colorways,
                 shipmentPlan: shipment.plan,
+                epoch: currentOrderDraftEpoch(),
             };
-            void set(orderDraftStorageKey(factoryId), payload);
+            const key = orderDraftStorageKey(factoryId);
+            const writeEpoch = currentOrderDraftEpoch();
+            void (async () => {
+                try {
+                    if (isOrderDraftWriteBlocked() || writeEpoch !== currentOrderDraftEpoch()) return;
+                    await set(key, payload);
+                    if (isOrderDraftWriteBlocked() || writeEpoch !== currentOrderDraftEpoch()) {
+                        await del(key);
+                        localStorage.removeItem(key);
+                    }
+                } catch {
+                    // session-only fallback if IDB write fails
+                }
+            })();
         }, 1000);
         return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -501,8 +620,35 @@ export const CreateOrderMaster: React.FC = () => {
             shipmentPlan: shipment.plan,
             cuttingAllowance: header.cuttingAllowance,
             shipmentAllowance: finalShipmentAllowance,
+            sizeGroup: templateGroupId || undefined,
             routingSteps: existingOrder?.routingSteps ?? [],
         };
+    };
+
+    const openColorPage = (opts: { addNew?: boolean; colorId?: string }) => {
+        if (!hasSizeContext) {
+            showNotification('Select a size group first', 'error');
+            return;
+        }
+
+        const draft = constructOrderObject();
+        setWipOrder(draft);
+
+        if (factoryId && !isEditingExistingOrder) {
+            void set(orderDraftStorageKey(factoryId), {
+                id: draft.id,
+                header: (({ factoryCode: _, ...rest }) => rest)(header),
+                colorways: draft.colorways,
+                shipmentPlan: shipment.plan,
+                epoch: currentOrderDraftEpoch(),
+            });
+        }
+
+        const params: Record<string, string> = {};
+        if (opts.addNew || !opts.colorId) params.add = '1';
+        else params.colorId = opts.colorId;
+        if (isEditingExistingOrder && editOrderId) params.id = editOrderId;
+        navigate(RoutePath.CREATE_ORDER_COLOR, params);
     };
 
     const validateHeader = async () => {
@@ -636,25 +782,31 @@ export const CreateOrderMaster: React.FC = () => {
 
     handleConfirmOrderRef.current = handleConfirmOrder;
 
-    useEffect(() => {
-        setPendingSaveAction(async () => {
-            await handleConfirmOrderRef.current({ silent: true });
-        });
-        return () => {
-            setPendingSaveAction(null);
-        };
-    }, [setPendingSaveAction]);
-
     const resetForm = () => {
         headerDispatch({ type: 'reset' });
         colorwayDispatch({ type: 'reset' });
         shipmentDispatch({ type: 'reset' });
         validationDispatch({ type: 'reset' });
         draftOrderIdRef.current = null;
+        hydratedIdRef.current = editOrderId ? hydratedIdRef.current : 'new';
         setUnsaved(false);
         setWipOrder(null);
-        if (factoryId) clearDraft();
+        void clearOrderDraft(useNavigationStore.getState().factoryId);
     };
+
+    useEffect(() => {
+        setPendingSaveAction(async () => {
+            return handleConfirmOrderRef.current({ silent: true });
+        });
+        setPendingDiscardAction(() => {
+            markOrderDraftDiscarded(useNavigationStore.getState().factoryId);
+            resetForm();
+        });
+        return () => {
+            setPendingSaveAction(null);
+            setPendingDiscardAction(null);
+        };
+    }, [setPendingSaveAction, setPendingDiscardAction]);
 
     const performCancel = () => {
         resetForm();
@@ -679,6 +831,7 @@ export const CreateOrderMaster: React.FC = () => {
 
     const confirmDiscardCancel = () => {
         setShowDiscardDialog(false);
+        markOrderDraftDiscarded(useNavigationStore.getState().factoryId);
         setWipOrder(null);
         performCancel();
     };
@@ -812,6 +965,7 @@ export const CreateOrderMaster: React.FC = () => {
                     hasSizeContext={hasSizeContext}
                     headerState={header}
                     buyerExtraPct={buyerExtraPct}
+                    onOpenColorPage={openColorPage}
                 />
 
                 <ShipmentPlanSection
@@ -1138,43 +1292,14 @@ export const CreateOrderMaster: React.FC = () => {
                     </div>
                 </Modal>
 
-                <Modal isOpen={showDiscardDialog} onClose={cancelDiscardDialog}>
-                    <div className="relative">
-                        <button
-                            onClick={cancelDiscardDialog}
-                            className="absolute top-4 right-4 text-slate-400 hover:text-red-600 transition-colors p-1 hover:bg-red-50 rounded-full"
-                        >
-                            <X size={20} />
-                        </button>
-                        <div className="flex flex-col items-center p-8 pb-4 text-center">
-                            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm ring-4 ring-amber-50">
-                                <AlertTriangle size={32} />
-                            </div>
-                            <h3 className="text-base font-bold text-slate-900 mb-2">Unsaved Changes</h3>
-                            <p className="text-slate-500 text-xs max-w-[260px] leading-relaxed">
-                                You have unsaved modifications. What would you like to do?
-                            </p>
-                        </div>
-                        <div className="p-6 pt-2 flex flex-col gap-3">
-                            <DesktopWriteGate>
-                            <Button
-                                onClick={() => void confirmSaveAndCloseCancel()}
-                                disabled={saving}
-                                className="w-full shadow-lg shadow-blue-100 py-2.5 text-xs"
-                            >
-                                {saving ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Save Changes'}
-                            </Button>
-                            </DesktopWriteGate>
-                            <Button
-                                variant="danger-light"
-                                onClick={confirmDiscardCancel}
-                                className="w-full text-xs"
-                            >
-                                Discard &amp; {isEditingExistingOrder ? 'Leave' : 'Clear'}
-                            </Button>
-                        </div>
-                    </div>
-                </Modal>
+                <UnsavedChangesModal
+                    isOpen={showDiscardDialog}
+                    onClose={cancelDiscardDialog}
+                    onSave={confirmSaveAndCloseCancel}
+                    onDiscard={confirmDiscardCancel}
+                    discardLabel={isEditingExistingOrder ? 'Discard & Leave' : 'Discard & Clear'}
+                    saving={saving}
+                />
 
             </div>
             )}

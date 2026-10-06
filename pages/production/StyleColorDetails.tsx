@@ -3,13 +3,14 @@ import { useNavigationStore, useDataStore } from '../../stores';
 import { useDepartmentsCatalog, useShiftsCatalog } from '../../lib/queries/settingsSlices';
 import { useAssignedResources } from '../../hooks/useAssignedResources';
 import { RoutePath } from '../../types';
-import { Factory, ExternalLink, FileText, Eye, Calendar, BarChart3, TrendingUp, Scissors } from 'lucide-react';
+import { Factory, ExternalLink, FileText, Eye, Calendar, BarChart3, TrendingUp, Scissors, Package } from 'lucide-react';
 import { flowTableClasses as t } from '../../lib/productionFlowTable';
 import { sizeAdjQty, sizeOrderQty } from '../../lib/colorwaySizesUtils';
 import { Card } from '../../components/ui';
 import { PageShell } from '../../components/layout/PageShell';
 import { useDesktopWriteRole } from '../../components/DesktopWriteGate';
 import { StyleInformationCard } from '../../components/production/StyleInformationCard';
+import { ColorwayMaterialsPanel } from '../../components/production/ColorwayMaterialsPanel';
 import { ShipmentPlanReadOnly } from '../../components/production/ShipmentPlanReadOnly';
 import { OrderDepartmentScheduleGantt } from '../../components/production/OrderDepartmentScheduleGantt';
 import { DeptFlowTable } from '../../components/production/DeptFlowTable';
@@ -18,6 +19,7 @@ import { StyleDetailsPageSkeleton } from '../../components/production/StyleDetai
 import { useOrderCutFabricByRoute } from '../../hooks/useOrderCutFabricByRoute';
 import { useCuttingComponentProgress } from '../../hooks/useCuttingComponentProgress';
 import { useOrderForEdit } from '../../hooks/useOrderForEdit';
+import { useModuleEnabled } from '../../core/modules/useModuleEnabled';
 import { useOrderAllocations } from '../../hooks/useOrderAllocations';
 import { allocationsForColorway } from '../../lib/allocationUtils';
 import { useOrderDetailMetrics } from '../../hooks/useOrderDetailMetrics';
@@ -55,12 +57,17 @@ export const StyleColorDetails: React.FC = () => {
     const settingsLoading = shiftsLoading || deptLoading;
     const { data: assignedResources = [] } = useAssignedResources(factoryId);
 
-    const [activeTab, setActiveTab] = useState<'production' | 'reports'>('production');
+    const [activeTab, setActiveTab] = useState<'production' | 'materials' | 'reports'>('production');
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const materialOn = useModuleEnabled('material');
 
     useEffect(() => {
         window.scrollTo(0, 0);
     }, []);
+
+    useEffect(() => {
+        if (!materialOn && activeTab === 'materials') setActiveTab('production');
+    }, [materialOn, activeTab]);
 
     const orderId = routeParams?.id;
     const colorId = routeParams?.colorId;
@@ -214,8 +221,9 @@ export const StyleColorDetails: React.FC = () => {
     );
 
     const renderOperationValue = (value: number, column: ProductionMatrixVisitCol, size?: string) => {
-        if (value <= 0 || column.deptId !== originDepartmentId) return formatCount(value);
+        if (column.deptId !== originDepartmentId) return formatCount(value);
         const components = componentsFor(column.stepId, colorId ?? undefined, size);
+        if (value <= 0 && components.length === 0) return formatCount(value);
         return <FabricOutputBreakdownPopover value={value} components={components} size={size} />;
     };
 
@@ -383,6 +391,14 @@ export const StyleColorDetails: React.FC = () => {
                     >
                         <Factory size={16} /> Production
                     </button>
+                    {materialOn ? (
+                        <button
+                            onClick={() => setActiveTab('materials')}
+                            className={`px-6 py-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${activeTab === 'materials' ? 'border-blue-500 text-blue-600 bg-white shadow-sm rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-t-lg'}`}
+                        >
+                            <Package size={16} /> Material Requirements
+                        </button>
+                    ) : null}
                     <button
                         onClick={() => setActiveTab('reports')}
                         className={`px-6 py-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${activeTab === 'reports' ? 'border-blue-500 text-blue-600 bg-white shadow-sm rounded-t-lg' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-t-lg'}`}
@@ -518,6 +534,22 @@ export const StyleColorDetails: React.FC = () => {
                                 displaySizes={order.sizeLabels ? order.sizeLabels.split(',').map(s => s.trim()) : undefined}
                             />
                         </div>
+                    )}
+
+                    {activeTab === 'materials' && materialOn && (
+                        <Card
+                            title="Material requirements"
+                            subtitle="Fabric categories from Work Centres. Extra fabric columns load after fabric type. Trim total qty is qty per piece × this color's adjusted qty."
+                            className="shadow-sm border-slate-200"
+                            noPadding
+                        >
+                            <ColorwayMaterialsPanel
+                                colorway={colorway}
+                                adjustedQty={totalPlannedQty}
+                                showCaption={false}
+                                readOnly
+                            />
+                        </Card>
                     )}
 
                     {activeTab === 'reports' && (

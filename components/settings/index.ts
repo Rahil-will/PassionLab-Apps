@@ -8,3 +8,4 @@ export { FabricComponentsEditor } from './FabricComponentsEditor';
 export { ShipmentDropdownChips } from './ShipmentDropdownChips';
 export { UnsavedChangesModal } from './UnsavedChangesModal';
 export { FactorySettingsPanel } from './FactorySettingsPanel';
+export { ModuleSelectorPanel } from './ModuleSelectorPanel';

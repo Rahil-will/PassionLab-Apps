@@ -37,6 +37,20 @@ export function planningModeForDepartment(
   return 'production';
 }
 
+/** Day Report RPC family: origin / standard / terminal (outsource stays on its own capture path). */
+export type DayReportRoleKind = 'origin' | 'standard' | 'terminal' | 'outsource';
+
+export function dayReportRoleKind(
+  dept: Pick<DepartmentEntity, 'role' | 'planning_mode'> | undefined,
+): DayReportRoleKind {
+  const mode = resolvePlanningMode(dept);
+  if (mode === 'outsource') return 'outsource';
+  const role = dept?.role || 'standard';
+  if (role === 'origin') return 'origin';
+  if (role === 'terminal') return 'terminal';
+  return 'standard';
+}
+
 export function effectivePlanningMode(
   dept: Pick<DepartmentEntity, 'role' | 'planning_mode'> | undefined,
 ): DepartmentPlanningMode {
@@ -69,6 +83,13 @@ export function isOutsourcePlanningDepartment(
   dept: Pick<DepartmentEntity, 'role' | 'planning_mode'> | undefined,
 ): boolean {
   return resolvePlanningMode(dept) === 'outsource';
+}
+
+/** Day Report audits — outsource window planning has no floor AQL (shipment desk still uses shipment_audits). */
+export function departmentDayReportAuditsEligible(
+  dept: Pick<DepartmentEntity, 'role' | 'planning_mode'> | undefined,
+): boolean {
+  return !isOutsourcePlanningDepartment(dept);
 }
 
 /** Store and outsource — supervisor-only on the floor (no operators). */

@@ -58,7 +58,7 @@ export default function MmProcChallanListV4Page() {
   const [sendSide, setSendSide] = useState<MmV4ProcSide>('mill');
 
   usePageHeader({
-    subtitle: 'Send rolls to processing units and track returns, lots, and loss.',
+    subtitle: 'Process challans already sent. Open a row for returns, lots, and loss. Create new challans from Warehouse → Send to processing.',
   });
 
   const units = useMemo(

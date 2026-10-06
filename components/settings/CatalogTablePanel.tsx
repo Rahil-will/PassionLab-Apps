@@ -10,6 +10,8 @@ interface CatalogTablePanelProps {
   isEmpty?: boolean;
   /** Renders below the panel header (e.g. Active / History tabs). */
   toolbar?: React.ReactNode;
+  /** Renders on the right of the title row (e.g. Add). */
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -21,22 +23,26 @@ export const CatalogTablePanel: React.FC<CatalogTablePanelProps> = ({
   emptyMessage = 'No items yet.',
   isEmpty = false,
   toolbar,
+  headerAction,
   children,
 }) => (
   <div className="h-full flex flex-col min-h-0">
-    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/50 shrink-0">
-      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
-        {Icon && <Icon size={14} />}
-        {title}
-      </h4>
-      {meta ? (
-        <>
-          {subtitle && <p className="text-[11px] font-semibold text-slate-700 mt-1">{subtitle}</p>}
-          <p className="text-[10px] text-slate-400 mt-0.5">{meta}</p>
-        </>
-      ) : subtitle ? (
-        <p className="text-[10px] text-slate-400 mt-0.5">{subtitle}</p>
-      ) : null}
+    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/50 shrink-0 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+          {Icon && <Icon size={14} />}
+          {title}
+        </h4>
+        {meta ? (
+          <>
+            {subtitle && <p className="text-[11px] font-semibold text-slate-700 mt-1">{subtitle}</p>}
+            <p className="text-[10px] text-slate-400 mt-0.5">{meta}</p>
+          </>
+        ) : subtitle ? (
+          <p className="text-[10px] text-slate-400 mt-0.5">{subtitle}</p>
+        ) : null}
+      </div>
+      {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
     </div>
     {toolbar && (
       <div className="px-4 py-2 border-b border-slate-200 bg-white shrink-0">
@@ -58,6 +64,12 @@ interface CatalogTableProps {
   leftColumns?: number[];
   /** @deprecated Prefer leftColumns — extra center columns beyond default (all except leftColumns). */
   centerColumns?: number[];
+  /** Center-align every header and default cell alignment hint. */
+  centerAll?: boolean;
+  /** Blank row after data so the table does not feel cramped at the bottom. */
+  padBottomRow?: boolean;
+  /** Optional per-column widths (CSS). Unset columns share remaining space. */
+  widths?: (string | undefined)[];
 }
 
 const thBorder = 'border-r border-slate-200 last:border-r-0';
@@ -66,32 +78,43 @@ const tdBorder = 'border-r border-slate-200 last:border-r-0';
 export const CatalogTable: React.FC<CatalogTableProps> = ({
   headers,
   children,
-  leftColumns = [0, 1],
+  leftColumns: _leftColumns = [0, 1],
   centerColumns = [],
+  centerAll = false,
+  padBottomRow = false,
+  widths,
 }) => {
-  const leftSet = new Set(leftColumns);
+  void _leftColumns;
   const extraCenter = new Set(centerColumns);
   const serialWidth = '3.5rem';
-  const actionCol = headers[headers.length - 1] === '' ? 1 : 0;
-  const dataCols = headers.length - 1 - actionCol;
+  const lastHeader = headers[headers.length - 1] ?? '';
+  const actionCol = lastHeader === '' || lastHeader === 'Action' ? 1 : 0;
+  const actionWidth = '3.75rem';
+  const dataCols = headers.length - actionCol;
   const dataWidth =
-    dataCols > 0 ? `calc((100% - ${serialWidth}${actionCol ? ' - 2.5rem' : ''}) / ${dataCols})` : 'auto';
+    dataCols > 0
+      ? `calc((100% - ${actionCol ? actionWidth : '0px'}) / ${dataCols})`
+      : 'auto';
 
   return (
     <table className="w-full text-xs table-fixed border-collapse">
+      <colgroup>
+        {headers.map((h, i) => {
+          const isSerial = i === 0 && (h === '#' || h === 'S.No');
+          const isAction = actionCol > 0 && i === headers.length - 1;
+          const width = widths?.[i]
+            ?? (isSerial ? serialWidth : isAction ? actionWidth : dataWidth);
+          return <col key={`${h}-${i}`} style={{ width }} />;
+        })}
+      </colgroup>
       <thead className="text-[10px] uppercase text-slate-500 font-semibold border-b border-slate-200 sticky top-0 bg-white z-10">
         <tr>
           {headers.map((h, i) => {
-            const isSerial = i === 0;
-            const isAction = actionCol > 0 && i === headers.length - 1;
-            const centered = extraCenter.has(i);
+            const centered = centerAll || extraCenter.has(i);
             return (
               <th
                 key={`${h}-${i}`}
                 className={`px-3 py-2 ${centered ? 'text-center' : 'text-left'} ${thBorder}`}
-                style={{
-                  width: isSerial ? serialWidth : isAction ? '2.5rem' : dataWidth,
-                }}
               >
                 {h}
               </th>
@@ -99,7 +122,14 @@ export const CatalogTable: React.FC<CatalogTableProps> = ({
           })}
         </tr>
       </thead>
-      <tbody className="[&_tr]:border-b [&_tr]:border-slate-200">{children}</tbody>
+      <tbody className="[&_tr]:border-b [&_tr]:border-slate-200">
+        {children}
+        {padBottomRow ? (
+          <tr aria-hidden>
+            <td colSpan={headers.length} className="h-10 border-0 p-0" />
+          </tr>
+        ) : null}
+      </tbody>
     </table>
   );
 };
@@ -150,8 +180,8 @@ export const CatalogTableCell: React.FC<CatalogTableCellProps> = ({
 }) => (
   <td
     colSpan={colSpan}
-    className={`px-3 py-2.5 align-middle text-left ${tdBorder} ${
-      align === 'center' ? 'text-center' : ''
+    className={`px-3 py-2.5 align-middle ${tdBorder} ${
+      align === 'center' ? 'text-center' : 'text-left'
     } ${className}`}
   >
     {children}

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { LineAllocation, StyleOrder } from '../../types';
 import { supabase } from '../supabase';
 import { mapStyleOrderFromDb } from '../styleOrderDb';
+import { COLORWAY_WITH_MATERIALS_SELECT } from '../colorwayMaterialsDb';
 import {
   ORDER_ROUTING_STEP_SELECT_SLIM,
   mapRoutingRecordToRow,
@@ -38,7 +39,7 @@ export async function fetchOrdersEnrichedByIds(
 
   const [ordersRes, colorwaysRes, odtRes, routingRes] = await Promise.all([
     supabase.from('style_orders').select('*').eq('factory_id', factoryId).in('id', orderIds),
-    supabase.from('colorways').select('*').eq('factory_id', factoryId).in('order_id', orderIds),
+    supabase.from('colorways').select(COLORWAY_WITH_MATERIALS_SELECT).eq('factory_id', factoryId).in('order_id', orderIds),
     supabase
       .from('order_delivery_targets')
       .select('id, order_id, colorway_id, target_date, ship_mode, shipment_type, qty_by_size, destination_country, status, change_history, notes')
@@ -53,6 +54,9 @@ export async function fetchOrdersEnrichedByIds(
   ]);
 
   if (ordersRes.error) throw ordersRes.error;
+  if (colorwaysRes.error) throw colorwaysRes.error;
+  if (odtRes.error) throw odtRes.error;
+  if (routingRes.error) throw routingRes.error;
 
   const colorwaysByOrder = new Map<string, Record<string, unknown>[]>();
   for (const cw of (colorwaysRes.data ?? []) as Record<string, unknown>[]) {

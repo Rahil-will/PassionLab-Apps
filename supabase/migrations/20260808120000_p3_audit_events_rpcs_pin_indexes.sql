@@ -14,17 +14,13 @@ CREATE TABLE IF NOT EXISTS public.audit_events (
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_audit_events_factory_created
   ON public.audit_events (factory_id, created_at DESC);
-
 ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS audit_events_select ON public.audit_events;
 CREATE POLICY audit_events_select ON public.audit_events
   FOR SELECT TO authenticated
   USING (factory_id = current_factory_id() AND is_factory_admin());
-
 CREATE OR REPLACE FUNCTION public.log_audit_event(
   p_factory_id uuid,
   p_action text,
@@ -52,7 +48,6 @@ BEGIN
   );
 END;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- PIN rate-limiting (5 failures / 15 minutes per user or email)
 -- ---------------------------------------------------------------------------
@@ -63,15 +58,12 @@ CREATE TABLE IF NOT EXISTS public.floor_login_attempts (
   success boolean NOT NULL DEFAULT false,
   attempted_at timestamptz NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_floor_login_attempts_profile_time
   ON public.floor_login_attempts (profile_id, attempted_at DESC)
   WHERE profile_id IS NOT NULL;
-
 CREATE INDEX IF NOT EXISTS idx_floor_login_attempts_email_time
   ON public.floor_login_attempts (lower(email), attempted_at DESC)
   WHERE email IS NOT NULL;
-
 ALTER TABLE public.floor_login_attempts ENABLE ROW LEVEL SECURITY;
 -- No client policies — SECURITY DEFINER RPCs only.
 
@@ -98,7 +90,6 @@ AS $$
     HAVING count(*) >= 5
   );
 $$;
-
 CREATE OR REPLACE FUNCTION public.record_floor_login_attempt(
   p_profile_id uuid,
   p_email text,
@@ -114,7 +105,6 @@ BEGIN
   VALUES (p_profile_id, NULLIF(lower(trim(p_email)), ''), COALESCE(p_success, false));
 END;
 $$;
-
 CREATE OR REPLACE FUNCTION public.verify_floor_pin(p_user_id uuid, p_pin text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -161,7 +151,6 @@ BEGIN
   );
 END;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.verify_floor_login_by_email(p_email text, p_pin text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -193,22 +182,17 @@ BEGIN
          || jsonb_build_object('email', v_profile.email);
 END;
 $function$;
-
 -- ---------------------------------------------------------------------------
 -- Performance indexes (SCHEMA_BACKLOG G)
 -- ---------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_style_orders_factory_status_created
   ON public.style_orders (factory_id, status, created_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_hourly_counts_factory_order_date
   ON public.hourly_counts (factory_id, order_id, log_date);
-
 CREATE INDEX IF NOT EXISTS idx_handover_slips_factory_order_sent
   ON public.handover_slips (factory_id, order_id, sent_at);
-
 CREATE INDEX IF NOT EXISTS idx_order_routing_steps_factory_dept
   ON public.order_routing_steps (factory_id, dept_id);
-
 -- ---------------------------------------------------------------------------
 -- save_factory_settings
 -- ---------------------------------------------------------------------------
@@ -258,9 +242,7 @@ BEGIN
   RETURN v_row;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.save_factory_settings(uuid, text, text, text, text, uuid, jsonb, jsonb, jsonb, jsonb, jsonb) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- save_fabric_components (batch upsert + soft-delete)
 -- ---------------------------------------------------------------------------
@@ -354,9 +336,7 @@ BEGIN
   ORDER BY fc.created_at ASC, fc.fabric_type ASC;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.save_fabric_components(uuid, uuid, jsonb, uuid[]) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- save_operation
 -- ---------------------------------------------------------------------------
@@ -431,9 +411,7 @@ BEGIN
   RETURN v_row;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.save_operation(text, uuid, uuid, uuid, text, text, text) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- save_colorway_planning_remarks
 -- ---------------------------------------------------------------------------
@@ -480,5 +458,4 @@ BEGIN
   RETURN p_colorway_id;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.save_colorway_planning_remarks(uuid, uuid, uuid, text) TO authenticated;

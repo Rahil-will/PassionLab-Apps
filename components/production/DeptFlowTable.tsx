@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { flowTableClasses as t } from '../../lib/productionFlowTable';
-import type { VisitFlowMetrics } from '../../lib/orderFlowMetrics';
+import { shipmentFlowDisplayQty, type VisitFlowMetrics } from '../../lib/orderFlowMetrics';
 interface DeptFlowTableProps {
   metrics: VisitFlowMetrics[];
   emptyMessage?: string;
@@ -40,7 +40,9 @@ export const DeptFlowTable: React.FC<DeptFlowTableProps> = ({
             <tr>
               <td colSpan={8} className="p-6 text-center text-slate-400 italic">{emptyMessage}</td>
             </tr>
-          ) : metrics.map((row) => (
+          ) : metrics.map((row) => {
+            const cols = shipmentFlowDisplayQty(row);
+            return (
             <tr key={row.visitId}>
               <td className={t.firstCell}>
                 <span className="font-semibold text-[10px] text-slate-800">{row.deptName}</span>
@@ -51,8 +53,8 @@ export const DeptFlowTable: React.FC<DeptFlowTableProps> = ({
                 </span>
               </td>
               <td className={t.numCell}>{qtyCell(row.received)}</td>
-              <td className={`${t.numCell} text-slate-900`}>{qtyCell(row.produced)}</td>
-              <td className={t.numCell}>{qtyCell(row.sent)}</td>
+              <td className={`${t.numCell} text-slate-900`}>{qtyCell(cols.produced)}</td>
+              <td className={t.numCell}>{qtyCell(cols.sent)}</td>
               <td className={t.numCell}>{qtyCell(row.inTransit ?? 0)}</td>
               <td className={t.numCell}>
                 {(row.missingInTransit ?? 0) > 0 ? (
@@ -64,9 +66,10 @@ export const DeptFlowTable: React.FC<DeptFlowTableProps> = ({
                   '—'
                 )}
               </td>
-              <td className={t.numCell}>{qtyCell(row.wip)}</td>
+              <td className={t.numCell}>{qtyCell(cols.wip)}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

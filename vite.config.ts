@@ -157,7 +157,7 @@ export default defineConfig(() => {
       test: {
         globals: false,
         environment: 'node',
-        include: ['lib/**/*.test.ts', 'hooks/**/*.test.ts'],
+        include: ['lib/**/*.test.ts', 'hooks/**/*.test.ts', 'modules/**/*.test.ts'],
       },
     };
 });

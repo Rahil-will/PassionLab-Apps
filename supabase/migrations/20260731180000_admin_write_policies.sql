@@ -15,7 +15,6 @@ CREATE POLICY style_orders_update ON public.style_orders
 CREATE POLICY style_orders_delete ON public.style_orders
   FOR DELETE TO authenticated
   USING (factory_id = current_factory_id() AND is_factory_admin());
-
 -- line_allocations
 DROP POLICY IF EXISTS la_all ON public.line_allocations;
 CREATE POLICY line_allocations_select ON public.line_allocations
@@ -31,7 +30,6 @@ CREATE POLICY line_allocations_update ON public.line_allocations
 CREATE POLICY line_allocations_delete ON public.line_allocations
   FOR DELETE TO authenticated
   USING (factory_id = current_factory_id() AND is_factory_admin());
-
 -- buyers (writes only — select unchanged)
 DROP POLICY IF EXISTS buyers_insert ON public.buyers;
 DROP POLICY IF EXISTS buyers_update ON public.buyers;
@@ -46,7 +44,6 @@ CREATE POLICY buyers_update ON public.buyers
 CREATE POLICY buyers_delete ON public.buyers
   FOR DELETE TO authenticated
   USING (factory_id = current_factory_id() AND is_factory_admin());
-
 -- departments (writes only)
 DROP POLICY IF EXISTS departments_insert ON public.departments;
 DROP POLICY IF EXISTS departments_update ON public.departments;
@@ -61,7 +58,6 @@ CREATE POLICY departments_update ON public.departments
 CREATE POLICY departments_delete ON public.departments
   FOR DELETE TO authenticated
   USING (factory_id = current_factory_id() AND is_factory_admin());
-
 -- operations
 DROP POLICY IF EXISTS operations_all ON public.operations;
 CREATE POLICY operations_select ON public.operations

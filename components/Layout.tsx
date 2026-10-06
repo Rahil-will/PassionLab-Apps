@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard,
   PlusCircle,
@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Hexagon,
-  AlertTriangle,
   Activity,
   GitMerge,
   ArrowLeftRight,
@@ -21,16 +20,24 @@ import {
   Package,
   Building2,
   Menu,
+  Warehouse,
+  Scissors,
 } from 'lucide-react';
 import { useNavigationStore, useDataStore } from '../stores';
 import { RoutePath } from '../types';
 import { Modal, Button } from './ui';
+import { UnsavedChangesModal } from './settings/UnsavedChangesModal';
 import { Breadcrumb, PageHeaderProvider } from './Breadcrumb';
 import { applyScale, tokens } from '../lib/designTokens';
+import { markOrderDraftDiscarded } from '../lib/orderDraftStorage';
 import { buildRouteHash, parseRouteHash } from '../lib/routeHash';
 import { logoutDesktopSession } from '../lib/authSession';
-import { canAccessRoute } from '../lib/routeAccess';
+import { canAccessRoute, type RouteAccessContext } from '../lib/routeAccess';
 import { DesktopWriteProvider, DesktopWriteGate } from './DesktopWriteGate';
+import { getEntitledManifests } from '../core/modules/registry';
+import { useFactoryModules } from '../core/modules/useModuleEnabled';
+import { useInHouseMill } from '../modules/material/lib/useMmFactoryFeatures';
+import type { ModuleKey } from '../core/modules/types';
 
 interface SidebarItemProps {
   id: string;
@@ -41,7 +48,7 @@ interface SidebarItemProps {
   onToggle: (id: string) => void;
   onClick?: () => void;
   onNavRequest: (route: RoutePath) => void;
-  subItems?: { label: string; route: RoutePath }[];
+  subItems?: { label: string; route: RoutePath; matchPrefix?: string }[];
   collapsed?: boolean;
 }
 
@@ -53,15 +60,17 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ id, icon: Icon, label, active
   };
 
   const handleClick = () => {
-    if (subItems) {
-      onToggle(id);
-    } else if (onClick) {
+    if (onClick) {
       onClick();
+      return;
     }
+    if (subItems) onToggle(id);
   };
 
-  const isChildActive = subItems?.some(item => item.route === currentRoute);
-  const isActiveState = active || isChildActive;
+  const childIsActive = (item: { route: RoutePath; matchPrefix?: string }) =>
+    currentRoute === item.route || Boolean(item.matchPrefix && currentRoute.startsWith(item.matchPrefix));
+  const isChildActive = subItems?.some(childIsActive);
+  const isActiveState = active || Boolean(isChildActive);
 
   return (
     <div className="mb-1">
@@ -84,7 +93,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ id, icon: Icon, label, active
       {subItems && isOpen && !collapsed && (
         <div className="ml-5 mt-1.5 space-y-1.5 border-l-2 border-blue-400/40 pl-3">
           {subItems.map((sub) => {
-            const isSubActive = currentRoute === sub.route;
+            const isSubActive = childIsActive(sub);
             return (
             <button
               key={sub.route}
@@ -119,7 +128,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     userProfile,
     initRouteFromHash,
   } = useNavigationStore();
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const sidebarWidth = collapsed ? 'lg:w-24' : 'lg:w-52';
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -131,19 +139,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   // Modal state for sidebar navigation / logout
   const [showUnsavedModal, setShowUnsavedModal] = useState(false);
-  const [pendingLogout, setPendingLogout] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     if (pendingNavigation) setShowUnsavedModal(true);
   }, [pendingNavigation]);
 
-  const doLogout = () => {
+  const confirmLogout = () => {
+    useDataStore.getState().setWipOrder(null);
+    setUnsaved(false);
+    setShowLogoutModal(false);
     void logoutDesktopSession();
-    navigate(RoutePath.DASHBOARD);
-  };
-
-  const toggleMenu = (id: string) => {
-    setOpenMenu(prev => prev === id ? null : id);
   };
 
   const handleNavRequest = (route: RoutePath, params?: Record<string, string>) => {
@@ -154,20 +160,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const confirmSaveAndLeave = async () => {
-    if (pendingSaveAction) {
-      await pendingSaveAction();
-    }
-    if (useNavigationStore.getState().isUnsaved) return;
     const target = pendingNavigation;
-    const loggingOut = pendingLogout;
-    setUnsaved(false);
-    setShowUnsavedModal(false);
-    setPendingLogout(false);
-    clearPendingNavigation();
-    if (loggingOut) {
-      doLogout();
+    if (pendingSaveAction) {
+      const result = await pendingSaveAction();
+      if (result === false) return;
+      if (result !== true && useNavigationStore.getState().isUnsaved) return;
+    } else if (useNavigationStore.getState().isUnsaved) {
       return;
     }
+    setShowUnsavedModal(false);
+    clearPendingNavigation();
     if (target) {
       navigate(target.route, target.params);
     }
@@ -175,16 +177,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const confirmDiscard = () => {
     const target = pendingNavigation;
-    const loggingOut = pendingLogout;
-    useDataStore.getState().setWipOrder(null);
-    setUnsaved(false);
-    setShowUnsavedModal(false);
-    setPendingLogout(false);
-    clearPendingNavigation();
-    if (loggingOut) {
-      doLogout();
-      return;
+    const discard = useNavigationStore.getState().pendingDiscardAction;
+    if (discard) {
+      discard();
+    } else {
+      const { factoryId } = useNavigationStore.getState();
+      markOrderDraftDiscarded(factoryId);
+      useDataStore.getState().setWipOrder(null);
+      setUnsaved(false);
     }
+    setShowUnsavedModal(false);
+    clearPendingNavigation();
     if (target) {
       navigate(target.route, target.params);
     }
@@ -192,20 +195,39 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const cancelNav = () => {
     setShowUnsavedModal(false);
-    setPendingLogout(false);
     clearPendingNavigation();
   };
 
   const userRole = userProfile?.userRole ?? null;
-  const showNav = (route: RoutePath) => canAccessRoute(userRole, route);
+  const modulesQuery = useFactoryModules();
+  const accessCtx: RouteAccessContext = useMemo(() => {
+    const modulesEnabled: Partial<Record<string, boolean>> = {};
+    for (const row of modulesQuery.data ?? []) {
+      modulesEnabled[row.module_key] = row.enabled;
+    }
+    return {
+      modulesEnabled,
+      assignedApps: userProfile?.assignedApps ?? [],
+    };
+  }, [modulesQuery.data, userProfile?.assignedApps]);
+
+  const showNav = (route: RoutePath) => canAccessRoute(userRole, route, accessCtx);
+  const millOn = useInHouseMill(Boolean(accessCtx.modulesEnabled?.material));
+
+  const moduleNavSections = useMemo(() => {
+    const isEnabled = (key: ModuleKey) => Boolean(accessCtx.modulesEnabled?.[key]);
+    return getEntitledManifests(isEnabled).flatMap((m) =>
+      m.nav.map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          canAccessRoute(userRole, item.route as RoutePath, accessCtx),
+        ),
+      })).filter((section) => section.items.length > 0),
+    );
+  }, [accessCtx, userRole]);
 
   const handleLogout = () => {
-    if (isUnsaved) {
-      setPendingLogout(true);
-      setShowUnsavedModal(true);
-      return;
-    }
-    doLogout();
+    setShowLogoutModal(true);
   };
 
   // Browser refresh/close protection
@@ -274,21 +296,56 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {/* Navigation - SCROLLABLE */}
         <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto no-scrollbar">
-          {showNav(RoutePath.DASHBOARD) && (
+          {(showNav(RoutePath.DASHBOARD) || showNav(RoutePath.CREATE_ORDER)) && (
           <div>
             <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>Main</p>
+            {showNav(RoutePath.DASHBOARD) && (
             <SidebarItem collapsed={collapsed} id="dashboard" icon={LayoutDashboard} label="Dashboard" active={currentRoute === RoutePath.DASHBOARD} isOpen={false} onToggle={() => {}} onClick={() => handleNavRequest(RoutePath.DASHBOARD)} onNavRequest={handleNavRequest} />
+            )}
+            {showNav(RoutePath.CREATE_ORDER) && (
+            <SidebarItem collapsed={collapsed} id="create" icon={PlusCircle} label="Create Order" active={currentRoute === RoutePath.CREATE_ORDER || currentRoute === RoutePath.CREATE_ORDER_COLOR} isOpen={false} onToggle={() => {}} onClick={() => handleNavRequest(RoutePath.CREATE_ORDER)} onNavRequest={handleNavRequest} />
+            )}
           </div>
           )}
 
-          {(showNav(RoutePath.CREATE_ORDER) || showNav(RoutePath.STATUS_TRACKER) || showNav(RoutePath.FLOOR_DAY) || showNav(RoutePath.ORDER_COMPLETION)) && (
+          {(showNav(RoutePath.MATERIAL_WAREHOUSE) || (showNav(RoutePath.MATERIAL_MILL) && millOn)) && Boolean(accessCtx.modulesEnabled?.material) && (
+          <div>
+            <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>Material</p>
+            {showNav(RoutePath.MATERIAL_WAREHOUSE) && (
+            <SidebarItem collapsed={collapsed}
+              id="fabric-warehouse"
+              icon={Warehouse}
+              label="Fabric Warehouse"
+              active={currentRoute === RoutePath.MATERIAL_WAREHOUSE || currentRoute.startsWith('#/material/warehouse')}
+              isOpen={false}
+              onToggle={() => {}}
+              onClick={() => handleNavRequest(RoutePath.MATERIAL_WAREHOUSE)}
+              onNavRequest={handleNavRequest}
+            />
+            )}
+            {showNav(RoutePath.MATERIAL_MILL) && millOn && (
+            <SidebarItem collapsed={collapsed}
+              id="fabric-mill"
+              icon={Scissors}
+              label="Fabric Mill"
+              active={currentRoute === RoutePath.MATERIAL_MILL || currentRoute.startsWith('#/material/mill')}
+              isOpen={false}
+              onToggle={() => {}}
+              onClick={() => handleNavRequest(RoutePath.MATERIAL_MILL)}
+              onNavRequest={handleNavRequest}
+            />
+            )}
+          </div>
+          )}
+
+          {(showNav(RoutePath.STATUS_TRACKER) || showNav(RoutePath.FLOOR_DAY) || showNav(RoutePath.ORDER_COMPLETION) || showNav(RoutePath.PRODUCTION_CUTTING)) && (
           <div>
             <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>Production</p>
-            {showNav(RoutePath.CREATE_ORDER) && (
-            <SidebarItem collapsed={collapsed} id="create" icon={PlusCircle} label="Create Order" active={currentRoute === RoutePath.CREATE_ORDER} isOpen={false} onToggle={() => {}} onClick={() => handleNavRequest(RoutePath.CREATE_ORDER)} onNavRequest={handleNavRequest} />
-            )}
             {showNav(RoutePath.STATUS_TRACKER) && (
             <SidebarItem collapsed={collapsed} id="status-tracker" icon={Activity} label="Status Tracker" active={currentRoute === RoutePath.STATUS_TRACKER} isOpen={false} onToggle={() => {}} onClick={() => handleNavRequest(RoutePath.STATUS_TRACKER)} onNavRequest={handleNavRequest} />
+            )}
+            {showNav(RoutePath.PRODUCTION_CUTTING) && (
+            <SidebarItem collapsed={collapsed} id="production-cutting" icon={Scissors} label="Cutting" active={currentRoute === RoutePath.PRODUCTION_CUTTING || currentRoute.startsWith('#/production/cutting')} isOpen={false} onToggle={() => {}} onClick={() => handleNavRequest(RoutePath.PRODUCTION_CUTTING)} onNavRequest={handleNavRequest} />
             )}
             {showNav(RoutePath.FLOOR_DAY) && (
             <SidebarItem collapsed={collapsed} id="floor-day" icon={Calendar} label="Floor Day Board" active={currentRoute === RoutePath.FLOOR_DAY} isOpen={false} onToggle={() => {}} onClick={() => handleNavRequest(RoutePath.FLOOR_DAY)} onNavRequest={handleNavRequest} />
@@ -326,6 +383,26 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
           )}
 
+          {moduleNavSections.map((section) => (
+            <div key={section.label}>
+              <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>{section.label}</p>
+              {section.items.map((item) => (
+                <SidebarItem
+                  key={item.route}
+                  collapsed={collapsed}
+                  id={`module-${item.route}`}
+                  icon={Package}
+                  label={item.label}
+                  active={currentRoute === item.route || currentRoute.startsWith(`${item.route}/`)}
+                  isOpen={false}
+                  onToggle={() => {}}
+                  onClick={() => handleNavRequest(item.route as RoutePath)}
+                  onNavRequest={handleNavRequest}
+                />
+              ))}
+            </div>
+          ))}
+
           {(showNav(RoutePath.WORK_CENTERS) || showNav(RoutePath.USER_MANAGEMENT) || showNav(RoutePath.SETTINGS)) && (
           <div>
             <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>Factory Configuration</p>
@@ -343,6 +420,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               isOpen={false}
               onToggle={() => {}}
               onClick={() => handleNavRequest(RoutePath.WORK_CENTERS)}
+              onNavRequest={handleNavRequest}
+            />
+            )}
+            {showNav(RoutePath.MATERIAL_MANAGEMENT) && Boolean(accessCtx.modulesEnabled?.material) && (
+            <SidebarItem collapsed={collapsed}
+              id="material-management"
+              icon={Package}
+              label="Material Management"
+              active={
+                currentRoute === RoutePath.MATERIAL_MANAGEMENT ||
+                currentRoute === RoutePath.WORK_CENTER_MATERIAL
+              }
+              isOpen={false}
+              onToggle={() => {}}
+              onClick={() => handleNavRequest(RoutePath.MATERIAL_MANAGEMENT)}
               onNavRequest={handleNavRequest}
             />
             )}
@@ -429,37 +521,39 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </main>
 
-      {/* GLOBAL UNSAVED CHANGES MODAL */}
-      <Modal isOpen={showUnsavedModal} onClose={cancelNav}>
+      <UnsavedChangesModal
+        isOpen={showUnsavedModal}
+        onClose={cancelNav}
+        onSave={confirmSaveAndLeave}
+        onDiscard={confirmDiscard}
+        discardLabel="Discard & Continue"
+      />
+
+      <Modal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>
         <div className="relative">
-          <button onClick={cancelNav} className="absolute top-4 right-4 text-red-400 hover:text-red-600 transition-colors p-1 hover:bg-red-50 rounded-full">
+          <button
+            type="button"
+            onClick={() => setShowLogoutModal(false)}
+            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors p-1 hover:bg-slate-100 rounded-full"
+          >
             <X size={20} />
           </button>
 
           <div className="flex flex-col items-center p-8 pb-4 text-center">
-            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm ring-4 ring-amber-50">
-              <AlertTriangle size={32} />
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm ring-4 ring-red-50">
+              <LogOut size={32} />
             </div>
-            <h3 className="text-xs font-bold text-slate-900 mb-2">Unsaved Changes</h3>
+            <h3 className="text-xs font-bold text-slate-900 mb-2">Sign out?</h3>
             <p className="text-slate-500 text-[10px] max-w-[260px] leading-relaxed">
-              {pendingLogout
-                ? 'You have unsaved changes. Save, discard, or cancel to stay signed in.'
-                : 'You have unsaved changes. Save, discard, or cancel to stay on this page.'}
+              You will return to the login screen.
             </p>
           </div>
 
           <div className="p-6 pt-2 flex flex-col gap-3">
-            {pendingSaveAction && (
-              <DesktopWriteGate>
-                <Button onClick={confirmSaveAndLeave} className="w-full shadow-lg shadow-blue-100 py-2.5 text-sm">
-                  Save Changes
-                </Button>
-              </DesktopWriteGate>
-            )}
-            <Button variant="danger-light" onClick={confirmDiscard} className="w-full text-xs">
-              Discard Changes
+            <Button variant="danger" onClick={confirmLogout} className="w-full text-xs">
+              Sign out
             </Button>
-            <Button variant="secondary" onClick={cancelNav} className="w-full text-xs">
+            <Button variant="secondary" onClick={() => setShowLogoutModal(false)} className="w-full text-xs">
               Cancel
             </Button>
           </div>

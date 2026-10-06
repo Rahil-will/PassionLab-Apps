@@ -19,12 +19,12 @@ import {
   Legend,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import {
+  ChartSizedContainer,
   DAILY_TREND_CHART_HEIGHT,
   VisitOperationOutputChart,
   buildVisitOperationBarPoints,
@@ -304,26 +304,24 @@ function OutsourceMovementBarChart({
   return (
     <div className="min-w-0">
       <p className="text-[9px] font-semibold uppercase text-slate-500 mb-1.5">{title}</p>
-      <div className="w-full min-w-0" style={{ height, minHeight: height }}>
-        <ResponsiveContainer width="100%" height={height}>
-          <BarChart data={data} margin={{ top: 14, right: 8, left: 0, bottom: 48 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={axisStyle}
-              interval={0}
-              angle={-30}
-              textAnchor="end"
-              height={56}
-            />
-            <YAxis tick={axisStyle} width={36} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Bar dataKey="qty" name={title} fill={color} radius={[4, 4, 0, 0]} maxBarSize={52}>
-              <LabelList dataKey="qty" position="top" fontSize={9} fill="#64748b" />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <ChartSizedContainer height={height}>
+        <BarChart data={data} margin={{ top: 14, right: 8, left: 0, bottom: 48 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={axisStyle}
+            interval={0}
+            angle={-30}
+            textAnchor="end"
+            height={56}
+          />
+          <YAxis tick={axisStyle} width={36} />
+          <Tooltip contentStyle={tooltipStyle} />
+          <Bar dataKey="qty" name={title} fill={color} radius={[4, 4, 0, 0]} maxBarSize={52}>
+            <LabelList dataKey="qty" position="top" fontSize={9} fill="#64748b" />
+          </Bar>
+        </BarChart>
+      </ChartSizedContainer>
     </div>
   );
 }
@@ -750,8 +748,7 @@ const DeptAnalysisBlock: React.FC<DeptAnalysisBlockProps> = ({
               No data for {metricLabel.toLowerCase()}
             </div>
           ) : (
-            <div className="w-full min-w-0" style={{ height: DAILY_TREND_CHART_HEIGHT, minHeight: DAILY_TREND_CHART_HEIGHT }}>
-            <ResponsiveContainer width="100%" height={DAILY_TREND_CHART_HEIGHT}>
+            <ChartSizedContainer height={DAILY_TREND_CHART_HEIGHT}>
               <LineChart data={metricLineData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="label" tick={axisStyle} />
@@ -782,8 +779,7 @@ const DeptAnalysisBlock: React.FC<DeptAnalysisBlockProps> = ({
                   />
                 </Line>
               </LineChart>
-            </ResponsiveContainer>
-            </div>
+            </ChartSizedContainer>
           )}
           </div>
           <ChartPrintTable
@@ -858,36 +854,34 @@ const DeptAnalysisBlock: React.FC<DeptAnalysisBlockProps> = ({
                   No defect data
                 </div>
               ) : (
-                <div style={{ height: qcChartsHeight }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={topDefectChartData}
-                      layout="vertical"
-                      margin={{ top: 2, right: 20, left: 2, bottom: 2 }}
-                      barCategoryGap="12%"
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                      <XAxis type="number" tick={axisStyle} hide />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={84}
-                        tick={DefectYAxisTick}
-                        axisLine={false}
-                        tickLine={false}
+                <ChartSizedContainer height={qcChartsHeight}>
+                  <BarChart
+                    data={topDefectChartData}
+                    layout="vertical"
+                    margin={{ top: 2, right: 20, left: 2, bottom: 2 }}
+                    barCategoryGap="12%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                    <XAxis type="number" tick={axisStyle} hide />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={84}
+                      tick={DefectYAxisTick}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip contentStyle={tooltipStyle} />
+                    <Bar dataKey="count" fill="#ef4444" radius={[0, 3, 3, 0]} barSize={28}>
+                      <LabelList
+                        dataKey="count"
+                        position="right"
+                        fontSize={9}
+                        fill="#64748b"
                       />
-                      <Tooltip contentStyle={tooltipStyle} />
-                      <Bar dataKey="count" fill="#ef4444" radius={[0, 3, 3, 0]} barSize={28}>
-                        <LabelList
-                          dataKey="count"
-                          position="right"
-                          fontSize={9}
-                          fill="#64748b"
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                    </Bar>
+                  </BarChart>
+                </ChartSizedContainer>
               )}
             </div>
 
@@ -903,38 +897,36 @@ const DeptAnalysisBlock: React.FC<DeptAnalysisBlockProps> = ({
                   No defective % data
                 </div>
               ) : (
-                <div style={{ height: qcChartsHeight }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={defectiveTrendData}
-                      margin={{ top: 14, right: 8, left: 0, bottom: 2 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis dataKey="label" tick={axisStyle} />
-                      <YAxis tick={axisStyle} width={32} unit="%" domain={[0, 'auto']} />
-                      <Tooltip
-                        contentStyle={tooltipStyle}
-                        formatter={(v) =>
-                          v != null
-                            ? [formatPct2(typeof v === 'number' ? v : Number(v)), 'Defective']
-                            : ['', 'Defective']
-                        }
+                <ChartSizedContainer height={qcChartsHeight}>
+                  <BarChart
+                    data={defectiveTrendData}
+                    margin={{ top: 14, right: 8, left: 0, bottom: 2 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="label" tick={axisStyle} />
+                    <YAxis tick={axisStyle} width={32} unit="%" domain={[0, 'auto']} />
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(v) =>
+                        v != null
+                          ? [formatPct2(typeof v === 'number' ? v : Number(v)), 'Defective']
+                          : ['', 'Defective']
+                      }
+                    />
+                    <Bar dataKey="pct" fill="#ef4444" radius={[3, 3, 0, 0]} barSize={32}>
+                      <LabelList
+                        dataKey="pct"
+                        position="top"
+                        fontSize={9}
+                        fill="#64748b"
+                        formatter={(v) => {
+                          const n = typeof v === 'number' ? v : Number(v);
+                          return n != null && !Number.isNaN(n) ? formatPct2(n) : '';
+                        }}
                       />
-                      <Bar dataKey="pct" fill="#ef4444" radius={[3, 3, 0, 0]} barSize={32}>
-                        <LabelList
-                          dataKey="pct"
-                          position="top"
-                          fontSize={9}
-                          fill="#64748b"
-                          formatter={(v) => {
-                            const n = typeof v === 'number' ? v : Number(v);
-                            return n != null && !Number.isNaN(n) ? formatPct2(n) : '';
-                          }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                    </Bar>
+                  </BarChart>
+                </ChartSizedContainer>
               )}
             </div>
           </div>
@@ -1010,38 +1002,36 @@ const DeptAnalysisBlock: React.FC<DeptAnalysisBlockProps> = ({
                       No pass rate data
                     </div>
                   ) : (
-                    <div style={{ height: auditChartsHeight }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={auditPassTrendData}
-                          margin={{ top: 14, right: 8, left: 0, bottom: 2 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                          <XAxis dataKey="label" tick={axisStyle} />
-                          <YAxis tick={axisStyle} width={32} unit="%" domain={[0, 100]} />
-                          <Tooltip
-                            contentStyle={tooltipStyle}
-                            formatter={(v) =>
-                              v != null
-                                ? [formatPct2(typeof v === 'number' ? v : Number(v)), 'Pass %']
-                                : ['', 'Pass %']
-                            }
+                    <ChartSizedContainer height={auditChartsHeight}>
+                      <BarChart
+                        data={auditPassTrendData}
+                        margin={{ top: 14, right: 8, left: 0, bottom: 2 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="label" tick={axisStyle} />
+                        <YAxis tick={axisStyle} width={32} unit="%" domain={[0, 100]} />
+                        <Tooltip
+                          contentStyle={tooltipStyle}
+                          formatter={(v) =>
+                            v != null
+                              ? [formatPct2(typeof v === 'number' ? v : Number(v)), 'Pass %']
+                              : ['', 'Pass %']
+                          }
+                        />
+                        <Bar dataKey="pct" fill="#8b5cf6" radius={[3, 3, 0, 0]} barSize={32}>
+                          <LabelList
+                            dataKey="pct"
+                            position="top"
+                            fontSize={9}
+                            fill="#64748b"
+                            formatter={(v) => {
+                              const n = typeof v === 'number' ? v : Number(v);
+                              return n != null && !Number.isNaN(n) ? formatPct2(n) : '';
+                            }}
                           />
-                          <Bar dataKey="pct" fill="#8b5cf6" radius={[3, 3, 0, 0]} barSize={32}>
-                            <LabelList
-                              dataKey="pct"
-                              position="top"
-                              fontSize={9}
-                              fill="#64748b"
-                              formatter={(v) => {
-                                const n = typeof v === 'number' ? v : Number(v);
-                                return n != null && !Number.isNaN(n) ? formatPct2(n) : '';
-                              }}
-                            />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                        </Bar>
+                      </BarChart>
+                    </ChartSizedContainer>
                   )}
                 </div>
 
@@ -1057,38 +1047,36 @@ const DeptAnalysisBlock: React.FC<DeptAnalysisBlockProps> = ({
                       No defective % data
                     </div>
                   ) : (
-                    <div style={{ height: auditChartsHeight }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={auditDefectiveTrendData}
-                          margin={{ top: 14, right: 8, left: 0, bottom: 2 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                          <XAxis dataKey="label" tick={axisStyle} />
-                          <YAxis tick={axisStyle} width={32} unit="%" domain={[0, 'auto']} />
-                          <Tooltip
-                            contentStyle={tooltipStyle}
-                            formatter={(v) =>
+                    <ChartSizedContainer height={auditChartsHeight}>
+                      <BarChart
+                        data={auditDefectiveTrendData}
+                        margin={{ top: 14, right: 8, left: 0, bottom: 2 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="label" tick={axisStyle} />
+                        <YAxis tick={axisStyle} width={32} unit="%" domain={[0, 'auto']} />
+                        <Tooltip
+                          contentStyle={tooltipStyle}
+                          formatter={(v) =>
                           v != null
                             ? [formatPct2(typeof v === 'number' ? v : Number(v)), 'Defective']
                             : ['', 'Defective']
                         }
+                        />
+                        <Bar dataKey="pct" fill="#ef4444" radius={[3, 3, 0, 0]} barSize={32}>
+                          <LabelList
+                            dataKey="pct"
+                            position="top"
+                            fontSize={9}
+                            fill="#64748b"
+                            formatter={(v) => {
+                              const n = typeof v === 'number' ? v : Number(v);
+                              return n != null && !Number.isNaN(n) ? formatPct2(n) : '';
+                            }}
                           />
-                          <Bar dataKey="pct" fill="#ef4444" radius={[3, 3, 0, 0]} barSize={32}>
-                            <LabelList
-                              dataKey="pct"
-                              position="top"
-                              fontSize={9}
-                              fill="#64748b"
-                              formatter={(v) => {
-                                const n = typeof v === 'number' ? v : Number(v);
-                                return n != null && !Number.isNaN(n) ? formatPct2(n) : '';
-                              }}
-                            />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                        </Bar>
+                      </BarChart>
+                    </ChartSizedContainer>
                   )}
                 </div>
               </div>

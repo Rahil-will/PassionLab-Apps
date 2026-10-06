@@ -12,6 +12,7 @@ export interface UpdateFactoryUserInput {
   assignedOperationIds?: string[];
   status?: 'Active' | 'Inactive';
   userRole?: string;
+  password?: string;
 }
 
 /**
@@ -33,6 +34,7 @@ export async function updateFactoryUser(
     assignedOperationIds: input.assignedOperationIds,
     status: input.status,
     userRole: input.userRole,
+    password: input.password,
   });
 
   if (!payload.id) {

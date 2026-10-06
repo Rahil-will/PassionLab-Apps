@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION public.save_line_plan(
   p_colorway_plans jsonb
 )
 RETURNS void
-LANGUAGE plpgsql SECURITY INVOKER SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   v_plan            jsonb;

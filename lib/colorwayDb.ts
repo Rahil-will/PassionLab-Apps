@@ -1,4 +1,5 @@
 import type { Colorway } from '../types';
+import { materialToRpcPayload } from './colorwayMaterialsDb';
 import { sizeRowToDb, sumSizeAdjQty, sumSizeOrderQty } from './colorwaySizesUtils';
 
 const UUID_RE =
@@ -9,7 +10,8 @@ export function ensureColorwayId(id: string | undefined): string {
   return crypto.randomUUID();
 }
 
-/** Columns: id, order_id, name, color_code, qty, adj_qty, sizes */
+/** Columns: id, order_id, name, color_code, qty, adj_qty, sizes.
+ *  `materials` is RPC payload only — persisted on public.colorway_materials. */
 export function colorwayToDbRow(c: Colorway, orderId: string) {
   const sizes = (c.sizes || []).map(sizeRowToDb);
   return {
@@ -21,5 +23,6 @@ export function colorwayToDbRow(c: Colorway, orderId: string) {
     adj_qty: Number(c.adjQty) || sumSizeAdjQty(c.sizes),
     sizes,
     planning_remarks: c.planningRemarks?.trim() || null,
+    materials: (c.materials ?? []).map(materialToRpcPayload),
   };
 }

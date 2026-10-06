@@ -83,7 +83,7 @@ export const DayNativeEntries: React.FC<DayNativeEntriesProps> = ({ entries, kin
   );
 
   const colCount =
-    kind === 'cutting_session' ? 15 : kind === 'shipment' ? 12 : kind === 'outsource' ? 11 : 12;
+    kind === 'cutting_session' ? 14 : kind === 'shipment' ? 12 : kind === 'outsource' ? 11 : 12;
   const colSpan = colCount;
 
   const rows = (list: DayNativeEntry[]) =>
@@ -105,7 +105,6 @@ export const DayNativeEntries: React.FC<DayNativeEntriesProps> = ({ entries, kin
             <td className={`${t.deptCell} text-left text-slate-700`}>{entry.sessionNo || '—'}</td>
             <td className={`${t.deptCell} text-left text-slate-700`}>{entry.refNo || '—'}</td>
             <td className={`${t.deptCell} text-left text-slate-700`}>{entry.fabricType || '—'}</td>
-            <td className={`${t.deptCell} text-left text-slate-600`}>{entry.fabricCode || '—'}</td>
             <td className={`${t.deptCell} text-left text-slate-500`}>{entry.layNo || '—'}</td>
             <td className={`${t.deptCell} text-left text-slate-600`}>{entry.colorName}</td>
             <td className={`${t.deptCell} text-left text-slate-600 whitespace-nowrap`}>
@@ -217,7 +216,6 @@ export const DayNativeEntries: React.FC<DayNativeEntriesProps> = ({ entries, kin
                     <th className={`${t.deptHead} text-left`}>Session no</th>
                     <th className={`${t.deptHead} text-left`}>Ref no</th>
                     <th className={`${t.deptHead} text-left`}>Fabric type</th>
-                    <th className={`${t.deptHead} text-left`}>Fabric code</th>
                     <th className={`${t.deptHead} text-left`}>Lay no</th>
                     <th className={`${t.deptHead} text-left`}>Color</th>
                     <th className={`${t.deptHead} text-left`}>Workers by category</th>

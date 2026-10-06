@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { User, Building2, GitMerge, Clock } from 'lucide-react';
 import { WorkCenterBuyers } from './WorkCenterBuyers';
 import { WorkCenterDepartments } from './WorkCenterDepartments';
@@ -9,7 +9,7 @@ import { RoutePath } from '../../types';
 
 export type WorkCenterTab = 'buyers' | 'departments' | 'process-flows' | 'shifts';
 
-const TABS: { id: WorkCenterTab; label: string; icon: React.ElementType; route: RoutePath }[] = [
+const BASE_TABS: { id: WorkCenterTab; label: string; icon: React.ElementType; route: RoutePath }[] = [
   { id: 'buyers', label: 'Buyers', icon: User, route: RoutePath.WORK_CENTER_BUYERS },
   { id: 'departments', label: 'Departments', icon: Building2, route: RoutePath.WORK_CENTER_DEPARTMENTS },
   { id: 'process-flows', label: 'Process Flows', icon: GitMerge, route: RoutePath.WORK_CENTER_PROCESS_FLOWS },
@@ -25,13 +25,15 @@ const ROUTE_TO_TAB: Record<string, WorkCenterTab> = {
 export function WorkCenterTabBar({
   active,
   onChange,
+  tabs,
 }: {
   active: WorkCenterTab;
   onChange: (t: WorkCenterTab) => void;
+  tabs: typeof BASE_TABS;
 }) {
   return (
     <div className="flex items-center gap-0.5 border-r border-slate-200 pr-3 mr-1">
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = active === tab.id;
         return (
@@ -56,10 +58,12 @@ export function WorkCenterTabBar({
 export function WorkCenters() {
   const { currentRoute, routeParams, requestNavigate } = useNavigationStore();
 
+  const tabs = useMemo(() => BASE_TABS, []);
+
   const activeTab: WorkCenterTab = (() => {
     if (currentRoute === RoutePath.WORK_CENTERS && routeParams.tab) {
       const t = routeParams.tab as WorkCenterTab;
-      if (TABS.some((tab) => tab.id === t)) return t;
+      if (tabs.some((tab) => tab.id === t)) return t;
       return 'buyers';
     }
     return ROUTE_TO_TAB[currentRoute] ?? 'buyers';
@@ -71,11 +75,11 @@ export function WorkCenters() {
       requestNavigate(RoutePath.WORK_CENTERS, { tab: 'shifts' });
       return;
     }
-    const target = TABS.find((t) => t.id === tab)!;
+    const target = tabs.find((t) => t.id === tab)!;
     requestNavigate(target.route);
   };
 
-  const tabBar = <WorkCenterTabBar active={activeTab} onChange={requestTabChange} />;
+  const tabBar = <WorkCenterTabBar active={activeTab} onChange={requestTabChange} tabs={tabs} />;
 
   return (
     <>

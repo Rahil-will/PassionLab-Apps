@@ -30,6 +30,9 @@
     "pages/legacy",
     "plapps",
     "supabase/functions",
-    "dist"
+    "dist",
+    "eslint.config.js",
+    "scripts/**/*.mjs",
+    "coverage"
   ]
 }

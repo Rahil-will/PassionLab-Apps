@@ -1,41 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Save, Loader2 } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { useSettingsStore, useNotificationStore, useNavigationStore } from "../../stores";
 import { useFactoryProfileCatalog, useShiftsCatalog } from "../../lib/queries/settingsSlices";
 import { SelectDropdown } from "../../components/ui";
-import type { FactoryEntitlements } from "../../lib/factoryEntitlements";
 import type { FactorySettings } from "../../types/settings";
-import { DesktopWriteGate } from "../DesktopWriteGate";
+import { useDesktopWriteRole } from "../DesktopWriteGate";
+import { ModuleSelectorPanel } from "./ModuleSelectorPanel";
 
 const TIMEZONES = ["UTC", "Asia/Kolkata", "Asia/Dhaka", "Asia/Karachi", "Europe/London", "America/New_York"];
 
-const ENTITLEMENT_LABELS: Record<keyof FactoryEntitlements, string> = {
-  transaction: "Transaction",
-  production: "Production",
-  workforce: "Workforce",
-  audit: "Audit",
-  shipment: "Shipment",
-};
+const fieldLabelCls = "block text-[10px] font-semibold text-slate-500 uppercase mb-1";
+const inputCls =
+  "w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 disabled:bg-slate-50 disabled:text-slate-500";
 
-const APP_OPTIONS: Record<keyof FactoryEntitlements, { id: string; label: string }[]> = {
-  transaction: [{ id: "transaction", label: "Transaction" }],
-  production: [
-    { id: "hourly", label: "Hourly" },
-    { id: "qc_log", label: "QC Log" },
-    { id: "batch", label: "Batch" },
-  ],
-  workforce: [{ id: "supervisor", label: "Supervisor" }],
-  audit: [{ id: "audit", label: "Audit" }],
-  shipment: [
-    { id: "shipment_log", label: "Shipment Log" },
-    { id: "final_rejection_log", label: "Final Rejection Log" },
-    { id: "shipment_audit", label: "Shipment Audit" },
-  ],
-};
-
-export const FactorySettingsPanel: React.FC = () => {
+export const FactorySettingsPanel: React.FC<{
+  onSaveReady?: (api: { save: () => void; saving: boolean } | null) => void;
+}> = ({ onSaveReady }) => {
   const { factoryId } = useNavigationStore();
-  const { factory, loading: factoryLoading } = useFactoryProfileCatalog(factoryId);
+  const canWrite = useDesktopWriteRole();
+  const { factory } = useFactoryProfileCatalog(factoryId);
   const { shifts } = useShiftsCatalog(factoryId, 'full');
   const updateFactory = useSettingsStore((s) => s.updateFactory);
   const { showNotification } = useNotificationStore();
@@ -60,21 +43,6 @@ export const FactorySettingsPanel: React.FC = () => {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  const toggleEntitlement = (category: keyof FactoryEntitlements, appId: string) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const current = prev.entitlements[category];
-      const active = current.includes(appId as never);
-      const next = active
-        ? current.filter((id) => id !== appId)
-        : [...current, appId as never];
-      return {
-        ...prev,
-        entitlements: { ...prev.entitlements, [category]: next },
-      };
-    });
-  };
-
   const handleSave = async () => {
     if (!draft) return;
     setSaving(true);
@@ -89,6 +57,20 @@ export const FactorySettingsPanel: React.FC = () => {
     }
   };
 
+  const onSaveReadyRef = React.useRef(onSaveReady);
+  onSaveReadyRef.current = onSaveReady;
+  const saveRef = React.useRef(handleSave);
+  saveRef.current = handleSave;
+
+  React.useEffect(() => {
+    onSaveReadyRef.current?.({
+      save: () => { void saveRef.current(); },
+      saving,
+    });
+  }, [saving]);
+
+  React.useEffect(() => () => onSaveReadyRef.current?.(null), []);
+
   if (!draft) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
@@ -98,113 +80,63 @@ export const FactorySettingsPanel: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-          Factory Settings
-        </h3>
-        <DesktopWriteGate>
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            Save Changes
-          </button>
-        </DesktopWriteGate>
-      </div>
+    <div className="space-y-4 pb-4">
+      
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">
-            Factory Name
-          </label>
-          <input
-            type="text"
-            value={draft.name}
-            onChange={(e) => updateField("name", e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
-          />
+      <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+            <Building2 size={14} />
+          </span>
+          <h4 className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            Factory profile
+          </h4>
         </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">
-            Factory Code
-          </label>
-          <input
-            type="text"
-            value={draft.code}
-            onChange={(e) => updateField("code", e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
-          />
+        <div className="grid grid-cols-4 gap-4">
+          <div className="min-w-0">
+            <label className={fieldLabelCls}>Factory Name</label>
+            <input
+              type="text"
+              value={draft.name}
+              onChange={(e) => updateField("name", e.target.value)}
+              disabled={!canWrite}
+              className={inputCls}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className={fieldLabelCls}>Country</label>
+            <input
+              type="text"
+              value={draft.country}
+              onChange={(e) => updateField("country", e.target.value)}
+              disabled={!canWrite}
+              className={inputCls}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className={fieldLabelCls}>Timezone</label>
+            <SelectDropdown
+              value={draft.timezone}
+              onChange={(v) => updateField("timezone", v)}
+              options={timezoneOptions}
+              disabled={!canWrite}
+            />
+          </div>
+          <div className="min-w-0">
+            <label className={fieldLabelCls}>Default Shift</label>
+            <SelectDropdown
+              value={draft.defaultShiftId ?? ""}
+              onChange={(v) => updateField("defaultShiftId", v || null)}
+              options={shiftOptions}
+              disabled={!canWrite}
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">
-            Country
-          </label>
-          <input
-            type="text"
-            value={draft.country}
-            onChange={(e) => updateField("country", e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">
-            Timezone
-          </label>
-          <SelectDropdown
-            value={draft.timezone}
-            onChange={(v) => updateField("timezone", v)}
-            options={timezoneOptions}
-          />
-        </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
-          <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">
-            Default Shift
-          </label>
-          <SelectDropdown
-            value={draft.defaultShiftId ?? ""}
-            onChange={(v) => updateField("defaultShiftId", v || null)}
-            options={shiftOptions}
-          />
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-[10px] font-semibold text-slate-500 uppercase mb-2">
-          Floor App Entitlements
-        </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {(Object.keys(APP_OPTIONS) as Array<keyof FactoryEntitlements>).map((category) => (
-            <div key={category} className="border border-slate-100 rounded-lg p-3">
-              <div className="text-[10px] font-bold text-slate-700 uppercase mb-2">
-                {ENTITLEMENT_LABELS[category]}
-              </div>
-              <div className="space-y-2">
-                {APP_OPTIONS[category].map((opt) => {
-                  const active = draft.entitlements[category].includes(opt.id as never);
-                  return (
-                    <label key={opt.id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={active}
-                        onChange={() => toggleEntitlement(category, opt.id)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-xs text-slate-700">{opt.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <ModuleSelectorPanel />
+      </section>
     </div>
   );
 };

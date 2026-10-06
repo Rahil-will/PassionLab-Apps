@@ -54,9 +54,9 @@ import {
   X,
   ClipboardList,
   Bug,
-  Layers,
   Pencil,
   Check,
+  Layers,
 } from 'lucide-react';
 
 interface DepartmentEditorProps {
@@ -81,19 +81,19 @@ interface DepartmentEditorProps {
   setFormData: (d: Record<string, unknown>) => void;
   onDefectsDirtyChange?: (dirty: boolean) => void;
   onDefectsDraftChange?: (defects: DefectItem[]) => void;
-  onFabricDirtyChange?: (dirty: boolean) => void;
-  onFabricDraftChange?: (rows: FabricComponent[]) => void;
+  onFabricCategoriesDirtyChange?: (dirty: boolean) => void;
+  onFabricCategoriesDraftChange?: (rows: FabricComponent[]) => void;
   onRatesDirtyChange?: (dirty: boolean) => void;
   onRatesDraftChange?: (drafts: WorkforceRateVersionDraft[]) => void;
   saveRevision?: number;
 }
 
-type DeptSectionTab = 'operations' | 'resources' | 'defects' | 'fabric';
+type DeptSectionTab = 'operations' | 'resources' | 'fabric-categories' | 'defects';
 
 const DEPT_SECTION_TABS: { id: DeptSectionTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'operations', label: 'Operations', icon: ClipboardList },
   { id: 'resources', label: 'Resources', icon: Factory },
-  { id: 'fabric', label: 'Fabric Categories', icon: Layers },
+  { id: 'fabric-categories', label: 'Fabric categories', icon: Layers },
   { id: 'defects', label: 'Defects', icon: Bug },
 ];
 
@@ -120,8 +120,8 @@ export const DepartmentEditor: React.FC<DepartmentEditorProps> = ({
   setFormData,
   onDefectsDirtyChange,
   onDefectsDraftChange,
-  onFabricDirtyChange,
-  onFabricDraftChange,
+  onFabricCategoriesDirtyChange,
+  onFabricCategoriesDraftChange,
   onRatesDirtyChange,
   onRatesDraftChange,
   saveRevision = 0,
@@ -329,15 +329,24 @@ export const DepartmentEditor: React.FC<DepartmentEditorProps> = ({
     return DEPT_SECTION_TABS.filter((tab) => {
       if (tab.id === 'operations') return showOperationsTab;
       if (tab.id === 'resources') return !isStoreDept;
+      if (tab.id === 'fabric-categories') {
+        return isCuttingOrigin && !isTempDept && Boolean(onFabricCategoriesDirtyChange);
+      }
       if (tab.id === 'defects') {
         return !isTempDept && Boolean(onDefectsDirtyChange) && !isStoreDept;
       }
-      if (tab.id === 'fabric') {
-        return deptRole === 'origin' && !isTempDept && Boolean(onFabricDirtyChange);
-      }
       return true;
     });
-  }, [isTempDept, onDefectsDirtyChange, onFabricDirtyChange, deptRole, isTerminal, showOperationsTab, isStoreDept]);
+  }, [
+    isTempDept,
+    onDefectsDirtyChange,
+    onFabricCategoriesDirtyChange,
+    deptRole,
+    isTerminal,
+    showOperationsTab,
+    isStoreDept,
+    isCuttingOrigin,
+  ]);
 
   useEffect(() => {
     if (!visibleSectionTabs.some((t) => t.id === sectionTab)) {
@@ -732,25 +741,26 @@ export const DepartmentEditor: React.FC<DepartmentEditorProps> = ({
         </div>
       )}
 
-      {sectionTab === 'defects' && !isTempDept && onDefectsDirtyChange && onDefectsDraftChange && (
+      {sectionTab === 'fabric-categories' && !isTempDept && isCuttingOrigin
+        && onFabricCategoriesDirtyChange && onFabricCategoriesDraftChange && (
         <div className="pt-2">
-          <DefectsEditor
-            selectedDeptId={formData.id}
-            onDirtyChange={onDefectsDirtyChange}
-            onChange={onDefectsDraftChange}
+          <FabricComponentsEditor
+            originDepartmentId={formData.id}
+            factoryId={factoryId}
+            onDirtyChange={onFabricCategoriesDirtyChange}
+            onChange={onFabricCategoriesDraftChange}
             saveRevision={saveRevision}
             embedded
           />
         </div>
       )}
 
-      {sectionTab === 'fabric' && deptRole === 'origin' && !isTempDept && onFabricDirtyChange && onFabricDraftChange && (
+      {sectionTab === 'defects' && !isTempDept && onDefectsDirtyChange && onDefectsDraftChange && (
         <div className="pt-2">
-          <FabricComponentsEditor
-            originDepartmentId={formData.id}
-            factoryId={factoryId}
-            onDirtyChange={onFabricDirtyChange}
-            onChange={onFabricDraftChange}
+          <DefectsEditor
+            selectedDeptId={formData.id}
+            onDirtyChange={onDefectsDirtyChange}
+            onChange={onDefectsDraftChange}
             saveRevision={saveRevision}
             embedded
           />

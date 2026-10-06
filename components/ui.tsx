@@ -78,15 +78,40 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   noPadding?: boolean;
+  titleClassName?: string;
+  subtitleClassName?: string;
 }
 
-export const Card: React.FC<CardProps> = ({ title, subtitle, action, children, className = '', noPadding = false }) => (
+export const Card: React.FC<CardProps> = ({
+  title,
+  subtitle,
+  action,
+  children,
+  className = '',
+  noPadding = false,
+  titleClassName,
+  subtitleClassName,
+}) => (
   <div className={`bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col ${className}`}>
     {(title || action) && (
       <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-xl shrink-0">
         <div>
-          {title && <h3 className="font-semibold text-slate-900" style={{ fontSize: tokens.fontSize.h4 }}>{title}</h3>}
-          {subtitle && <p className="text-slate-500 mt-0.5" style={{ fontSize: tokens.fontSize.caption }}>{subtitle}</p>}
+          {title && (
+            <h3
+              className={`font-semibold text-slate-900 ${titleClassName ?? ''}`}
+              style={titleClassName ? undefined : { fontSize: tokens.fontSize.h4 }}
+            >
+              {title}
+            </h3>
+          )}
+          {subtitle && (
+            <p
+              className={`text-slate-500 mt-0.5 ${subtitleClassName ?? ''}`}
+              style={subtitleClassName ? undefined : { fontSize: tokens.fontSize.caption }}
+            >
+              {subtitle}
+            </p>
+          )}
         </div>
         {action && <div>{action}</div>}
       </div>
@@ -188,9 +213,7 @@ export const Input: React.FC<InputProps> = ({ label, error, className = '', id, 
 };
 
 // --- SELECT DROPDOWN (portal menu — same pattern as Create Order) ---
-interface SelectDropdownProps {
-  value: string;
-  onChange: (value: string) => void;
+interface SelectDropdownBaseProps {
   options: { value: string; label: string }[];
   placeholder?: string;
   icon?: LucideIcon;
@@ -207,34 +230,43 @@ interface SelectDropdownProps {
   align?: 'start' | 'center';
   /** `'pill'` = default rounded-full; `'none'` = no rounding (for table cells). */
   shape?: 'pill' | 'none';
+  /** `cell` = borderless trigger for tables; menu stays the shared rounded card. */
+  variant?: 'default' | 'cell';
   /** When true, menu grows to fit all options (no max-height scroll). */
   menuExpand?: boolean;
   /** @deprecated Menus always render in a portal; prop is ignored. */
   menuFixed?: boolean;
 }
 
+type SelectDropdownProps = SelectDropdownBaseProps & (
+  | { multiple?: false; value: string; onChange: (value: string) => void }
+  | { multiple: true; value: string[]; onChange: (value: string[]) => void }
+);
+
 const dropdownMenuBaseCls =
   'bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl shadow-lg ring-1 ring-slate-100/80 z-[250]';
-const dropdownMenuScrollCls = 'max-h-60 overflow-auto';
+const dropdownMenuScrollCls = 'max-h-60 overflow-y-auto hairline-scrollbar';
 
-export const SelectDropdown: React.FC<SelectDropdownProps> = ({
-  value,
-  onChange,
-  options,
-  placeholder = 'Select...',
-  icon: Icon,
-  className = '',
-  label,
-  id,
-  name,
-  labelVariant = 'form',
-  error,
-  disabled = false,
-  size = 'default',
-  align = 'start',
-  shape = 'pill',
-  menuExpand = false,
-}) => {
+export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
+  const {
+    options,
+    placeholder = 'Select...',
+    icon: Icon,
+    className = '',
+    label,
+    id,
+    name,
+    labelVariant = 'form',
+    error,
+    disabled = false,
+    size = 'default',
+    align = 'start',
+    shape = 'pill',
+    variant = 'default',
+    menuExpand = false,
+  } = props;
+  const isMulti = props.multiple === true;
+  const selectedValues = isMulti ? props.value : (props.value ? [props.value] : []);
   const autoId = React.useId();
   const fieldId = id || name || autoId;
   const listboxId = `${fieldId}-listbox`;
@@ -261,7 +293,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
-  }, [isOpen, options.length, value]);
+  }, [isOpen, options.length, props.value]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -274,25 +306,60 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      const selectedIdx = options.findIndex((o) => o.value === value);
-      setHighlightedIndex(selectedIdx >= 0 ? selectedIdx : 0);
-    }
-  }, [isOpen, options, value]);
+    if (!isOpen) return;
+    const selectedIdx = isMulti
+      ? options.findIndex((o) => o.value !== '' && Array.isArray(props.value) && props.value.includes(o.value))
+      : options.findIndex((o) => o.value === props.value);
+    setHighlightedIndex(selectedIdx >= 0 ? selectedIdx : 0);
+    // Highlight is only set when the menu opens; keep it stable while toggling options.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isOpen is the intended trigger
+  }, [isOpen]);
 
   useEffect(() => {
     setHighlightedIndex((i) => (options.length ? Math.min(i, options.length - 1) : 0));
   }, [options.length]);
 
-  const selectedLabel = options.find(opt => opt.value === value)?.label || placeholder;
-  const hasValue = value !== '';
+  const selectedLabel = (() => {
+    if (isMulti) {
+      if (selectedValues.length === 0) {
+        return options.find((opt) => opt.value === '')?.label || placeholder;
+      }
+      const labels = selectedValues
+        .map((v) => options.find((opt) => opt.value === v)?.label)
+        .filter((label): label is string => Boolean(label));
+      return labels.join(', ') || placeholder;
+    }
+    return options.find((opt) => opt.value === props.value)?.label || placeholder;
+  })();
+  const hasValue = isMulti ? selectedValues.length > 0 : props.value !== '';
   const hasError = Boolean(error);
   const errorMsg = typeof error === 'string' ? error : '';
+
+  const isOptionSelected = (optValue: string) => {
+    if (isMulti) {
+      if (optValue === '') return selectedValues.length === 0;
+      return selectedValues.includes(optValue);
+    }
+    return props.value === optValue;
+  };
 
   const selectOption = (idx: number) => {
     const opt = options[idx];
     if (!opt) return;
-    onChange(opt.value);
+    if (isMulti) {
+      if (opt.value === '') {
+        props.onChange([]);
+        setIsOpen(false);
+        return;
+      }
+      const next = selectedValues.includes(opt.value)
+        ? selectedValues.filter((v) => v !== opt.value)
+        : [...selectedValues, opt.value];
+      const realCount = options.filter((o) => o.value !== '').length;
+      props.onChange(next.length === realCount ? [] : next);
+      return;
+    }
+    props.onChange(opt.value);
     setIsOpen(false);
   };
 
@@ -303,7 +370,9 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
 
     if (!isOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')) {
       e.preventDefault();
-      const selectedIdx = options.findIndex((o) => o.value === value);
+      const selectedIdx = isMulti
+        ? options.findIndex((o) => o.value !== '' && selectedValues.includes(o.value))
+        : options.findIndex((o) => o.value === props.value);
       setHighlightedIndex(selectedIdx >= 0 ? selectedIdx : 0);
       setIsOpen(true);
       return;
@@ -340,27 +409,37 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       : `block font-medium mb-1.5 ${hasError ? 'text-red-600' : 'text-slate-700'}`;
 
   const menu = isOpen && !disabled ? (
-    <div ref={menuRef} id={listboxId} role="listbox" className={`${dropdownMenuBaseCls}${menuExpand ? '' : ` ${dropdownMenuScrollCls}`} p-1.5`} style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width, minWidth: 120 }}>
-      {options.map((opt, idx) => (
-        <div
-          key={opt.value || '__empty__'}
-          id={`${listboxId}-opt-${idx}`}
-          role="option"
-          aria-selected={value === opt.value}
-          onClick={() => { onChange(opt.value); setIsOpen(false); }}
-          onMouseEnter={() => setHighlightedIndex(idx)}
-          className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
-            idx === highlightedIndex
-              ? 'bg-blue-100 text-blue-800'
-              : value === opt.value
-                ? 'bg-blue-50 text-blue-700 font-medium'
-                : 'hover:bg-slate-50 text-slate-600'
-          }`}
-        >
-          {opt.label}
-          {value === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
-        </div>
-      ))}
+    <div
+      ref={menuRef}
+      id={listboxId}
+      role="listbox"
+      aria-multiselectable={isMulti || undefined}
+      className={`${dropdownMenuBaseCls}${menuExpand ? '' : ` ${dropdownMenuScrollCls}`} p-1.5`}
+      style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width, minWidth: 120 }}
+    >
+      {options.map((opt, idx) => {
+        const selected = isOptionSelected(opt.value);
+        return (
+          <div
+            key={opt.value || '__empty__'}
+            id={`${listboxId}-opt-${idx}`}
+            role="option"
+            aria-selected={selected}
+            onClick={() => selectOption(idx)}
+            onMouseEnter={() => setHighlightedIndex(idx)}
+            className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
+              idx === highlightedIndex
+                ? 'bg-blue-100 text-blue-800'
+                : selected
+                  ? 'bg-blue-50 text-blue-700 font-medium'
+                  : 'hover:bg-slate-50 text-slate-600'
+            }`}
+          >
+            {opt.label}
+            {selected && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+          </div>
+        );
+      })}
     </div>
   ) : null;
 
@@ -387,17 +466,27 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         disabled={disabled}
         onClick={() => { if (!disabled) setIsOpen(!isOpen); }}
         onKeyDown={handleKeyDown}
-        className={`relative flex items-center gap-2 ${shape === 'none' ? 'rounded-none' : 'rounded-full'} border font-medium transition-colors w-full select-none ${
-          size === 'compact' ? 'px-2 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
-        } ${align === 'center' ? 'justify-center' : 'justify-between'} ${
-          disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400' :
-          hasError ? 'border-red-400 bg-red-50 text-red-700' :
-          isOpen || hasValue ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-        }`}
+        className={`relative flex items-center gap-2 font-medium transition-colors w-full select-none ${
+          variant === 'cell'
+            ? `rounded-none border-0 min-h-8 h-full pl-2.5 pr-2 py-0 text-[11px] leading-8 outline-none items-center whitespace-normal bg-transparent ${
+                align === 'center' ? 'text-center' : 'text-left'
+              } ${
+                disabled ? 'opacity-50 cursor-not-allowed text-slate-400' :
+                hasError ? 'text-red-700' :
+                hasValue ? 'text-slate-700' : 'text-slate-300'
+              }`
+            : `${shape === 'none' ? 'rounded-none' : 'rounded-full'} border ${
+                size === 'compact' ? 'px-2 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
+              } ${
+                disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-200 text-slate-400' :
+                hasError ? 'border-red-400 bg-red-50 text-red-700' :
+                isOpen || hasValue ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+              }`
+        } ${align === 'center' ? 'justify-center' : 'justify-between'}`}
       >
-        <div className={`flex items-center gap-2 min-w-0 ${align === 'center' ? 'justify-center flex-1 px-4' : ''}`}>
+        <div className={`flex items-center gap-2 min-w-0 ${align === 'center' ? `justify-center flex-1 ${variant === 'cell' ? '' : 'px-4'}` : ''} ${variant === 'cell' ? 'flex-1' : ''}`}>
           {Icon && align !== 'center' && <Icon size={13} className="shrink-0" />}
-          <span className={`truncate ${align === 'center' ? 'text-center' : ''}`}>{selectedLabel}</span>
+          <span className={`min-w-0 flex-1 ${variant === 'cell' ? 'whitespace-normal break-all' : 'truncate'} ${align === 'center' ? 'text-center' : 'text-left'}`}>{selectedLabel}</span>
         </div>
         <ChevronDown
           size={size === 'compact' ? 11 : 13}

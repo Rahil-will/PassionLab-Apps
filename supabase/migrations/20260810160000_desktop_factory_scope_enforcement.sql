@@ -17,7 +17,6 @@ ALTER VIEW public.v_department_kpis_by_shift SET (security_invoker = on);
 ALTER VIEW public.v_department_progress SET (security_invoker = on);
 ALTER VIEW public.v_daily_audit SET (security_invoker = on);
 ALTER VIEW public.v_daily_quality SET (security_invoker = on);
-
 -- Views have no business being anon-readable
 REVOKE SELECT ON
   public.v_cutting_component_progress,
@@ -29,7 +28,6 @@ REVOKE SELECT ON
   public.v_shift_minutes,
   public.v_shift_workforce_summary
 FROM anon;
-
 -- ---------------------------------------------------------------------------
 -- 2. Desktop fulfillment: enforce tenant, not just role (rename-and-wrap)
 -- ---------------------------------------------------------------------------
@@ -37,7 +35,6 @@ ALTER FUNCTION public.log_desktop_shipment(uuid, jsonb)
   RENAME TO log_desktop_shipment_inner;
 REVOKE ALL ON FUNCTION public.log_desktop_shipment_inner(uuid, jsonb)
   FROM PUBLIC, anon, authenticated;
-
 CREATE FUNCTION public.log_desktop_shipment(p_factory_id uuid, p_payload jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -51,15 +48,12 @@ BEGIN
   RETURN public.log_desktop_shipment_inner(p_factory_id, p_payload);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.log_desktop_shipment(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.log_desktop_shipment(uuid, jsonb) TO authenticated;
-
 ALTER FUNCTION public.log_desktop_rejection(uuid, jsonb)
   RENAME TO log_desktop_rejection_inner;
 REVOKE ALL ON FUNCTION public.log_desktop_rejection_inner(uuid, jsonb)
   FROM PUBLIC, anon, authenticated;
-
 CREATE FUNCTION public.log_desktop_rejection(p_factory_id uuid, p_payload jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -73,10 +67,8 @@ BEGIN
   RETURN public.log_desktop_rejection_inner(p_factory_id, p_payload);
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.log_desktop_rejection(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.log_desktop_rejection(uuid, jsonb) TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- 3. Fabric seed: guard tenant + role; stop failing silently
 -- ---------------------------------------------------------------------------
@@ -117,12 +109,10 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.ensure_factory_fabric_components(uuid, uuid)
   FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.ensure_factory_fabric_components(uuid, uuid)
   TO authenticated;
-
 -- ---------------------------------------------------------------------------
 -- 4. Unvalidated + uncalled: revoke rather than guess at a guard
 --    get_department_kpis_by_shift: desktop export fetchDepartmentKpisByShift has
@@ -139,7 +129,6 @@ REVOKE ALL ON FUNCTION public.next_internal_order_no(uuid)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.sync_colorway_ready_to_ship_rpc(uuid, uuid, uuid)
   FROM PUBLIC, anon, authenticated;
-
 -- ---------------------------------------------------------------------------
 -- 5. Desktop-only RPCs should not be anon-callable
 -- ---------------------------------------------------------------------------
@@ -159,7 +148,6 @@ REVOKE ALL ON FUNCTION public.save_colorway_planning_remarks(
   uuid, uuid, uuid, text
 ) FROM anon;
 REVOKE ALL ON FUNCTION public.delete_desktop_shipment(uuid, uuid) FROM anon;
-
 -- Legacy desktop save RPCs — authenticated only (defense-in-depth; floor uses floor_capture*)
 DO $$
 DECLARE

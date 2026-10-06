@@ -86,8 +86,6 @@ BEGIN
   RETURN QUERY SELECT b.* FROM public.buyers b WHERE b.id = v_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_department(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_department jsonb DEFAULT '{}'::jsonb, p_defects jsonb DEFAULT NULL::jsonb, p_workforce_rates jsonb DEFAULT NULL::jsonb, p_operations jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, role text, is_native boolean, sequence integer, planning_mode text, transaction_enabled boolean, supervisor_enabled boolean, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -288,8 +286,6 @@ BEGIN
     FROM public.departments d WHERE d.id = v_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_shift(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_type text DEFAULT 'Regular'::text, p_start_time time without time zone DEFAULT NULL::time without time zone, p_end_time time without time zone DEFAULT NULL::time without time zone, p_break_start time without time zone DEFAULT NULL::time without time zone, p_break_end time without time zone DEFAULT NULL::time without time zone, p_hours jsonb DEFAULT '[]'::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, type text, start_time time without time zone, end_time time without time zone, break_start time without time zone, break_end time without time zone, hours jsonb, created_at timestamp with time zone, updated_at timestamp with time zone, productive_mins numeric)
  LANGUAGE plpgsql
@@ -423,8 +419,6 @@ BEGIN
   RETURN QUERY SELECT s.* FROM public.shifts s WHERE s.id = v_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_process_flow(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_old_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_description text DEFAULT NULL::text, p_steps jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, description text, steps jsonb, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -502,8 +496,6 @@ BEGIN
   RETURN QUERY SELECT pf.* FROM public.process_flows pf WHERE pf.id = v_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_size_group(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_buyer_id uuid DEFAULT NULL::uuid, p_sizes jsonb DEFAULT '[]'::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, buyer_id uuid, name text, sizes jsonb, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -555,8 +547,6 @@ BEGIN
   RETURN QUERY SELECT sg.* FROM public.size_groups sg WHERE sg.id = v_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_resource(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_department_id uuid DEFAULT NULL::uuid, p_resource_name text DEFAULT NULL::text, p_resource_type text DEFAULT NULL::text, p_capacity integer DEFAULT NULL::integer, p_status text DEFAULT NULL::text, p_description text DEFAULT NULL::text)
  RETURNS TABLE(id uuid, factory_id uuid, department_id uuid, resource_name text, resource_type text, capacity integer, status text, description text, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -636,8 +626,6 @@ BEGIN
     FROM public.assigned_resources ar WHERE ar.id = v_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_style_order(p_factory_id uuid, p_order jsonb, p_colorways jsonb DEFAULT '[]'::jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -881,8 +869,6 @@ BEGIN
   RETURN v_order_id;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.delete_style_order(p_factory_id uuid, p_order_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -972,8 +958,6 @@ BEGIN
   PERFORM public.log_audit_event(p_factory_id, 'delete', 'style_order', p_order_id, '{}'::jsonb);
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_line_plan(p_factory_id uuid, p_order_id uuid, p_colorway_plans jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -1145,8 +1129,6 @@ BEGIN
 
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.save_order_routing(p_factory_id uuid, p_order_id uuid, p_steps jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -1334,8 +1316,6 @@ BEGIN
 
 END;
 $function$;
-
-
 -- Support dropdown writes via RPC (admin-only, matches save_buyer pattern).
 -- Note: column name "values" is a reserved word — must be quoted.
 
@@ -1411,8 +1391,6 @@ BEGIN
   WHERE sd.id = v_id AND sd.factory_id = p_factory_id;
 END;
 $$;
-
-
 -- ensure_department_defects
 CREATE OR REPLACE FUNCTION public.ensure_department_defects(
   p_factory_id uuid, p_department_id uuid, p_default_defects jsonb
@@ -1454,8 +1432,6 @@ BEGIN
   RETURN p_default_defects;
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.log_desktop_shipment_inner(
   p_factory_id uuid,
   p_payload jsonb
@@ -1590,8 +1566,6 @@ BEGIN
   );
 END;
 $function$;
-
-
 CREATE OR REPLACE FUNCTION public.log_desktop_rejection_inner(
   p_factory_id uuid,
   p_payload jsonb
@@ -1706,4 +1680,3 @@ BEGIN
   );
 END;
 $function$;
-

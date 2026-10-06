@@ -157,6 +157,42 @@ export function formatFabricCutQtyTooltip(components: FabricCutQtyComponentRow[]
     .join('\n');
 }
 
+/** Qty for one component row, optionally narrowed to a size. */
+export function fabricComponentQty(
+  component: FabricCutQtyComponentRow,
+  size?: string,
+): number {
+  if (size) return Number(component.by_size?.[size]) || 0;
+  return Number(component.total) || 0;
+}
+
+/** Sum of non-primary fabric cut qty (optionally for one size). */
+export function secondaryFabricCutQty(
+  components: FabricCutQtyComponentRow[],
+  size?: string,
+): number {
+  return components
+    .filter((c) => c.is_primary !== true)
+    .reduce((sum, c) => sum + fabricComponentQty(c, size), 0);
+}
+
+/**
+ * Headline for cutting cells:
+ * - primary captured qty when primary is cut (normal)
+ * - secondary-only qty when primary is still 0 (shown grayed in UI)
+ */
+export function resolveCuttingCellDisplay(args: {
+  primaryValue: number;
+  components: FabricCutQtyComponentRow[];
+  size?: string;
+}): { displayQty: number; secondaryOnly: boolean } {
+  const primary = Math.max(0, Number(args.primaryValue) || 0);
+  if (primary > 0) return { displayQty: primary, secondaryOnly: false };
+  const secondary = secondaryFabricCutQty(args.components, args.size);
+  if (secondary > 0) return { displayQty: secondary, secondaryOnly: true };
+  return { displayQty: 0, secondaryOnly: false };
+}
+
 export function resolveHeadlineCutQty(args: {
   cut_qty?: number;
   cut_qty_source?: string;

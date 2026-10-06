@@ -512,6 +512,7 @@ export async function fetchCutToShipReport(
     dateTo?: string | null;
     buyerId?: string | null;
     balancedOnly?: boolean | null;
+    orderIds?: string[];
   },
 ): Promise<CutToShipRow[]> {
   const { data, error } = await supabase.rpc('get_cut_to_ship_report', {
@@ -520,6 +521,7 @@ export async function fetchCutToShipReport(
     p_date_to: opts?.dateTo ?? null,
     p_buyer_id: opts?.buyerId ?? null,
     p_balanced_only: opts?.balancedOnly ?? null,
+    p_order_ids: opts?.orderIds?.length ? opts.orderIds : null,
   });
   if (!error) {
     return (data || []).map((row) => {

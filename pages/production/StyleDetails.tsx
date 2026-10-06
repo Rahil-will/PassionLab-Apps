@@ -15,6 +15,7 @@ import { useOrderCutFabricByRoute } from '../../hooks/useOrderCutFabricByRoute';
 import { useCuttingComponentProgress } from '../../hooks/useCuttingComponentProgress';
 import { useOrderForEdit } from '../../hooks/useOrderForEdit';
 import { useOrderAllocations } from '../../hooks/useOrderAllocations';
+import { MaterialComponentMapping } from '../../modules/material/contracts';
 import { flowTableClasses as t } from '../../lib/productionFlowTable';
 import { sizeAdjQty, sizeOrderQty, sumSizeAdjQty, orderedSizeKeys } from '../../lib/colorwaySizesUtils';
 import { allocationsForColorway } from '../../lib/allocationUtils';
@@ -177,8 +178,11 @@ export const StyleDetails: React.FC = () => {
         column: ProductionMatrixVisitCol,
         size?: string,
     ) => {
-        if (value <= 0 || column.deptId !== originDepartmentId) return formatCount(value);
+        if (column.deptId !== originDepartmentId) return formatCount(value);
         const components = componentsFor(column.stepId, colorwayId, size);
+        // Origin cutting: always consult fabric components so secondary-only cuts
+        // can render grayed when primary has not been logged yet.
+        if (value <= 0 && components.length === 0) return formatCount(value);
         return <FabricOutputBreakdownPopover value={value} components={components} size={size} />;
     };
 
@@ -389,6 +393,8 @@ export const StyleDetails: React.FC = () => {
                     }}
                     onEdit={canWrite ? () => navigate(RoutePath.CREATE_ORDER, { id: order.id }) : undefined}
                 />
+
+                <MaterialComponentMapping factoryId={factoryId} />
 
                 <Card title="Colors" subtitle="Colorway summary with flow progress" className="shadow-sm border-slate-200" noPadding>
                     <div className="p-6">

@@ -32,6 +32,21 @@ export async function fetchPlanningAllocationsWindow(
   return ((data ?? []) as Record<string, unknown>[]).map(mapAllocationRow);
 }
 
+/** All line allocations for one order (not clipped to the Gantt date window). */
+export async function fetchOrderLineAllocations(
+  factoryId: string,
+  orderId: string,
+): Promise<LineAllocation[]> {
+  const { data, error } = await supabase
+    .from('line_allocations')
+    .select('*')
+    .eq('factory_id', factoryId)
+    .eq('order_id', orderId);
+
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map(mapAllocationRow);
+}
+
 export async function fetchPlanningGanttOrderLabels(
   factoryId: string,
   orderIds: string[],
@@ -86,7 +101,25 @@ export async function fetchPlanningGanttContext(
   viewEnd: string,
   selectedOrderId?: string | null,
 ): Promise<PlanningGanttContext> {
-  const allocations = await fetchPlanningAllocationsWindow(factoryId, viewStart, viewEnd);
+  // Windowed fetch for peer bars on the timeline. Selected order is always loaded
+  // in full so departmental planning rows past the 30-day view (e.g. Finishing /
+  // Packing near delivery) do not vanish after save/refresh.
+  const [windowAllocations, selectedOrderAllocations] = await Promise.all([
+    fetchPlanningAllocationsWindow(factoryId, viewStart, viewEnd),
+    selectedOrderId
+      ? fetchOrderLineAllocations(factoryId, selectedOrderId)
+      : Promise.resolve([] as LineAllocation[]),
+  ]);
+
+  const byId = new Map<string, LineAllocation>();
+  for (const alloc of windowAllocations) {
+    if (alloc.id) byId.set(alloc.id, alloc);
+  }
+  for (const alloc of selectedOrderAllocations) {
+    if (alloc.id) byId.set(alloc.id, alloc);
+  }
+  const allocations = [...byId.values()];
+
   const peerIds = [
     ...new Set(
       allocations
@@ -99,8 +132,9 @@ export async function fetchPlanningGanttContext(
 }
 
 /**
- * Window-scoped allocations for planning Gantt peer bars plus minimal labels
- * for other orders. Selected order loads via useOrderForEdit.
+ * Window-scoped peer allocations for the Gantt timeline, merged with the
+ * selected order's full allocation set (so planning table rows beyond the
+ * visible date window still reload after save/refresh).
  */
 export function usePlanningGanttContext(
   factoryId: string | null | undefined,

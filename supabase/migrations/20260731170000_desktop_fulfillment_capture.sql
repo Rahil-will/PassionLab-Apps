@@ -132,7 +132,6 @@ BEGIN
   );
 END;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.log_desktop_rejection(
   p_factory_id uuid,
   p_payload jsonb
@@ -245,6 +244,5 @@ BEGIN
   );
 END;
 $function$;
-
 GRANT EXECUTE ON FUNCTION public.log_desktop_shipment(uuid, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.log_desktop_rejection(uuid, jsonb) TO authenticated;

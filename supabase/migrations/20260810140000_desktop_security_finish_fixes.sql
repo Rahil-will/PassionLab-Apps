@@ -14,7 +14,6 @@ CREATE POLICY profiles_insert_own ON public.profiles
     AND COALESCE(user_role, '') NOT IN ('admin', 'superadmin')
     AND (factory_id IS NULL OR factory_id = current_factory_id())
   );
-
 -- ---------------------------------------------------------------------------
 -- 2. save_fabric_components — upfront multi-primary guard
 -- ---------------------------------------------------------------------------
@@ -125,7 +124,6 @@ BEGIN
   ORDER BY fc.created_at ASC, fc.fabric_type ASC;
 END;
 $$;
-
 -- ---------------------------------------------------------------------------
 -- 3. log_audit_event — no session factory in WARNING; owner-only EXECUTE
 -- ---------------------------------------------------------------------------
@@ -154,10 +152,8 @@ BEGIN
   VALUES (p_factory_id, auth.uid(), p_action, p_entity_type, p_entity_id, COALESCE(p_metadata, '{}'::jsonb));
 END;
 $$;
-
 COMMENT ON FUNCTION public.log_audit_event(uuid, text, text, uuid, jsonb) IS
   'Internal only. Callable solely from owner-owned SECURITY DEFINER RPCs. '
   'Never GRANT EXECUTE to anon or authenticated — the body has no caller authorization check, '
   'so a client-reachable grant makes this a forgeable audit-injection endpoint.';
-
 REVOKE ALL ON FUNCTION public.log_audit_event(uuid, text, text, uuid, jsonb) FROM PUBLIC, anon, authenticated;

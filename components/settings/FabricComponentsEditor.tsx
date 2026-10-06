@@ -21,6 +21,8 @@ export interface FabricComponentsEditorProps {
   onChange?: (rows: FabricComponent[]) => void;
   saveRevision?: number;
   embedded?: boolean;
+  fillHeight?: boolean;
+  headerAction?: React.ReactNode;
 }
 
 export const FabricComponentsEditor: React.FC<FabricComponentsEditorProps> = ({
@@ -30,6 +32,8 @@ export const FabricComponentsEditor: React.FC<FabricComponentsEditorProps> = ({
   onChange,
   saveRevision = 0,
   embedded = false,
+  fillHeight = false,
+  headerAction,
 }) => {
   const { fabricComponents, loading: fabricLoading } = useFabricComponentsCatalog(factoryId);
   const { departments, loading: deptLoading } = useDepartmentsCatalog(factoryId, 'full');
@@ -180,7 +184,8 @@ export const FabricComponentsEditor: React.FC<FabricComponentsEditorProps> = ({
       scrollable={false}
       leftScrollable={false}
       rightScrollable
-      panelHeight={embedded ? undefined : 'min(480px, 55vh)'}
+      fillHeight={fillHeight}
+      panelHeight={embedded ? 'min(460px, 50vh)' : 'min(480px, 55vh)'}
       left={(
         <DesktopWriteGate>
         <div className="space-y-3">
@@ -189,15 +194,12 @@ export const FabricComponentsEditor: React.FC<FabricComponentsEditorProps> = ({
               {formMode === 'edit' ? <Pencil size={14} /> : <Plus size={14} />}
               {formMode === 'edit' ? 'Edit fabric category' : 'Add fabric category'}
             </h4>
-            <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-              Factory-wide list. One primary category drives cut qty everywhere.
-            </p>
           </div>
           <Input
-            label="Fabric type"
+            label="Category name"
             value={formFabricType}
             onChange={(e) => setFormFabricType(e.target.value)}
-            placeholder="e.g. Body, Lining 1"
+            placeholder="e.g. Shell, Lining, Pocketing"
             onKeyDown={(e) => e.key === 'Enter' && submitForm()}
           />
           <div>
@@ -207,7 +209,7 @@ export const FabricComponentsEditor: React.FC<FabricComponentsEditorProps> = ({
               value={formRemarks}
               onChange={(e) => setFormRemarks(e.target.value)}
               placeholder="Optional notes"
-              className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-500 resize-y min-h-[4.5rem] text-[11px]"
+              className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-500 resize-y min-h-[6.5rem] max-h-40 text-[11px]"
             />
           </div>
           <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
@@ -253,14 +255,14 @@ export const FabricComponentsEditor: React.FC<FabricComponentsEditorProps> = ({
         </DesktopWriteGate>
       )}
       right={(
-        <div className="flex flex-col min-h-[280px] max-h-[min(360px,42vh)]">
+        <div className="h-full flex flex-col min-h-0">
           <CatalogTablePanel
-            title="Fabric category catalog"
-            icon={Layers}
+            title="Fabric categories"
             isEmpty={sortedRows.length === 0}
             emptyMessage="No fabric categories yet."
+            headerAction={headerAction}
           >
-            <CatalogTable headers={['S.No', 'Fabric type', 'Primary', 'Remarks']}>
+            <CatalogTable headers={['S.No', 'Category', 'Primary', 'Remarks']}>
               {sortedRows.map((row, idx) => {
                 const globalIndex = rows.findIndex((r) => r.id === row.id);
                 const isSelected = formMode === 'edit' && editingIndex === globalIndex;

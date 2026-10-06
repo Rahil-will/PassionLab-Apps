@@ -91,11 +91,20 @@ export interface UserMutationBody {
   userRole?: string;
   userId?: string;
   canLogWorkforce?: boolean;
+  /** Required when creating a desktop viewer (email/password sign-in). */
+  password?: string;
 }
 
 export function validateCreateUserBody(body: UserMutationBody): string | null {
   if (!body.factoryId || !body.fullName?.trim() || !body.email?.trim()) {
     return 'Missing required fields';
+  }
+  if (body.userRole === 'viewer') {
+    const password = body.password?.trim() ?? '';
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    return null;
   }
   if (!body.departmentId) {
     return 'Work center is required';

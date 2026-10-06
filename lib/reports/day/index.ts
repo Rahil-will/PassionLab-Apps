@@ -8,3 +8,4 @@ export {
 export * from './deptMetrics.pure';
 export * from './hourReport';
 export * from './periodReport';
+export * from './auditReport';

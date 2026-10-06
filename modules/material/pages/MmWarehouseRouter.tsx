@@ -19,7 +19,7 @@ import MmWarehouseEndBitsPage from './warehouse/MmWarehouseEndBitsPage';
 import MmWarehouseExpectedPage from './warehouse/MmWarehouseExpectedPage';
 import MmWarehouseReceiveUnallocatedPage from './warehouse/MmWarehouseReceiveUnallocatedPage';
 import MmWarehouseDispatchHistoryPage from './warehouse/MmWarehouseDispatchHistoryPage';
-import MmQcQueuePage from './MmQcQueuePage';
+import MmWarehouseProcessSendPage from './warehouse/MmWarehouseProcessSendPage';
 
 export default function MmWarehouseRouter() {
   const route = useNavigationStore((s) => s.currentRoute);
@@ -28,6 +28,9 @@ export default function MmWarehouseRouter() {
   useEffect(() => {
     if (route === RoutePath.MATERIAL_WAREHOUSE_RACKS_MOVE) {
       requestNavigate(RoutePath.MATERIAL_WAREHOUSE_RACKS);
+    }
+    if (route === RoutePath.MATERIAL_WAREHOUSE_QC) {
+      requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING);
     }
   }, [route, requestNavigate]);
 
@@ -77,7 +80,10 @@ export default function MmWarehouseRouter() {
     return <MmWarehouseTestingDetail />;
   }
   if (route === RoutePath.MATERIAL_WAREHOUSE_QC) {
-    return <MmQcQueuePage side="warehouse" siteSide="warehouse" />;
+    return null;
+  }
+  if (route === RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND) {
+    return <MmWarehouseProcessSendPage />;
   }
   if (route === RoutePath.MATERIAL_WAREHOUSE_STORE_DETAIL) {
     return <MmStoreChallanDetail />;

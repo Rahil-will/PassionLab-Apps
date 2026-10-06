@@ -65,6 +65,10 @@ export type RoutePath =
   | "#/reports/style"
   | "#/reports/department"
   | "#/production/order-completion"
+  | "#/production/cutting"
+  | "#/production/cutting/inbound"
+  | "#/production/cutting/inbound/:id"
+  | "#/production/cutting/stock"
   | "#/planning/transaction-report"
   | "#/mm";
 
@@ -124,6 +128,7 @@ export const RoutePath = {
   MATERIAL_WAREHOUSE_TESTING: "#/material/warehouse/testing",
   MATERIAL_WAREHOUSE_TESTING_DETAIL: "#/material/warehouse/testing/:id",
   MATERIAL_WAREHOUSE_QC: "#/material/warehouse/qc",
+  MATERIAL_WAREHOUSE_PROCESS_SEND: "#/material/warehouse/process-send",
   MATERIAL_WAREHOUSE_STOCK: "#/material/warehouse/stock",
   MATERIAL_WAREHOUSE_RETURNS: "#/material/warehouse/returns",
   MATERIAL_WAREHOUSE_RETURNS_DETAIL: "#/material/warehouse/returns/:id",
@@ -135,6 +140,10 @@ export const RoutePath = {
   REPORTS_STYLE: "#/reports/style",
   REPORTS_DEPARTMENT: "#/reports/department",
   ORDER_COMPLETION: "#/production/order-completion",
+  PRODUCTION_CUTTING: "#/production/cutting",
+  PRODUCTION_CUTTING_INBOUND: "#/production/cutting/inbound",
+  PRODUCTION_CUTTING_INBOUND_DETAIL: "#/production/cutting/inbound/:id",
+  PRODUCTION_CUTTING_STOCK: "#/production/cutting/stock",
   TRANSACTION_REPORT: "#/planning/transaction-report",
   MM_HOME: "#/mm",
 } as const;

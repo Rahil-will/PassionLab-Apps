@@ -6,8 +6,6 @@ import { useSupportDropdownsCatalog, useDepartmentDefectsCatalog, useDepartments
 import { Button, SelectDropdown, ListSkeleton, Modal } from '../ui';
 import { DesktopWriteGate } from '../DesktopWriteGate';
 import {
-  fetchColorwayLabels,
-  fetchCutToShipReport,
   fetchStyleJourneyReport,
   type CutToShipDetail,
   type CutToShipRow,
@@ -17,7 +15,6 @@ import { invalidateOrderDetailBundle } from '../../lib/orderDetailBundle';
 import { queryKeys } from '../../lib/queryKeys';
 import { invalidateFactoryOrders } from '../../lib/invalidateFactoryData';
 import { invalidateProductionSummary, useProductionSummary } from '../../lib/queries/productionSummary';
-import { useColorwayCompletionMap } from '../../lib/colorwayCompletionMap';
 import { useOrderForEdit } from '../../hooks/useOrderForEdit';
 import { sumSizeAdjQty, sumSizeOrderQty, orderedSizeKeys, sizeOrderQty, sizeAdjQty } from '../../lib/colorwaySizesUtils';
 import { sumSizeMap, type SizeMap } from '../../lib/mesSizeDisplay';
@@ -30,17 +27,17 @@ import {
   resolveOriginCutQty,
 } from '../../lib/cutToShipOrigin';
 import { FabricCutQtyHint } from '../reports/FabricCutQtyHint';
+import type { CompletionListFilter } from '../../lib/cutToShipList';
 import {
-  buildColorwayCutShipItems,
-  matchesColorwaySearch,
-  matchesCompletionFilter,
-  type CompletionListFilter,
-} from '../../lib/cutToShipList';
+  fetchOrderCompletionSidebarPage,
+  ORDER_COMPLETION_SIDEBAR_PAGE_SIZE,
+} from '../../lib/orderCompletionList';
 import {
   aggregateSizeMaps,
-  groupColorwayItemsByOrder,
   mergeCutToShipRows,
+  type OrderCompletionGroup,
 } from '../../lib/orderCompletionScope';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { scopedOrderQuantities } from '../../lib/orderQtyScope';
 import { supabase } from '../../lib/supabase';
 import { logDesktopRejection, logDesktopShipment, deleteShipmentRecord } from '../../lib/desktopFulfillment';
@@ -147,7 +144,6 @@ function summarizeSizeMap(map: Record<string, unknown> | SizeMap | null | undefi
 }
 
 const TEMPLATE_GRID = 'cut-to-ship-log-grid grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-4';
-const SIDEBAR_PAGE_SIZE = 20;
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -184,12 +180,12 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
   const { departmentDefects } = useDepartmentDefectsCatalog(factoryId);
   const { departments } = useDepartmentsCatalog(factoryId, 'core');
 
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const [listLoading, setListLoading] = useState(true);
-  const [reportLoading, setReportLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
-  const [cutRows, setCutRows] = useState<CutToShipRow[]>([]);
-  const [colorwayMap, setColorwayMap] = useState<Map<string, import('../../lib/mesReportsApi').ColorwayLabel>>(new Map());
+  const [orderGroups, setOrderGroups] = useState<OrderCompletionGroup[]>([]);
+  const [sidebarTotal, setSidebarTotal] = useState(0);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [sidebarPage, setSidebarPage] = useState(1);
   const [colorwayFilter, setColorwayFilter] = useState('');
@@ -227,31 +223,40 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
     return list.map((name) => ({ value: name, label: name }));
   }, [departmentDefects]);
 
-  const loadReport = useCallback(async () => {
+  const loadSidebarPage = useCallback(async () => {
     setListLoading(true);
-    setReportLoading(true);
     setLoadError(null);
     try {
-      const rows = await fetchCutToShipReport(factoryId, {
-        buyerId: buyerFilter || null,
+      const page = await fetchOrderCompletionSidebarPage({
+        factoryId,
+        page: sidebarPage,
+        pageSize: ORDER_COMPLETION_SIDEBAR_PAGE_SIZE,
+        buyerId: buyerFilter || undefined,
+        search: debouncedSearch,
+        completionFilter,
+        includeOrderId: filterOrderId,
       });
-      setCutRows(rows);
-      const orderIds = [...new Set(rows.map((row) => row.order_id).filter(Boolean))];
-      const colorways = await fetchColorwayLabels(factoryId, { orderIds });
-      setColorwayMap(new Map(colorways.map((c) => [c.id, c])));
+      setOrderGroups(page.groups);
+      setSidebarTotal(page.total);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load cut-to-ship summary');
-      setCutRows([]);
-      setColorwayMap(new Map());
+      setLoadError(err instanceof Error ? err.message : 'Failed to load orders');
+      setOrderGroups([]);
+      setSidebarTotal(0);
     } finally {
       setListLoading(false);
-      setReportLoading(false);
     }
-  }, [factoryId, buyerFilter]);
+  }, [
+    factoryId,
+    sidebarPage,
+    buyerFilter,
+    debouncedSearch,
+    completionFilter,
+    filterOrderId,
+  ]);
 
   useEffect(() => {
-    void loadReport();
-  }, [loadReport]);
+    void loadSidebarPage();
+  }, [loadSidebarPage]);
 
   const refreshCaptureState = useCallback(
     async (orderId?: string) => {
@@ -273,73 +278,46 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
     }
     setDetailRefreshKey((k) => k + 1);
     void refreshCaptureState(selectedOrderId ?? undefined);
-    void loadReport();
-  }, [refreshCaptureState, loadReport, factoryId, selectedOrderId]);
+    void loadSidebarPage();
+  }, [refreshCaptureState, loadSidebarPage, factoryId, selectedOrderId]);
 
-  const cutOrderIds = useMemo(
-    () => [...new Set(cutRows.map((row) => row.order_id))],
-    [cutRows],
+  const sidebarTotalPages = Math.max(
+    1,
+    Math.ceil(sidebarTotal / ORDER_COMPLETION_SIDEBAR_PAGE_SIZE),
   );
-  const completionMapQuery = useColorwayCompletionMap(factoryId, cutOrderIds, cutOrderIds.length > 0);
-
-  const colorwayItems = useMemo(
-    () => buildColorwayCutShipItems(cutRows, [], colorwayMap, completionMapQuery.data),
-    [cutRows, colorwayMap, completionMapQuery.data],
-  );
-
-  const orderGroupsAll = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const filtered = colorwayItems.filter(
-      (i) => matchesColorwaySearch(i, q) && matchesCompletionFilter(i, completionFilter),
-    );
-    return groupColorwayItemsByOrder(filtered);
-  }, [colorwayItems, searchQuery, completionFilter]);
-
-  const orderGroups = useMemo(() => {
-    const from = (sidebarPage - 1) * SIDEBAR_PAGE_SIZE;
-    const slice = orderGroupsAll.slice(from, from + SIDEBAR_PAGE_SIZE);
-    const pinId = filterOrderId || selectedOrderId;
-    if (!pinId) return slice;
-    const pinned = orderGroupsAll.find((g) => g.orderId === pinId);
-    if (!pinned || slice.some((g) => g.orderId === pinId)) return slice;
-    return [pinned, ...slice.filter((g) => g.orderId !== pinId).slice(0, SIDEBAR_PAGE_SIZE - 1)];
-  }, [orderGroupsAll, filterOrderId, selectedOrderId, sidebarPage]);
-
-  const sidebarTotalPages = Math.max(1, Math.ceil(orderGroupsAll.length / SIDEBAR_PAGE_SIZE));
 
   useEffect(() => {
     setSidebarPage(1);
-  }, [searchQuery, completionFilter, buyerFilter]);
+  }, [debouncedSearch, completionFilter, buyerFilter]);
 
-  const sidebarLoading = listLoading || reportLoading || completionMapQuery.isLoading;
+  const sidebarLoading = listLoading;
 
   useEffect(() => {
     if (filterOrderId) {
-      const inFullList = orderGroupsAll.some((g) => g.orderId === filterOrderId);
-      if (inFullList) {
-        setSelectedOrderId(filterOrderId);
-        if (filterColorwayId) setColorwayFilter(filterColorwayId);
-      }
-      return;
+      setSelectedOrderId(filterOrderId);
+      if (filterColorwayId) setColorwayFilter(filterColorwayId);
     }
-    if (selectedOrderId && !orderGroupsAll.some((g) => g.orderId === selectedOrderId)) {
-      setSelectedOrderId(null);
-      setColorwayFilter('');
-    }
-  }, [filterOrderId, filterColorwayId, orderGroupsAll, selectedOrderId]);
+  }, [filterOrderId, filterColorwayId]);
 
   const { order: selectedOrderFromQuery } = useOrderForEdit(factoryId, selectedOrderId);
   const selectedOrder = selectedOrderFromQuery ?? null;
 
   const selectedGroup = useMemo(() => {
     if (!selectedOrderId) return null;
-    const fromList = orderGroupsAll.find((g) => g.orderId === selectedOrderId);
+    const fromList = orderGroups.find((g) => g.orderId === selectedOrderId);
     if (fromList) return fromList;
     if (!selectedOrder) return null;
-    const items = colorwayItems.filter((i) => i.orderId === selectedOrderId);
-    if (items.length === 0) return null;
-    return groupColorwayItemsByOrder(items)[0] ?? null;
-  }, [selectedOrderId, orderGroupsAll, selectedOrder, colorwayItems]);
+    return {
+      orderId: selectedOrderId,
+      poNumber: selectedOrder.poNumber || '—',
+      styleName: selectedOrder.styleName,
+      buyerName: selectedOrder.buyer || '—',
+      items: [],
+      cutQty: 0,
+      shippedQty: 0,
+      rejectedQty: 0,
+    } satisfies OrderCompletionGroup;
+  }, [selectedOrderId, orderGroups, selectedOrder]);
 
   /** Terminal visit primary route — shipment / rejection stamp. */
   const terminalRoute = useMemo(() => {
@@ -425,13 +403,10 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
 
   const scopedReconRows = useMemo(() => {
     if (!selectedOrderId) return [] as CutToShipRow[];
-    const fromDetail = detail?.reconciliation?.filter((r) => r.order_id === selectedOrderId) ?? [];
-    const rows = fromDetail.length > 0
-      ? fromDetail
-      : cutRows.filter((r) => r.order_id === selectedOrderId);
+    const rows = detail?.reconciliation?.filter((r) => r.order_id === selectedOrderId) ?? [];
     if (!activeColorwayId) return rows;
     return rows.filter((r) => r.colorway_id === activeColorwayId);
-  }, [detail, cutRows, selectedOrderId, activeColorwayId]);
+  }, [detail, selectedOrderId, activeColorwayId]);
 
   const selectedRecon = useMemo(
     () => mergeCutToShipRows(scopedReconRows),
@@ -836,7 +811,7 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
         operationId: terminalRoute.primaryRouteId,
         visitId: terminalRoute.visitId,
       });
-      await Promise.all([loadReport(), refreshCaptureState(selectedOrderId)]);
+      await Promise.all([loadSidebarPage(), refreshCaptureState(selectedOrderId)]);
       invalidateOrderDetailBundle(factoryId, selectedOrderId);
       setDetailRefreshKey((k) => k + 1);
       setShipmentTemplate(buildShipmentTemplate(sizeKeys, defaultShipmentType));
@@ -872,7 +847,7 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
           visitId: terminalRoute.visitId,
         });
       }
-      await Promise.all([loadReport(), refreshCaptureState(selectedOrderId)]);
+      await Promise.all([loadSidebarPage(), refreshCaptureState(selectedOrderId)]);
       invalidateOrderDetailBundle(factoryId, selectedOrderId);
       setDetailRefreshKey((k) => k + 1);
       setRejectionTemplate(buildRejectionTemplate(sizeKeys, defaultAuditType, defaultDefect));
@@ -899,7 +874,7 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
     setSaveError(null);
     try {
       await deleteShipmentRecord(factoryId, shipmentId);
-      await Promise.all([loadReport(), refreshCaptureState(selectedOrderId)]);
+      await Promise.all([loadSidebarPage(), refreshCaptureState(selectedOrderId)]);
       invalidateOrderDetailBundle(factoryId, selectedOrderId);
       setDetailRefreshKey((k) => k + 1);
       setDeleteShipmentTarget(null);
@@ -947,7 +922,7 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
   const printMeta = format(new Date(), 'dd/MM/yyyy, HH:mm');
 
   return (
-    <div id="order-completion-print-root" className="mes-report order-completion-report">
+    <div id="order-completion-print-root" className="mes-report order-completion-report flex flex-col flex-1 min-h-0 h-full">
       <header className="print-only mes-report-header">
         <div>
           <div className="mes-report-logo">PRODIGI</div>
@@ -978,27 +953,27 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
         </div>
       )}
 
-      <div className="oc-layout-grid grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 min-h-[520px]">
-        <div className="oc-screen-sidebar no-print bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <div className="oc-layout-grid grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 flex-1 min-h-0">
+        <div className="oc-screen-sidebar no-print bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col min-h-0 h-full">
+          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
             <span className="text-xs font-bold text-slate-700 uppercase">Orders</span>
-            <button type="button" onClick={refreshAll} className="text-slate-400 hover:text-slate-600" title="Refresh" disabled={sidebarLoading || reportLoading}>
-              <RefreshCw size={14} className={sidebarLoading || reportLoading ? 'animate-spin' : ''} />
+            <button type="button" onClick={refreshAll} className="text-slate-400 hover:text-slate-600" title="Refresh" disabled={sidebarLoading}>
+              <RefreshCw size={14} className={sidebarLoading ? 'animate-spin' : ''} />
             </button>
           </div>
-          {orderGroupsAll.length > SIDEBAR_PAGE_SIZE && (
-            <div className="border-b border-slate-100 bg-slate-50">
+          {sidebarTotal > ORDER_COMPLETION_SIDEBAR_PAGE_SIZE && (
+            <div className="border-b border-slate-100 bg-slate-50 shrink-0">
               <Pagination
                 page={sidebarPage}
                 pageCount={sidebarTotalPages}
-                total={orderGroupsAll.length}
-                start={orderGroupsAll.length === 0 ? 0 : (sidebarPage - 1) * SIDEBAR_PAGE_SIZE + 1}
-                end={Math.min(sidebarPage * SIDEBAR_PAGE_SIZE, orderGroupsAll.length)}
+                total={sidebarTotal}
+                start={sidebarTotal === 0 ? 0 : (sidebarPage - 1) * ORDER_COMPLETION_SIDEBAR_PAGE_SIZE + 1}
+                end={Math.min(sidebarPage * ORDER_COMPLETION_SIDEBAR_PAGE_SIZE, sidebarTotal)}
                 setPage={setSidebarPage}
               />
             </div>
           )}
-          <div className="flex-1 overflow-y-auto min-h-[200px]">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {sidebarLoading && <ListSkeleton />}
             {loadError && !sidebarLoading && <p className="p-4 text-xs text-red-600">{loadError}</p>}
             {!sidebarLoading && orderGroups.length === 0 && (
@@ -1019,15 +994,11 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
                 <div className="text-xs font-semibold text-slate-800">{group.styleName}</div>
                 <div className="text-[10px] text-slate-500">PO {group.poNumber} · {group.buyerName}</div>
                 <div className="mt-1 text-[10px] text-slate-500 flex flex-wrap gap-x-2 gap-y-0.5">
-                  <span>{group.items.length} color{group.items.length !== 1 ? 's' : ''}</span>
                   <span>
-                    Cut{' '}
-                    <FabricCutQtyHint
-                      qty={group.cutQty}
-                      source={group.items[0]?.row?.cut_qty_source}
-                      components={group.items[0]?.row?.cut_qty_by_component}
-                    />
+                    {(group.colorCount ?? group.items.length)} color
+                    {(group.colorCount ?? group.items.length) !== 1 ? 's' : ''}
                   </span>
+                  <span>Cut {group.cutQty.toLocaleString()}</span>
                   <span>Ship {group.shippedQty.toLocaleString()}</span>
                   <span>Rej {group.rejectedQty.toLocaleString()}</span>
                 </div>
@@ -1036,7 +1007,7 @@ export const OrderCompletionWorkspace: React.FC<OrderCompletionWorkspaceProps> =
           </div>
         </div>
 
-        <div className="oc-detail-panel cut-to-ship-detail bg-white border border-slate-200 rounded-xl overflow-hidden print:border-0 print:rounded-none min-h-[520px]">
+        <div className="oc-detail-panel cut-to-ship-detail bg-white border border-slate-200 rounded-xl overflow-hidden print:border-0 print:rounded-none min-h-0 flex flex-col flex-1">
           {!sidebarLoading && !selectedOrder && (
             <p className="text-sm text-slate-400 py-12 text-center">Select an order from the list</p>
           )}

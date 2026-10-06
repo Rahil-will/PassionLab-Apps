@@ -37,6 +37,27 @@ function formatChartDate(date: string): string {
   }
 }
 
+/** Fixed-height Recharts wrapper — avoids width/height -1 when parent uses flex or % sizing. */
+export function ChartSizedContainer({
+  height,
+  children,
+}: {
+  height: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="w-full min-w-0" style={{ height, minHeight: height }}>
+      <ResponsiveContainer
+        width="100%"
+        height={height}
+        initialDimension={{ width: 1, height }}
+      >
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 interface ChartCardProps {
   title: string;
   subtitle?: string;
@@ -69,11 +90,9 @@ const ChartCard: React.FC<ChartCardProps> = ({
       </div>
     ) : (
       <>
-        <div className="w-full min-w-0" style={{ height, minHeight: height }}>
-          <ResponsiveContainer width="100%" height={height}>
+        <ChartSizedContainer height={height}>
             {children}
-          </ResponsiveContainer>
-        </div>
+        </ChartSizedContainer>
         {footer}
       </>
     )}
@@ -348,12 +367,13 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({
       <YAxis tick={axisStyle} width={40} domain={yDomain} allowDecimals={false} />
       <Tooltip
         contentStyle={tooltipStyle}
-        formatter={(value: number, name: string, item?: { payload?: typeof chartData[0] }) => {
+        formatter={(value, name, item) => {
+          const qty = typeof value === 'number' ? value : Number(value ?? 0);
           const pct = item?.payload?.achievementPct;
           if (name === 'Output' && pct != null) {
-            return [`${value.toLocaleString()} (${pct.toFixed(0)}% of target)`, 'Output'];
+            return [`${qty.toLocaleString()} (${pct.toFixed(0)}% of target)`, 'Output'];
           }
-          return [value.toLocaleString(), name];
+          return [qty.toLocaleString(), name ?? ''];
         }}
       />
       <Bar dataKey="output" name="Output" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={52} legendType="none">
@@ -399,11 +419,9 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({
       </div>
     ) : (
       <div className="w-full min-w-0">
-        <div className="w-full min-w-0" style={{ height, minHeight: height }}>
-          <ResponsiveContainer width="100%" height={height}>
-            {chart}
-          </ResponsiveContainer>
-        </div>
+        <ChartSizedContainer height={height}>
+          {chart}
+        </ChartSizedContainer>
         <ChartSeriesLegend items={dailyLegend} />
       </div>
     );
@@ -580,8 +598,8 @@ export const VisitOperationOutputChart: React.FC<VisitOperationOutputChartProps>
 
   return (
     <div className="w-full min-w-0">
-      <div className="w-full min-w-0" style={{ height: chartHeight, minHeight: chartHeight }}>
-        <ResponsiveContainer width="100%" height={chartHeight}>
+      <div className="w-full min-w-0">
+        <ChartSizedContainer height={chartHeight}>
           <BarChart
             key={chartKey}
             data={points}
@@ -608,15 +626,16 @@ export const VisitOperationOutputChart: React.FC<VisitOperationOutputChartProps>
             <Tooltip
               contentStyle={tooltipStyle}
               cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
-              formatter={(value: number, _name: string, item?: { payload?: VisitOperationBarPoint }) => {
-                const p = item?.payload;
-                if (!p) return [value.toLocaleString(), 'Output'];
+              formatter={(value, _name, item) => {
+                const qty = typeof value === 'number' ? value : Number(value ?? 0);
+                const p = item?.payload as VisitOperationBarPoint | undefined;
+                if (!p) return [qty.toLocaleString(), 'Output'];
                 const pct = p.target > 0 ? (p.output / p.target) * 100 : null;
                 const label = p.color === '#10b981' ? 'Loading' : 'Output';
                 if (pct != null) {
-                  return [`${value.toLocaleString()} (${formatAchievementPct(pct)} of target)`, label];
+                  return [`${qty.toLocaleString()} (${formatAchievementPct(pct)} of target)`, label];
                 }
-                return [value.toLocaleString(), label];
+                return [qty.toLocaleString(), label];
               }}
               labelFormatter={(_label, payload) => {
                 const p = payload?.[0]?.payload as VisitOperationBarPoint | undefined;
@@ -632,7 +651,10 @@ export const VisitOperationOutputChart: React.FC<VisitOperationOutputChartProps>
                 position="top"
                 fontSize={9}
                 fill="#64748b"
-                formatter={(v: number) => (v > 0 ? String(v) : '')}
+                formatter={(v) => {
+                  const n = typeof v === 'number' ? v : Number(v ?? 0);
+                  return n > 0 ? String(n) : '';
+                }}
               />
             </Bar>
             <Customized
@@ -645,7 +667,7 @@ export const VisitOperationOutputChart: React.FC<VisitOperationOutputChartProps>
               )}
             />
           </BarChart>
-        </ResponsiveContainer>
+        </ChartSizedContainer>
       </div>
       <ChartSeriesLegend items={legendItems} />
     </div>

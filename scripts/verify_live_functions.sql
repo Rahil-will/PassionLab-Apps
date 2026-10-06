@@ -255,7 +255,11 @@ BEGIN
       ('order_dept_progress_rows'),
       ('operation_progress_rows'),
       ('cutting_component_progress_rows'),
-      ('get_department_kpis')
+      ('get_department_kpis'),
+      ('get_day_cutting_sessions'),
+      ('get_day_origin_report'),
+      ('get_day_standard_report'),
+      ('get_day_terminal_report')
   ) AS expected(name)
   WHERE NOT EXISTS (
     SELECT 1
@@ -309,6 +313,7 @@ BEGIN
       AND (
         pg_get_functiondef(p.oid) ~ '_assert_desktop_factory_scope'
         OR pg_get_functiondef(p.oid) ~ 'public\.[a-z_]+_inner\('
+        OR pg_get_functiondef(p.oid) ~ 'log_audit_event'
       )
   ) AS bad;
 

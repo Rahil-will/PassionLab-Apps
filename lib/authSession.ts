@@ -10,6 +10,12 @@ export interface RpcProfileRow {
   email: string | null;
   user_role: string;
   status: string;
+  assigned_apps?: unknown;
+}
+
+function parseAssignedApps(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is string => typeof v === 'string');
 }
 
 export function parseMyProfile(data: unknown): RpcProfileRow | null {
@@ -25,6 +31,7 @@ export function profileToUserProfile(profile: RpcProfileRow, fallbackEmail: stri
     fullName: profile.full_name || fallbackEmail.split('@')[0],
     email: profile.email || fallbackEmail,
     userRole: profile.user_role || 'viewer',
+    assignedApps: parseAssignedApps(profile.assigned_apps),
   };
 }
 
@@ -127,6 +134,8 @@ export async function restoreAuthSession(): Promise<boolean> {
 }
 
 export async function logoutDesktopSession(): Promise<void> {
-  await supabase.auth.signOut();
   clearAuthenticatedSession();
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
+  if (error) console.warn('[AUTH] signOut', error.message);
+  void supabase.auth.signOut({ scope: 'global' }).catch(() => {});
 }

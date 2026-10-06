@@ -14,14 +14,20 @@ import { useSettingsBootstrap } from './lib/queries/settings';
 import { prefetchFactoryListData } from './lib/prefetchFactoryData';
 import { useFactoryDataBootstrap } from './hooks/useFactoryDataBootstrap';
 import { useAuthSessionSync } from './hooks/useAuthSessionSync';
-import { canAccessRoute } from './lib/routeAccess';
+import { canAccessRoute, type RouteAccessContext } from './lib/routeAccess';
+import { getAllManifests } from './core/modules/registry';
+import { ModuleGate } from './core/modules/ModuleGate';
+import { useFactoryModules } from './core/modules/useModuleEnabled';
+import type { ModuleKey } from './core/modules/types';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const CreateOrderMaster = React.lazy(() => import('./pages/production/CreateOrderMaster').then(m => ({ default: m.CreateOrderMaster })));
+const CreateOrderColor = React.lazy(() => import('./pages/production/CreateOrderColor').then(m => ({ default: m.CreateOrderColor })));
 const StatusTracker = React.lazy(() => import('./pages/production/StatusTracker').then(m => ({ default: m.StatusTracker })));
 const FloorDayBoard = React.lazy(() => import('./pages/production/FloorDayBoard').then(m => ({ default: m.FloorDayBoard })));
 const Settings = React.lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const WorkCenters = React.lazy(() => import('./pages/system/WorkCenters').then(m => ({ default: m.WorkCenters })));
+const WorkCenterMaterial = React.lazy(() => import('./pages/system/WorkCenterMaterial').then(m => ({ default: m.WorkCenterMaterial })));
 const UserManagement = React.lazy(() => import('./pages/system/UserManagement').then(m => ({ default: m.UserManagement })));
 const StyleDetails = React.lazy(() => import('./pages/production/StyleDetails').then(m => ({ default: m.StyleDetails })));
 const StyleColorDetails = React.lazy(() => import('./pages/production/StyleColorDetails').then(m => ({ default: m.StyleColorDetails })));
@@ -30,6 +36,7 @@ const PlanningOrderList = React.lazy(() => import('./pages/planning/PlanningOrde
 const DepartmentSchedule = React.lazy(() => import('./pages/planning/DepartmentSchedule').then(m => ({ default: m.DepartmentSchedule })));
 const TransactionReport = React.lazy(() => import('./pages/planning/TransactionReport').then(m => ({ default: m.TransactionReport })));
 const OrderCompletion = React.lazy(() => import('./pages/production/OrderCompletion').then(m => ({ default: m.OrderCompletion })));
+const CuttingRouter = React.lazy(() => import('./pages/production/cutting/CuttingRouter').then(m => ({ default: m.CuttingRouter })));
 const ReportsLanding = React.lazy(() => import('./pages/reports/ReportsLanding').then(m => ({ default: m.ReportsLanding })));
 const DayReport = React.lazy(() => import('./pages/reports/DayReport').then(m => ({ default: m.DayReport })));
 const StyleReport = React.lazy(() => import('./pages/reports/StyleReport').then(m => ({ default: m.StyleReport })));
@@ -78,6 +85,18 @@ const App: React.FC = () => {
   } = useNavigationStore();
   const { notification, hideNotification } = useNotificationStore();
   const [authReady, setAuthReady] = React.useState(false);
+  const modulesQuery = useFactoryModules();
+
+  const accessCtx = React.useMemo<RouteAccessContext>(() => {
+    const modulesEnabled: Partial<Record<string, boolean>> = {};
+    for (const row of modulesQuery.data ?? []) {
+      modulesEnabled[row.module_key] = row.enabled;
+    }
+    return {
+      modulesEnabled,
+      assignedApps: userProfile?.assignedApps ?? [],
+    };
+  }, [modulesQuery.data, userProfile?.assignedApps]);
 
   useSettingsBootstrap(
     factoryId,
@@ -106,9 +125,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const role = userProfile?.userRole;
-    if (!role || canAccessRoute(role, currentRoute)) return;
+    if (!role || canAccessRoute(role, currentRoute, accessCtx)) return;
     navigate(RoutePath.DASHBOARD);
-  }, [userProfile?.userRole, currentRoute, navigate]);
+  }, [userProfile?.userRole, userProfile?.assignedApps, currentRoute, navigate, accessCtx]);
 
   if (!authReady) {
     return <PageLoader />;
@@ -120,9 +139,28 @@ const App: React.FC = () => {
 
   const role = userProfile?.userRole;
   const guardedRoute =
-    role && !canAccessRoute(role, currentRoute) ? RoutePath.DASHBOARD : currentRoute;
+    role && !canAccessRoute(role, currentRoute, accessCtx) ? RoutePath.DASHBOARD : currentRoute;
+
+  const renderModulePage = () => {
+    for (const manifest of getAllManifests()) {
+      for (const def of manifest.routes) {
+        if (guardedRoute === def.path || guardedRoute.startsWith(`${def.path}/`)) {
+          const LazyPage = React.lazy(def.component);
+          return (
+            <ModuleGate moduleKey={manifest.key as ModuleKey}>
+              <LazyPage />
+            </ModuleGate>
+          );
+        }
+      }
+    }
+    return null;
+  };
 
   const renderContent = () => {
+    const modulePage = renderModulePage();
+    if (modulePage) return modulePage;
+
     if (guardedRoute.startsWith('#/style-details/')) {
       return <StyleDetails />;
     }
@@ -132,21 +170,27 @@ const App: React.FC = () => {
     if (guardedRoute.startsWith('#/planning-detail')) {
       return <ProductionPlanning />;
     }
-    if (guardedRoute.startsWith('#/create-order')) {
+    if (guardedRoute === RoutePath.CREATE_ORDER_COLOR || guardedRoute.startsWith(`${RoutePath.CREATE_ORDER_COLOR}?`)) {
+      return <CreateOrderColor />;
+    }
+    if (guardedRoute === RoutePath.CREATE_ORDER || guardedRoute.startsWith(`${RoutePath.CREATE_ORDER}?`)) {
       return <CreateOrderMaster key={routeParams.id ?? 'new'} />;
     }
 
     switch (guardedRoute) {
       case RoutePath.DASHBOARD:
         return <Dashboard />;
-      case RoutePath.CREATE_ORDER:
-        return <CreateOrderMaster key={routeParams.id ?? 'new'} />;
       case RoutePath.STATUS_TRACKER:
         return <StatusTracker />;
       case RoutePath.FLOOR_DAY:
         return <FloorDayBoard />;
       case RoutePath.ORDER_COMPLETION:
         return <OrderCompletion />;
+      case RoutePath.PRODUCTION_CUTTING:
+      case RoutePath.PRODUCTION_CUTTING_INBOUND:
+      case RoutePath.PRODUCTION_CUTTING_INBOUND_DETAIL:
+      case RoutePath.PRODUCTION_CUTTING_STOCK:
+        return <CuttingRouter />;
       case RoutePath.REPORTS:
         return <ReportsLanding />;
       case RoutePath.REPORTS_DAY:
@@ -171,6 +215,9 @@ const App: React.FC = () => {
       case RoutePath.WORK_CENTER_DEPARTMENTS:
       case RoutePath.WORK_CENTER_PROCESS_FLOWS:
         return <WorkCenters />;
+      case RoutePath.MATERIAL_MANAGEMENT:
+      case RoutePath.WORK_CENTER_MATERIAL:
+        return <WorkCenterMaterial />;
       default:
         return <Dashboard />;
     }

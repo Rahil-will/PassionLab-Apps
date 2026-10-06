@@ -14,12 +14,45 @@ export interface VisitFlowMetrics {
   activitiesLabel: string;
   label: string;
   primaryRouteId?: string;
+  deptRole?: string | null;
   received: number;
   produced: number;
   sent: number;
   wip: number;
   inTransit?: number;
   missingInTransit?: number;
+}
+
+/** Shipment/dispatch has no next department, so captured qty lives in produced. */
+export function isShipmentFlowDept(row: {
+  deptName: string;
+  activitiesLabel?: string | null;
+  deptRole?: string | null;
+}): boolean {
+  if (row.deptRole === 'terminal') return true;
+  return /\bshipment\b|\bdispatch\b/i.test(`${row.deptName} ${row.activitiesLabel || ''}`);
+}
+
+/** Show dispatched qty in Sent (not Produced) and WIP as still-on-hand. */
+export function shipmentFlowDisplayQty(row: {
+  deptName: string;
+  activitiesLabel?: string | null;
+  deptRole?: string | null;
+  produced: number;
+  sent: number;
+  received: number;
+  wip: number;
+}): { produced: number; sent: number; wip: number; isShipment: boolean } {
+  if (!isShipmentFlowDept(row)) {
+    return { produced: row.produced, sent: row.sent, wip: row.wip, isShipment: false };
+  }
+  const sent = row.sent > 0 ? row.sent : row.produced;
+  return {
+    produced: 0,
+    sent,
+    wip: Math.max(0, row.received - sent),
+    isShipment: true,
+  };
 }
 
 function journeyForDept(

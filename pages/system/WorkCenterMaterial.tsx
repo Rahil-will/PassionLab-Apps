@@ -32,6 +32,9 @@ import MmProcessVendorsPage, {
 import MmFacilitiesPage, {
   type MmFacilitiesHandle,
 } from '../../modules/material/pages/MmFacilitiesPage';
+import MmMachinesPage, {
+  type MmMachinesHandle,
+} from '../../modules/material/pages/MmMachinesPage';
 import MmFabricStagesPage, {
   type MmFabricStagesHandle,
 } from '../../modules/material/pages/MmFabricStagesPage';
@@ -45,6 +48,7 @@ type MaterialSection =
   | 'racks'
   | 'process-vendors'
   | 'facilities'
+  | 'machines'
   | 'fabric-stages';
 
 const SECTIONS: { id: MaterialSection; label: string; hint: string }[] = [
@@ -54,16 +58,21 @@ const SECTIONS: { id: MaterialSection; label: string; hint: string }[] = [
   { id: 'test-fabric', label: 'Fabric testing parameters', hint: 'What to record when a roll is tested.' },
   { id: 'trim-params', label: 'Trim requirement parameters', hint: 'Trim categories and types used on the order.' },
   { id: 'racks', label: 'Fabric rack management', hint: 'Create racks and bins, and set how many rolls each holds.' },
-  { id: 'process-vendors', label: 'Process vendors', hint: 'Who dyes, prints, or otherwise processes greige, and which processes they do.' },
+  { id: 'process-vendors', label: 'Process vendors', hint: 'Vendors and which fabric processes they can run.' },
   {
     id: 'facilities',
-    label: 'Facilities & machines',
-    hint: 'Mills, processing units, warehouses, fabric vendors, and in-house machines (Fabric v4).',
+    label: 'Facilities',
+    hint: 'Mills, processing units, warehouses, and fabric vendors (Fabric v4).',
+  },
+  {
+    id: 'machines',
+    label: 'Machines',
+    hint: 'In-house machines linked to facilities (Fabric v4).',
   },
   {
     id: 'fabric-stages',
     label: 'Fabric stages',
-    hint: 'Ordered greige → finished stages and which ones can be cut (Fabric v4).',
+    hint: 'Stage order, labels, and which stages can be cut (Fabric v4).',
   },
 ];
 
@@ -77,6 +86,7 @@ function resolveSection(raw: string | undefined): MaterialSection | null {
   if (raw === 'racks') return 'racks';
   if (raw === 'process-vendors') return 'process-vendors';
   if (raw === 'facilities' || raw === 'facilities-machines') return 'facilities';
+  if (raw === 'machines') return 'machines';
   if (raw === 'fabric-stages' || raw === 'stages') return 'fabric-stages';
   return null;
 }
@@ -104,6 +114,7 @@ export function WorkCenterMaterial() {
   const racksRef = useRef<MmRackMasterHandle>(null);
   const processRef = useRef<MmProcessVendorsHandle>(null);
   const facilitiesRef = useRef<MmFacilitiesHandle>(null);
+  const machinesRef = useRef<MmMachinesHandle>(null);
   const stagesRef = useRef<MmFabricStagesHandle>(null);
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
 
@@ -144,6 +155,7 @@ export function WorkCenterMaterial() {
       else if (section === 'racks') ok = (await racksRef.current?.save()) ?? false;
       else if (section === 'process-vendors') ok = (await processRef.current?.save()) ?? false;
       else if (section === 'facilities') ok = (await facilitiesRef.current?.save()) ?? false;
+      else if (section === 'machines') ok = (await machinesRef.current?.save()) ?? false;
       else if (section === 'fabric-stages') ok = (await stagesRef.current?.save()) ?? false;
       else ok = (await trimRef.current?.save()) ?? false;
       if (ok) {
@@ -275,6 +287,8 @@ export function WorkCenterMaterial() {
                   <MmProcessVendorsPage ref={processRef} onDirtyChange={markDirty} />
                 ) : section === 'facilities' ? (
                   <MmFacilitiesPage ref={facilitiesRef} onDirtyChange={markDirty} />
+                ) : section === 'machines' ? (
+                  <MmMachinesPage ref={machinesRef} onDirtyChange={markDirty} />
                 ) : section === 'fabric-stages' ? (
                   <MmFabricStagesPage ref={stagesRef} onDirtyChange={markDirty} />
                 ) : (

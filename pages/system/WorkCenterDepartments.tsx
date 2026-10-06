@@ -97,7 +97,7 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
   const [isUnsaved, setIsUnsaved] = useState(false);
   const [saveRevision, setSaveRevision] = useState(0);
   const [defectsDirty, setDefectsDirty] = useState(false);
-  const [fabricDirty, setFabricDirty] = useState(false);
+  const [fabricCategoriesDirty, setFabricCategoriesDirty] = useState(false);
   const [ratesDirty, setRatesDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -106,7 +106,7 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
   const [deleting, setDeleting] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [defectsDraft, setDefectsDraft] = useState<DefectItem[]>([]);
-  const [fabricDraft, setFabricDraft] = useState<FabricComponent[]>([]);
+  const [fabricCategoriesDraft, setFabricCategoriesDraft] = useState<FabricComponent[]>([]);
   const [ratesDraft, setRatesDraft] = useState<WorkforceRateVersionDraft[]>([]);
 
   const listItems = useMemo(() => departments, [departments]);
@@ -120,13 +120,13 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
     )
     && departmentOperationsSession?.deptId === formData.id
     && Boolean(departmentOperationsSession?.draftTouched);
-  const hasPendingUnsaved = isUnsaved || defectsDirty || fabricDirty || ratesDirty || operationsDirty;
+  const hasPendingUnsaved = isUnsaved || defectsDirty || fabricCategoriesDirty || ratesDirty || operationsDirty;
 
   const doSelect = (id: string, item: DepartmentEntity) => {
     const data = JSON.parse(JSON.stringify(item)) as DepartmentEntity;
     store.selectDepartmentForEdit(id);
     setDefectsDirty(false);
-    setFabricDirty(false);
+    setFabricCategoriesDirty(false);
     setRatesDirty(false);
     if (!id.startsWith('temp_')) {
       const isStore = isStoragePlanningDepartment({ role: data.role, planning_mode: data.planning_mode });
@@ -284,12 +284,21 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
           await store.syncDepartmentOperations(deptId, factoryId!);
         }
 
-        if (fabricDirty) {
-          await store.saveFabricComponents(factoryId!, deptId, fabricDraft, store.fabricComponents);
-        }
-
         if (ratesDirty) {
           await store.refreshDepartmentWorkforceRates(deptId);
+        }
+
+        if (
+          fabricCategoriesDirty
+          && factoryId
+          && resolvePlanningMode({ role: formData.role, planning_mode: formData.planning_mode }) === 'native_cutting'
+        ) {
+          await store.saveFabricComponents(
+            factoryId,
+            deptId,
+            fabricCategoriesDraft,
+            store.fabricComponents,
+          );
         }
 
         await refreshAssignedResources();
@@ -311,7 +320,7 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
       setIsUnsaved(false);
       setNavUnsaved(false);
       setDefectsDirty(false);
-      setFabricDirty(false);
+      setFabricCategoriesDirty(false);
       setRatesDirty(false);
       setSaveRevision((n) => n + 1);
       return true;
@@ -332,8 +341,8 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
     factoryId,
     defectsDirty,
     defectsDraft,
-    fabricDirty,
-    fabricDraft,
+    fabricCategoriesDirty,
+    fabricCategoriesDraft,
     ratesDirty,
     ratesDraft,
     departmentResourceSession,
@@ -404,6 +413,7 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
     setIsUnsaved(false);
     setNavUnsaved(false);
     setDefectsDirty(false);
+    setFabricCategoriesDirty(false);
     if (pendingAction) {
       pendingAction();
       setPendingAction(null);
@@ -527,8 +537,8 @@ export function WorkCenterDepartments({ tabBar }: { tabBar?: React.ReactNode } =
               setFormData={handleSetFormData}
               onDefectsDirtyChange={setDefectsDirty}
               onDefectsDraftChange={setDefectsDraft}
-              onFabricDirtyChange={setFabricDirty}
-              onFabricDraftChange={setFabricDraft}
+              onFabricCategoriesDirtyChange={setFabricCategoriesDirty}
+              onFabricCategoriesDraftChange={setFabricCategoriesDraft}
               onRatesDirtyChange={setRatesDirty}
               onRatesDraftChange={setRatesDraft}
               saveRevision={saveRevision}

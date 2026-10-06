@@ -69,7 +69,11 @@
   #order-completion-print-root,
   #order-completion-print-root *,
   #style-report-print-root,
-  #style-report-print-root * {
+  #style-report-print-root *,
+  #style-tested-rolls-print-root,
+  #style-tested-rolls-print-root *,
+  #mm-challan-print-root,
+  #mm-challan-print-root * {
     visibility: visible;
   }
 
@@ -88,7 +92,7 @@
     visibility: visible !important;
   }
 
-  .mes-report:not(#order-completion-print-root):not(#style-report-print-root),
+  .mes-report:not(#order-completion-print-root):not(#style-report-print-root):not(#style-tested-rolls-print-root):not(#mm-challan-print-root),
   #planning-summary-print-root {
     position: absolute !important;
     left: 0 !important;
@@ -133,6 +137,62 @@
     display: block !important;
     width: 100% !important;
     overflow: visible !important;
+  }
+
+  #style-tested-rolls-print-root {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 2mm !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    visibility: visible !important;
+  }
+
+  #style-tested-rolls-print-root .overflow-auto,
+  #style-tested-rolls-print-root .overflow-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  #style-tested-rolls-print-root table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 7.5pt !important;
+    border-collapse: collapse !important;
+  }
+
+  #style-tested-rolls-print-root th,
+  #style-tested-rolls-print-root td {
+    padding: 1.2mm 1.4mm !important;
+    font-size: 7.5pt !important;
+    line-height: 1.25 !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    border-bottom: 0.3pt solid #cbd5e1 !important;
+  }
+
+  #style-tested-rolls-print-root th {
+    white-space: normal !important;
+    font-size: 6.5pt !important;
+    letter-spacing: 0.02em;
+  }
+
+  #style-tested-rolls-print-root button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 1.5mm 0 !important;
   }
 
   .mes-report-header {
@@ -462,5 +522,104 @@
   #style-report-print-root .recharts-responsive-container,
   #style-report-print-root canvas {
     display: none !important;
+  }
+
+  #mm-challan-print-root {
+    display: block !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    visibility: visible !important;
+  }
+
+  /* Portal print: hide app chrome so page 1 is the challan, not blank layout. */
+  body.mm-print-challan #root {
+    display: none !important;
+  }
+
+  body.mm-print-challan #mm-challan-print-root {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+  }
+
+  body.mm-print-challan #mm-challan-print-root,
+  body.mm-print-challan #mm-challan-print-root * {
+    visibility: visible !important;
+  }
+
+  #mm-challan-print-root .mm-challan-meta {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: 1px solid #d1d5db;
+    margin: 0 0 4mm 0;
+    page-break-inside: avoid;
+  }
+
+  #mm-challan-print-root .mm-challan-kv {
+    padding: 2mm 3mm;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  #mm-challan-print-root .mm-challan-kv-label {
+    font-size: 7pt;
+    text-transform: uppercase;
+    color: #64748b;
+    letter-spacing: 0.03em;
+    margin: 0;
+  }
+
+  #mm-challan-print-root .mm-challan-kv-value {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 1mm 0 0 0;
+    word-break: break-word;
+  }
+
+  #mm-challan-print-root .mm-challan-rolls {
+    font-size: 8pt !important;
+  }
+
+  #mm-challan-print-root .mm-challan-rolls th,
+  #mm-challan-print-root .mm-challan-rolls td {
+    padding: 1mm 1.5mm !important;
+    font-size: 8pt !important;
+  }
+
+  #mm-challan-print-root .mm-challan-remarks {
+    border: 1px solid #d1d5db;
+    padding: 2mm 3mm;
+    margin: 3mm 0 4mm 0;
+    page-break-inside: avoid;
+  }
+
+  #mm-challan-print-root .mm-challan-signs {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8mm;
+    margin-top: 12mm;
+    page-break-inside: avoid;
+  }
+
+  #mm-challan-print-root .mm-challan-sign-line {
+    margin-top: 14mm;
+    border-top: 1px solid #94a3b8;
+    padding-top: 1.5mm;
+    font-size: 8pt;
+    color: #64748b;
   }
 }

@@ -39,9 +39,9 @@ export const OrderCompletion: React.FC = () => {
   }
 
   return (
-    <PageShell className="page-content space-y-4">
+    <PageShell className="page-content flex flex-col min-h-[calc(110vh-12rem)]">
       {meta && (
-        <PageToolbarCard className="no-print mes-page-chrome flex flex-wrap items-center gap-3">
+        <PageToolbarCard className="no-print mes-page-chrome flex flex-wrap items-center gap-3 shrink-0 mb-4">
           <div className="flex items-center gap-2 flex-1 min-w-[12rem] max-w-md">
             <Search size={14} className="text-slate-400 shrink-0" />
             <input
@@ -75,6 +75,7 @@ export const OrderCompletion: React.FC = () => {
         </PageToolbarCard>
       )}
 
+      <div className="flex-1 min-h-12 flex flex-col">
       <OrderCompletionWorkspace
         factoryId={factoryId}
         userId={userProfile?.id ?? ''}
@@ -85,6 +86,7 @@ export const OrderCompletion: React.FC = () => {
         filterOrderId={linkOrderId || undefined}
         filterColorwayId={linkColorwayId || undefined}
       />
+      </div>
     </PageShell>
   );
 };

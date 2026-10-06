@@ -1,0 +1,92 @@
+CREATE OR REPLACE FUNCTION public.mm_list_cutting_rolls(
+  p_order_id uuid,
+  p_colorway_id uuid,
+  p_style_material_id uuid DEFAULT NULL,
+  p_search text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $fn$
+DECLARE
+  v_factory uuid;
+  v_actor uuid;
+  v_cut uuid;
+  v_q text := NULLIF(btrim(COALESCE(p_search, '')), '');
+BEGIN
+  v_actor := public._mm_actor_id();
+  v_factory := public._mm_actor_factory_id();
+  IF v_actor IS NULL OR v_factory IS NULL THEN
+    RETURN public._mm_err('NO_FACTORY', 'No factory');
+  END IF;
+  v_cut := public._mm_loc(v_factory, 'CUTTING_STORE');
+  RETURN public._mm_ok(COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'id', u.id,
+      'unit_code', u.unit_code,
+      'roll_no', COALESCE(u.attributes->>'roll_no', u.unit_code),
+      'lot_no', u.lot_no,
+      'width_in', u.declared_width_in,
+      'opening_qty', public._mm_unit_on_hand(u),
+      'uom', u.uom,
+      'status', u.status,
+      'style_material_id', u.style_material_id,
+      'color_ref', u.color_ref,
+      'is_remnant', u.is_remnant
+    ) ORDER BY u.unit_code)
+    FROM public.mm_stock_units u
+    WHERE u.factory_id = v_factory
+      AND public._mm_unit_on_hand(u) > 0
+      AND NOT public._mm_unit_on_hold(u.id)
+      AND NOT public._mm_store_line_missing(u.id)
+      AND (u.status = 'issued' OR (u.status = 'in_stock' AND u.current_location_id = v_cut))
+      AND (
+        (p_style_material_id IS NOT NULL AND u.style_material_id = p_style_material_id)
+        OR (
+          p_style_material_id IS NULL
+          AND u.style_material_id IN (
+            SELECT sm.id FROM public.mm_style_materials sm
+            WHERE sm.factory_id = v_factory
+              AND sm.order_id = p_order_id
+              AND (p_colorway_id IS NULL OR sm.colorway_id = p_colorway_id)
+          )
+        )
+      )
+      AND (
+        v_q IS NULL
+        OR u.unit_code ILIKE '%' || v_q || '%'
+        OR COALESCE(u.attributes->>'roll_no', '') ILIKE '%' || v_q || '%'
+        OR COALESCE(u.lot_no, '') ILIKE '%' || v_q || '%'
+      )
+  ), '[]'::jsonb));
+END;
+$fn$;
+
+CREATE OR REPLACE FUNCTION public.mm_get_lay_report(p_lay_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $fn$
+DECLARE v_factory uuid;
+BEGIN
+  v_factory := public._mm_actor_factory_id();
+  IF v_factory IS NULL OR public._mm_actor_id() IS NULL THEN
+    RETURN public._mm_err('NO_FACTORY', 'No factory');
+  END IF;
+  RETURN public._mm_ok(COALESCE((
+    SELECT jsonb_agg(jsonb_build_object(
+      'id', c.id,
+      'stock_unit_id', c.stock_unit_id,
+      'unit_code', u.unit_code,
+      'roll_no', COALESCE(u.attributes->>'roll_no', u.unit_code),
+      'plies', c.plies,
+      'opening_qty', c.opening_qty,
+      'used_qty', c.used_qty,
+      'shortage_qty', c.shortage_qty,
+      'end_bit', c.opening_qty - COALESCE(c.used_qty, 0) - COALESCE(c.shortage_qty, 0),
+      'closing_qty', c.closing_qty,
+      'end_bit_action', c.end_bit_action
+    ) ORDER BY c.seq, u.unit_code)
+    FROM public.mm_lay_unit_consumptions c
+    JOIN public.mm_stock_units u ON u.id = c.stock_unit_id
+    WHERE c.cutting_lay_id = p_lay_id AND c.factory_id = v_factory
+  ), '[]'::jsonb));
+END;
+$fn$;;

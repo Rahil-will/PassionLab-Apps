@@ -11,8 +11,6 @@ import { SelectDropdown } from '../../components/ui';
 import { fetchFloorDayBoard, type FloorBoardData } from '../../lib/floorBoardApi';
 import { sortDepartmentsForDisplay } from '../../lib/departmentFilters';
 
-const STICKY_SHADOW = 'shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]';
-
 function deptShowsOutbound(role: string | undefined): boolean {
   return role !== 'terminal';
 }
@@ -21,10 +19,15 @@ function deptColumnCount(showOutbound: boolean, opCount: number): number {
   return showOutbound ? 2 + opCount : 1 + opCount;
 }
 
+function matchesDeptFilter(departmentId: string, selectedDeptIds: string[]): boolean {
+  return selectedDeptIds.length === 0 || selectedDeptIds.includes(departmentId);
+}
+
 const TH_BASE =
-  'px-2 py-2 text-[10px] font-semibold text-slate-600 uppercase bg-slate-50 whitespace-nowrap border-b border-r border-slate-200 last:border-r-0';
-const TH_LEFT = `${TH_BASE} text-left`;
-const TH_CENTER = `${TH_BASE} text-center`;
+  'px-2 py-2 text-[10px] font-semibold text-slate-600 uppercase bg-slate-50 border-b border-r border-slate-200 last:border-r-0';
+const TH_LEFT = `${TH_BASE} text-left whitespace-nowrap`;
+const TH_CENTER = `${TH_BASE} text-center whitespace-nowrap`;
+const TH_OP = `${TH_BASE} text-center whitespace-normal break-words leading-tight`;
 const TD_BASE =
   'px-2 py-2 text-[11px] text-slate-700 align-middle border-r border-slate-200 last:border-r-0';
 const TD_LEFT = `${TD_BASE} text-left`;
@@ -41,7 +44,7 @@ export const FloorDayBoard: React.FC = () => {
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(today);
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('');
+  const [deptFilter, setDeptFilter] = useState<string[]>([]);
   const [preset, setPreset] = useState('');
   const [data, setData] = useState<FloorBoardData>({
     receivedSent: [],
@@ -117,7 +120,7 @@ export const FloorDayBoard: React.FC = () => {
     const { receivedSent, produced, operationNames, operationsByDepartment } = data;
 
     const matchesRS = (row: { order_id: string; colorway_id: string | null; department_id: string }) => {
-      if (!q && !deptFilter) return true;
+      if (!q && deptFilter.length === 0) return true;
       const meta = orderMeta.get(row.order_id);
       const colorName = row.colorway_id ? (meta?.colors.get(row.colorway_id) ?? '') : '';
       const dept = deptById.get(row.department_id);
@@ -125,8 +128,7 @@ export const FloorDayBoard: React.FC = () => {
         .join(' ')
         .toLowerCase();
       const matchesSearch = !q || hay.includes(q);
-      const matchesDept = !deptFilter || row.department_id === deptFilter;
-      return matchesSearch && matchesDept;
+      return matchesSearch && matchesDeptFilter(row.department_id, deptFilter);
     };
 
     const matchesProd = (row: {
@@ -135,7 +137,7 @@ export const FloorDayBoard: React.FC = () => {
       department_id: string;
       operation_id: string;
     }) => {
-      if (!q && !deptFilter) return true;
+      if (!q && deptFilter.length === 0) return true;
       const meta = orderMeta.get(row.order_id);
       const colorName = row.colorway_id ? (meta?.colors.get(row.colorway_id) ?? '') : '';
       const dept = deptById.get(row.department_id);
@@ -150,8 +152,7 @@ export const FloorDayBoard: React.FC = () => {
         .join(' ')
         .toLowerCase();
       const matchesSearch = !q || hay.includes(q);
-      const matchesDept = !deptFilter || row.department_id === deptFilter;
-      return matchesSearch && matchesDept;
+      return matchesSearch && matchesDeptFilter(row.department_id, deptFilter);
     };
 
     return {
@@ -271,7 +272,7 @@ export const FloorDayBoard: React.FC = () => {
 
   const handleReset = () => {
     setSearch('');
-    setDeptFilter('');
+    setDeptFilter([]);
     applyPreset('last14');
   };
 
@@ -370,10 +371,11 @@ export const FloorDayBoard: React.FC = () => {
           onReset={handleReset}
         >
           <SelectDropdown
+            multiple
             value={deptFilter}
             onChange={setDeptFilter}
             options={deptOptions}
-            className="w-full sm:min-w-[150px] sm:w-auto"
+            className="w-full sm:w-48"
           />
           <SelectDropdown
             value={preset}
@@ -418,16 +420,16 @@ export const FloorDayBoard: React.FC = () => {
         )}
 
         {!error && rows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="border-collapse w-max min-w-full">
+          <div className="overflow-x-hidden">
+            <table className="border-collapse w-full table-fixed">
               <colgroup>
-                <col style={{ minWidth: '6rem', width: '6rem' }} />
+                <col className="w-24" />
                 {deptOrder.flatMap((dept) => {
                   const ops = deptOps.get(dept.id) ?? [];
                   const showOut = deptShowsOutbound(dept.role);
                   const cols = Array.from({ length: deptColumnCount(showOut, ops.length) });
                   return cols.map((_, i) => (
-                    <col key={`${dept.id}-${i}`} style={{ minWidth: '4.5rem', width: '4.5rem' }} />
+                    <col key={`${dept.id}-${i}`} />
                   ));
                 })}
               </colgroup>
@@ -435,7 +437,7 @@ export const FloorDayBoard: React.FC = () => {
                 <tr>
                   <th
                     rowSpan={2}
-                    className={`${TH_LEFT} sticky left-0 z-20 bg-slate-100 ${STICKY_SHADOW}`}
+                    className={`${TH_LEFT} bg-slate-100`}
                   >
                     Date
                   </th>
@@ -461,7 +463,7 @@ export const FloorDayBoard: React.FC = () => {
                       <React.Fragment key={`${dept.id}-sub`}>
                         <th className={TH_CENTER}>In</th>
                         {ops.map((op) => (
-                          <th key={op.id} className={`${TH_CENTER} truncate`} title={op.name}>
+                          <th key={op.id} className={TH_OP} title={op.name}>
                             {op.name}
                           </th>
                         ))}
@@ -475,7 +477,7 @@ export const FloorDayBoard: React.FC = () => {
                 {rows.map((row) => (
                   <tr key={row.date} className="hover:bg-slate-50/60">
                     <td
-                      className={`${TD_LEFT} sticky left-0 z-10 bg-white font-medium whitespace-nowrap ${STICKY_SHADOW}`}
+                      className={`${TD_LEFT} bg-white font-medium whitespace-nowrap`}
                     >
                       {format(parseISO(row.date), 'dd MMM yyyy')}
                     </td>
@@ -512,7 +514,7 @@ export const FloorDayBoard: React.FC = () => {
               <tfoot>
                 <tr className="bg-slate-50 border-t-2 border-slate-200">
                   <td
-                    className={`${TD_LEFT} sticky left-0 z-10 bg-slate-50 font-bold whitespace-nowrap ${STICKY_SHADOW}`}
+                    className={`${TD_LEFT} bg-slate-50 font-bold whitespace-nowrap`}
                   >
                     Total
                   </td>

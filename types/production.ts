@@ -3,26 +3,25 @@ import type { OrderShipmentPlan } from '../lib/orderShipmentPlan';
 
 export interface Material {
   id: string;
+  /** Fabric or Trim line. Catalog category/type live on fabricCategory+type or trimCategory+trimType. */
   category: 'Fabric' | 'Trim';
   name: string;
+  /** Trim placement. Empty on fabric lines. */
   placement?: string;
   type?: string;
   trimType?: string;
-  composition?: string;
-  fabricCategory?: 'Main' | 'Allied';
+  fabricCategory?: string;
   avgCons?: number;
   perPc?: number;
   unit: string;
-  wastage?: number;
   reqQty?: number;
-  rcvdQty?: number;
-  balanceQty?: number;
-  totalRolls?: number;
-  status?: string;
-  supplier?: string;
-  supplierRef?: string;
-  colorCode?: string;
-  remarks?: string;
+  /** Percent added on top of consumption × qty. Empty/null is ignored. */
+  processLossPct?: number | null;
+  /** Percent added on top of consumption × qty. Empty/null is ignored. */
+  wastagePct?: number | null;
+  trimCategory?: string;
+  /** Type-specific fabric params (gsm, width, …). Stored in extras.paramValues. */
+  paramValues?: Record<string, string>;
 }
 
 export interface ProductionProgress {

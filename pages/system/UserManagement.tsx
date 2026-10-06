@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigationStore, useNotificationStore } from '../../stores';
 import { useDepartmentsCatalog, useFactoryProfileCatalog, useCatalogOperations } from '../../lib/queries/settingsSlices';
-import { Users, Plus, Search, Trash2, X, Mail, User, Shield, CheckCircle, XCircle, Lock, Check, AlertTriangle, Loader2, Filter, Building2, Download } from 'lucide-react';
+import { Users, Plus, Search, Trash2, X, Mail, User, Shield, CheckCircle, XCircle, Lock, Check, AlertTriangle, Loader2, Filter, Building2, Download, Eye, EyeOff } from 'lucide-react';
 import { Button, Modal, SelectDropdown } from '../../components/ui';
 import { Pagination } from '../../components/Pagination';
 import { PageShell } from '../../components/layout/PageShell';
@@ -59,7 +59,7 @@ interface UserProfile {
     id: string;
     fullName: string;
     email: string;
-    userRole: 'superadmin' | 'admin' | 'quality_manager' | 'supervisor' | 'auditor' | 'operator';
+    userRole: 'superadmin' | 'admin' | 'quality_manager' | 'supervisor' | 'auditor' | 'operator' | 'viewer';
     factoryId: string;
     status: 'Active' | 'Inactive';
     departmentId: string | null;
@@ -104,6 +104,7 @@ export const UserManagement: React.FC = () => {
         userRole: 'operator' as UserProfile['userRole'],
         departmentId: '',
         floorPin: '',
+        password: '',
         assignedOperationIds: [] as string[],
         floorDeptFlags: [] as FloorDeptFlag[],
         assignedApps: [] as DeptAppId[],
@@ -112,6 +113,7 @@ export const UserManagement: React.FC = () => {
         status: 'Active' as UserProfile['status']
     });
     const [archivedOps, setArchivedOps] = useState<FloorUserArchivedOp[]>([]);
+    const [showViewerPassword, setShowViewerPassword] = useState(false);
 
     const archivedCaptureLabel = (op: FloorUserArchivedOp): string | null => {
         const cap = op.captureApp;
@@ -297,7 +299,9 @@ export const UserManagement: React.FC = () => {
 
     const handleCreateUser = async (): Promise<boolean> => {
         const dept = selectedDept;
-        const validationError = validateFloorUserPayload({
+        const isViewer = formData.userRole === 'viewer';
+        if (!isViewer) {
+            const validationError = validateFloorUserPayload({
             fullName: formData.fullName,
             email: formData.email,
             floorPin: formData.floorPin,
@@ -312,9 +316,19 @@ export const UserManagement: React.FC = () => {
             operations: catalogOperations,
             workforceOnly: formData.supervisorOnly || formData.workforceOnly,
             supervisorOnly: formData.supervisorOnly || formData.workforceOnly,
-        });
-        if (validationError) {
-            showNotification(validationError, 'error');
+            });
+            if (validationError) {
+                showNotification(validationError, 'error');
+                return false;
+            }
+        } else if (!formData.fullName.trim()) {
+            showNotification('Full name is required', 'error');
+            return false;
+        } else if (!formData.email.trim().includes('@')) {
+            showNotification('Valid email is required', 'error');
+            return false;
+        } else if (formData.password.trim().length < 6) {
+            showNotification('Password must be at least 6 characters', 'error');
             return false;
         }
 
@@ -323,8 +337,12 @@ export const UserManagement: React.FC = () => {
             if (!factoryId) throw new Error('No factory selected');
 
             const normalizedEmail = formData.email.trim().toLowerCase();
-            const { assignedApps, assignedOperationIds } = resolveProfilePayloadForSave();
-            const floorFlags = floorFlagsToProfileColumns(
+            const { assignedApps, assignedOperationIds } = isViewer
+                ? { assignedApps: [] as DeptAppId[], assignedOperationIds: [] as string[] }
+                : resolveProfilePayloadForSave();
+            const floorFlags = isViewer
+                ? { handoverEnabled: false, workforceEnabled: false, auditEnabled: false }
+                : floorFlagsToProfileColumns(
                 (formData.supervisorOnly || formData.workforceOnly)
                     ? clampSupervisorFloorFlags(formData.floorDeptFlags, selectedDept)
                     : clampFloorDeptFlags(formData.floorDeptFlags, selectedDept?.apps, factoryEntitlements, selectedDept),
@@ -333,16 +351,17 @@ export const UserManagement: React.FC = () => {
                     factoryId,
                     fullName: formData.fullName,
                     email: normalizedEmail,
-                    floorPin: formData.floorPin,
-                    departmentId: formData.departmentId,
-                    assignedApps,
-                    assignedOperationIds,
-                    handoverEnabled: floorFlags.handoverEnabled,
-                    workforceEnabled: floorFlags.workforceEnabled,
-                    auditEnabled: floorFlags.auditEnabled,
-                    shipmentQaEnabled: isTerminalDept,
+                    floorPin: isViewer ? '' : formData.floorPin,
+                    departmentId: isViewer ? null : formData.departmentId,
+                    assignedApps: isViewer ? [] : assignedApps,
+                    assignedOperationIds: isViewer ? [] : assignedOperationIds,
+                    handoverEnabled: isViewer ? false : floorFlags.handoverEnabled,
+                    workforceEnabled: isViewer ? false : floorFlags.workforceEnabled,
+                    auditEnabled: isViewer ? false : floorFlags.auditEnabled,
+                    shipmentQaEnabled: isViewer ? false : isTerminalDept,
                     userRole: floorUserRoleForSave,
                     status: formData.status,
+                    password: isViewer ? formData.password.trim() : undefined,
             });
 
             const optimisticUser: UserProfile = {
@@ -352,14 +371,14 @@ export const UserManagement: React.FC = () => {
                 userRole: floorUserRoleForSave,
                 factoryId,
                 status: formData.status,
-                departmentId: formData.departmentId || null,
-                floorPin: formData.floorPin,
-                assignedApps,
-                assignedOperationIds,
-                handoverEnabled: floorFlags.handoverEnabled,
-                workforceEnabled: floorFlags.workforceEnabled,
-                auditEnabled: floorFlags.auditEnabled,
-                shipmentQaEnabled: isTerminalDept,
+                departmentId: isViewer ? null : (formData.departmentId || null),
+                floorPin: isViewer ? '' : formData.floorPin,
+                assignedApps: isViewer ? [] : assignedApps,
+                assignedOperationIds: isViewer ? [] : assignedOperationIds,
+                handoverEnabled: isViewer ? false : floorFlags.handoverEnabled,
+                workforceEnabled: isViewer ? false : floorFlags.workforceEnabled,
+                auditEnabled: isViewer ? false : floorFlags.auditEnabled,
+                shipmentQaEnabled: isViewer ? false : isTerminalDept,
                 createdAt: new Date().toISOString(),
                 updatedAt: null,
             };
@@ -501,6 +520,7 @@ export const UserManagement: React.FC = () => {
             userRole: user.userRole,
             departmentId: user.departmentId || '',
             floorPin: user.floorPin,
+            password: '',
             assignedOperationIds: isTerminal ? assignedOperationIds : resolvedOperationIds,
             floorDeptFlags,
             assignedApps,
@@ -528,7 +548,7 @@ export const UserManagement: React.FC = () => {
             return false;
         }
 
-        if (editingUser.userRole !== 'admin' && isFloorLoginRole(formData.userRole)) {
+        if (editingUser.userRole !== 'admin' && formData.userRole !== 'viewer' && isFloorLoginRole(formData.userRole)) {
             const validationError = validateFloorUserPayload({
                 fullName: formData.fullName,
                 email: formData.email,
@@ -548,6 +568,15 @@ export const UserManagement: React.FC = () => {
             });
             if (validationError) {
                 showNotification(validationError, 'error');
+                return false;
+            }
+        } else if (formData.userRole === 'viewer') {
+            if (!formData.fullName.trim()) {
+                showNotification('Full name is required', 'error');
+                return false;
+            }
+            if (formData.password.trim().length < 6) {
+                showNotification('Password must be at least 6 characters', 'error');
                 return false;
             }
         }
@@ -573,11 +602,18 @@ export const UserManagement: React.FC = () => {
 
             if (!isAdmin) {
                 updateBody.userRole = floorUserRoleForSave;
-                updateBody.departmentId = formData.departmentId || null;
-                updateBody.assignedApps = assignedApps;
-                updateBody.assignedOperationIds = assignedOperationIds;
-                if (formData.floorPin?.trim()) {
-                    updateBody.floorPin = formData.floorPin.trim();
+                if (formData.userRole === 'viewer') {
+                    updateBody.departmentId = null;
+                    updateBody.assignedApps = [];
+                    updateBody.assignedOperationIds = [];
+                    updateBody.password = formData.password.trim();
+                } else {
+                    updateBody.departmentId = formData.departmentId || null;
+                    updateBody.assignedApps = assignedApps;
+                    updateBody.assignedOperationIds = assignedOperationIds;
+                    if (formData.floorPin?.trim()) {
+                        updateBody.floorPin = formData.floorPin.trim();
+                    }
                 }
             }
 
@@ -635,12 +671,14 @@ export const UserManagement: React.FC = () => {
     };
 
     const resetForm = () => {
+        setShowViewerPassword(false);
         setFormData({
             fullName: '',
             email: '',
             userRole: 'operator',
             departmentId: '',
             floorPin: '',
+            password: '',
             assignedOperationIds: [],
             floorDeptFlags: [],
             assignedApps: [],
@@ -677,34 +715,38 @@ export const UserManagement: React.FC = () => {
     const isPassiveSupervisorOnlyDept = isPassiveSupervisorOnlyDepartment(selectedDept);
 
     const isSupervisorAssignment = formData.supervisorOnly || formData.workforceOnly;
+    const isViewerAccount = formData.userRole === 'viewer';
 
-    const floorRoleOptions = useMemo(() => {
-        if (isPassiveSupervisorOnlyDept) {
-            return [{ value: 'supervisor', label: 'Supervisor — handover only' }];
-        }
-        return [
-            { value: 'operator', label: 'Operator — production capture' },
-            ...(canAssignSupervisor
-                ? [{
-                    value: 'supervisor',
-                    label: isOriginCuttingDept
-                        ? 'Supervisor — handover only'
-                        : 'Supervisor — handover & workforce',
-                }]
-                : []),
-        ];
-    }, [canAssignSupervisor, isOriginCuttingDept, isPassiveSupervisorOnlyDept]);
+    const roleOptions = useMemo(() => [
+        { value: 'operator', label: 'Operator — production capture' },
+        {
+            value: 'supervisor',
+            label: isOriginCuttingDept
+                ? 'Supervisor — handover only'
+                : 'Supervisor — handover & workforce',
+        },
+        { value: 'viewer', label: 'Viewer — desktop read-only' },
+    ], [isOriginCuttingDept]);
+
+    const selectedRoleValue =
+        formData.userRole === 'viewer'
+            ? 'viewer'
+            : isSupervisorAssignment
+                ? 'supervisor'
+                : 'operator';
+
+    const floorUserRoleForSave: UserProfile['userRole'] = isViewerAccount
+        ? 'viewer'
+        : isTerminalDept
+            ? 'quality_manager'
+            : isSupervisorAssignment
+                ? 'supervisor'
+                : 'operator';
 
     const supervisorLockedFlags = useMemo(
         () => supervisorFloorExtrasForDepartment(selectedDept),
         [selectedDept],
     );
-
-    const floorUserRoleForSave: UserProfile['userRole'] = isTerminalDept
-        ? 'quality_manager'
-        : isSupervisorAssignment
-            ? 'supervisor'
-            : 'operator';
 
     const toggleAssignedOperation = (operationId: string) => {
         setPanelDirty(true);
@@ -1078,7 +1120,9 @@ export const UserManagement: React.FC = () => {
 
                             {!isEditingAdmin && (
                                 <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                                    Floor users sign in on the mobile app with <strong>email and PIN</strong>.
+                                    {isViewerAccount
+                                        ? <>Viewer accounts sign in to the <strong>desktop app</strong> with email and password (read-only).</>
+                                        : <>Floor users sign in on the mobile app with <strong>email and PIN</strong>.</>}
                                 </p>
                             )}
 
@@ -1108,6 +1152,120 @@ export const UserManagement: React.FC = () => {
                                 </div>
                             ) : (
                                 <>
+                                    {!isTerminalDept && (
+                                        <div>
+                                            <SelectDropdown
+                                                id="user-role"
+                                                label="Role"
+                                                value={selectedRoleValue}
+                                                onChange={(mode) => {
+                                                    if (isPassiveSupervisorOnlyDept && mode === 'operator') return;
+                                                    setPanelDirty(true);
+                                                    if (mode === 'viewer') {
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            userRole: 'viewer',
+                                                            supervisorOnly: false,
+                                                            workforceOnly: false,
+                                                            departmentId: '',
+                                                            assignedOperationIds: [],
+                                                            floorDeptFlags: [],
+                                                            assignedApps: [],
+                                                            floorPin: '',
+                                                            password: '',
+                                                        }));
+                                                        return;
+                                                    }
+                                                    if (mode === 'supervisor') {
+                                                        setFormData((prev) => {
+                                                            const dept = departments.find((d) => d.id === prev.departmentId);
+                                                            return {
+                                                                ...prev,
+                                                                userRole: 'supervisor',
+                                                                password: '',
+                                                                supervisorOnly: true,
+                                                                workforceOnly: true,
+                                                                assignedOperationIds: prev.departmentId
+                                                                    ? (prev.assignedOperationIds.length > 0
+                                                                        ? prev.assignedOperationIds
+                                                                        : defaultAssignedOperationIds(
+                                                                            catalogOperations,
+                                                                            prev.departmentId,
+                                                                        ))
+                                                                    : [],
+                                                                floorDeptFlags: dept
+                                                                    ? supervisorFloorExtrasForDepartment(dept)
+                                                                    : [],
+                                                            };
+                                                        });
+                                                        return;
+                                                    }
+                                                    setFormData((prev) => {
+                                                        const dept = departments.find((d) => d.id === prev.departmentId);
+                                                        const extras = dept
+                                                            ? operatorOptionalFloorExtrasForDepartment(
+                                                                dept.apps,
+                                                                factoryEntitlements,
+                                                                dept,
+                                                            )
+                                                            : [];
+                                                        return {
+                                                            ...prev,
+                                                            userRole: 'operator',
+                                                            password: '',
+                                                            supervisorOnly: false,
+                                                            workforceOnly: false,
+                                                            assignedOperationIds: prev.departmentId
+                                                                ? (prev.assignedOperationIds.length > 0
+                                                                    ? prev.assignedOperationIds
+                                                                    : defaultAssignedOperationIds(
+                                                                        catalogOperations,
+                                                                        prev.departmentId,
+                                                                    ))
+                                                                : [],
+                                                            floorDeptFlags: extras.includes('audit') ? ['audit'] : [],
+                                                        };
+                                                    });
+                                                }}
+                                                options={roleOptions}
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {isViewerAccount && (
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                                                Password
+                                            </label>
+                                            <div className="relative">
+                                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                                <input
+                                                    type={showViewerPassword ? 'text' : 'password'}
+                                                    required
+                                                    className="pl-10 pr-10 py-2.5 w-full border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 text-xs"
+                                                    placeholder="Enter sign-in password"
+                                                    value={formData.password}
+                                                    onChange={(e) => patchFormData({ password: e.target.value })}
+                                                    autoComplete="new-password"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowViewerPassword((prev) => !prev)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                    aria-label={showViewerPassword ? 'Hide password' : 'Show password'}
+                                                >
+                                                    {showViewerPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">
+                                                At least 6 characters. Required for viewer desktop sign-in.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {!isViewerAccount && (
+                                    <>
                                     <div>
                                         <SelectDropdown
                                             id="user-work-center"
@@ -1198,53 +1356,6 @@ export const UserManagement: React.FC = () => {
                                         <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                                             Dispatch operation is missing on this terminal work center. Run migrations or open Work centers to seed it.
                                         </p>
-                                    )}
-
-                                    {!isTerminalDept && !isEditingAdmin && formData.departmentId && (
-                                        <div>
-                                            <SelectDropdown
-                                                id="user-floor-role"
-                                                label="Floor role"
-                                                value={isPassiveSupervisorOnlyDept || isSupervisorAssignment ? 'supervisor' : 'operator'}
-                                                onChange={(mode) => {
-                                                    if (isPassiveSupervisorOnlyDept) return;
-                                                    setPanelDirty(true);
-                                                    if (mode === 'supervisor') {
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            supervisorOnly: true,
-                                                            workforceOnly: true,
-                                                            userRole: 'supervisor',
-                                                            assignedOperationIds: prev.assignedOperationIds.length > 0
-                                                                ? prev.assignedOperationIds
-                                                                : defaultAssignedOperationIds(
-                                                                    catalogOperations,
-                                                                    prev.departmentId,
-                                                                ),
-                                                            floorDeptFlags: supervisorFloorExtrasForDepartment(selectedDept),
-                                                        }));
-                                                        return;
-                                                    }
-                                                    setFormData((prev) => ({
-                                                        ...prev,
-                                                        supervisorOnly: false,
-                                                        workforceOnly: false,
-                                                        userRole: 'operator',
-                                                        assignedOperationIds: prev.assignedOperationIds.length > 0
-                                                            ? prev.assignedOperationIds
-                                                            : defaultAssignedOperationIds(
-                                                                catalogOperations,
-                                                                prev.departmentId,
-                                                            ),
-                                                        floorDeptFlags: availableDeptFlags.includes('audit')
-                                                            ? ['audit']
-                                                            : [],
-                                                    }));
-                                                }}
-                                                options={floorRoleOptions}
-                                                className="w-full"
-                                            />
-                                        </div>
                                     )}
 
                                     {!isTerminalDept && !isEditingAdmin && isSupervisorAssignment && supervisorLockedFlags.length > 0 && (
@@ -1384,6 +1495,8 @@ export const UserManagement: React.FC = () => {
                                                 onChange={(e) => patchFormData({ floorPin: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                                             />
                                         </div>
+                                    )}
+                                    </>
                                     )}
                                 </>
                             )}

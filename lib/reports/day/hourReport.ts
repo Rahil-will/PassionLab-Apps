@@ -2,7 +2,7 @@ import format from 'date-fns/format';
 import { supabase } from '../../supabase';
 import { allocationSamValue } from '../../allocationUtils';
 import { isQcDept } from '../../reportDeptUtils';
-import { resolvePlanningMode } from '../../departmentFilters';
+import { resolvePlanningMode, dayReportRoleKind } from '../../departmentFilters';
 import { getRegularShiftHours } from '../../shiftHours';
 import {
   allActiveHourSlots,
@@ -13,20 +13,32 @@ import {
 import type { Shift } from '../../../types';
 import { qcSessionOutputQty } from '../shared/qcUtils';
 import { isMissingRelationError, isMissingColumnError } from '../shared/rpcUtils';
-import { colorwayDisplayLabel, resolveOrderMap, type ColorwayLabel, type ReportMeta, type ReportOrderSummary } from '../reportMeta';
+import { colorwayDisplayLabel, resolveColorwayMap, resolveOrderMap, type ColorwayLabel, type ReportMeta, type ReportOrderSummary } from '../reportMeta';
 import { fetchDepartmentKpis, type DailyKpiRpcRow } from '../kpiAndProgress';
 import { mapShiftRow } from '../shared/shiftLogUtils';
 import {
   aggregateDeptDayKpi,
   applyAllocationPlanToDayRows,
   allocRowKey,
+  averageDailyHeadcountFromLogs,
   buildResourceWorkforceDetails,
   computeDayDeptMetricsFromRows,
   enrichDayResourceRows,
   listDatesInRange,
   type AllocPlanRow,
 } from './deptMetrics.pure';
-import { fetchDayDeptHandoverSummary, mergeHandoverSummaries } from './handover';
+import { fetchDayDeptHandoverRange, fetchDayDeptHandoverSummary, mergeHandoverSummaries } from './handover';
+import {
+  buildCuttingOperationSectionsFromRpc,
+  fetchDayCuttingSessionsRpc,
+  mapCuttingSessionRpcToNativeEntry,
+} from './cuttingSessionsRpc';
+import {
+  fetchDayStandardReportRpc,
+  fetchDayTerminalReportRpc,
+  mapStandardRpcToBatchEntry,
+  mapTerminalRpcToNativeEntry,
+} from './standardTerminalRpc';
 import type {
   DayNativeEntry,
   DayOperationHourSection,
@@ -349,7 +361,10 @@ function buildHourlyOperationSections(
   routeSteps: OriginRouteStepRow[],
   hourColumns: string[],
 ): DayOperationHourSection[] | undefined {
-  const routeOpGroups = new Map<string, { label: string; sortSeq: number }>();
+  const routeOpGroups = new Map<
+    string,
+    { label: string; sortSeq: number; stepType: string | null }
+  >();
   for (const step of routeSteps) {
     if (step.step_type !== 'produce' && step.step_type !== 'loading') continue;
     const groupKey = operationGroupKeyFromStep(step, step.id);
@@ -357,6 +372,7 @@ function buildHourlyOperationSections(
       routeOpGroups.set(groupKey, {
         label: operationLabelFromStep(step),
         sortSeq: step.seq,
+        stepType: step.step_type ?? null,
       });
     }
   }
@@ -376,20 +392,43 @@ function buildHourlyOperationSections(
     rowsByGroup.set(groupKey, list);
   }
 
+  // A route operation's capture mode can move between hourly output and QC over
+  // time, so keep the two kinds in separate cards rather than merging them.
   const sections: DayOperationHourSection[] = [];
   for (const [groupKey, meta] of routeOpGroups) {
-    sections.push({
-      operationId: groupKey,
-      operationLabel: meta.label,
-      hourColumns,
-      rows: (rowsByGroup.get(groupKey) ?? []).sort(sortHourlyRows),
-    });
+    const groupRows = rowsByGroup.get(groupKey) ?? [];
+    const hourlyGroupRows = groupRows.filter((r) => r.captureKind !== 'qc').sort(sortHourlyRows);
+    const qcGroupRows = groupRows.filter((r) => r.captureKind === 'qc').sort(sortHourlyRows);
+    // Loading is a receiving/WIP-start acknowledgement, never QC-inspected in
+    // practice, but keep the split mechanical (by captureKind) rather than
+    // hard-coding that assumption — if it ever is QC-captured, it still gets
+    // its own correctly-labelled card instead of silently merging into produce.
+    if (hourlyGroupRows.length > 0 || qcGroupRows.length === 0) {
+      sections.push({
+        operationId: groupKey,
+        operationLabel: meta.label,
+        hourColumns,
+        rows: hourlyGroupRows,
+        captureKind: 'hourly',
+        stepType: meta.stepType,
+      });
+    }
+    if (qcGroupRows.length > 0) {
+      sections.push({
+        operationId: `${groupKey}::qc`,
+        operationLabel: meta.label,
+        hourColumns,
+        rows: qcGroupRows,
+        captureKind: 'qc',
+        stepType: meta.stepType,
+      });
+    }
   }
 
   sections.sort(
     (a, b) =>
-      (routeOpGroups.get(a.operationId)?.sortSeq ?? 0)
-      - (routeOpGroups.get(b.operationId)?.sortSeq ?? 0)
+      (routeOpGroups.get(a.operationId.replace(/::qc$/, ''))?.sortSeq ?? 0)
+      - (routeOpGroups.get(b.operationId.replace(/::qc$/, ''))?.sortSeq ?? 0)
       || a.operationLabel.localeCompare(b.operationLabel),
   );
   return sections;
@@ -716,7 +755,6 @@ async function buildNativeCuttingDaySectionsFromSessions(
   colorwayLabels: ColorwayLabel[],
   primaryComponentId: string | null,
 ): Promise<DayOperationHourSection[]> {
-  const colorMap = new Map(colorwayLabels.map((c) => [c.id, c]));
   const resourceMap = new Map(meta.resources.map((r) => [r.id, r]));
   const sessionsRes = await supabase
     .from('cutting_sessions')
@@ -743,6 +781,11 @@ async function buildNativeCuttingDaySectionsFromSessions(
     ...sessions.map((s) => s.order_id || ''),
     ...bundleRows.map((b) => b.order_id || ''),
   ]);
+  const colorMap = await resolveColorwayMap(
+    factoryId,
+    colorwayLabels,
+    sessions.map((s) => s.colorway_id),
+  );
 
   const layById = await loadCuttingLayRefs(
     factoryId,
@@ -974,7 +1017,11 @@ async function buildNativeCuttingSessionEntries(
     meta,
     sessions.map((session) => String(session.order_id || '')),
   );
-  const colorMap = new Map(colorwayLabels.map((color) => [color.id, color]));
+  const colorMap = await resolveColorwayMap(
+    factoryId,
+    colorwayLabels,
+    sessions.map((session) => (session.colorway_id as string) || null),
+  );
   const resourceMap = new Map(meta.resources.map((resource) => [resource.id, resource]));
   return sessions.map((session): DayNativeEntry => {
     const sessionId = String(session.id);
@@ -1147,7 +1194,7 @@ async function buildOutsourceDayReport(
   const dayStart = `${date}T00:00:00`;
   const dayEnd = `${date}T23:59:59.999`;
 
-  const [movementsRes, routeSteps, kpiRows, handover] = await Promise.all([
+  const [movementsRes, routeSteps, kpiRows, handover, workforceRes, shiftRes] = await Promise.all([
     supabase
       .from('outsource_work_movements')
       .select(
@@ -1161,6 +1208,13 @@ async function buildOutsourceDayReport(
     fetchRoutingStepsForDepartment(factoryId, departmentId),
     fetchDepartmentKpis(factoryId, departmentId, date, date),
     fetchDayDeptHandoverSummary(factoryId, date, departmentId, meta, colorwayLabels),
+    supabase
+      .from('workforce_logs')
+      .select('resource_id, headcount_by_category, log_date')
+      .eq('factory_id', factoryId)
+      .eq('department_id', departmentId)
+      .eq('log_date', date),
+    supabase.from('shifts').select('id, name, type, hours, productive_mins').eq('factory_id', factoryId),
   ]);
   if (movementsRes.error) throw movementsRes.error;
 
@@ -1252,21 +1306,119 @@ async function buildOutsourceDayReport(
   const kpiBase = aggregateDeptDayKpi((kpiRows || []) as DailyKpiRpcRow[]);
   const output = entries.reduce((sum, entry) => sum + (entry.receivedQty || 0), 0);
 
+  if (workforceRes.error) {
+    console.warn('[buildOutsourceDayReport] workforce_logs:', workforceRes.error.message);
+  }
+  if (shiftRes.error) throw shiftRes.error;
+  const shifts = (shiftRes.data || []).map((s) => mapShiftRow(s as Record<string, unknown>));
+  let productiveMinsPerWorker = regularShiftProductiveMins(shifts);
+  if (productiveMinsPerWorker <= 0) productiveMinsPerWorker = 480;
+
+  const metricRows: DayResourceHourRow[] = [...byKey.values()]
+    .filter((agg) => agg.received > 0)
+    .map((agg) => {
+      const order = orderMap.get(agg.orderId);
+      return {
+        resourceId: agg.vendorResourceId,
+        resourceName: resourceMap.get(agg.vendorResourceId)?.name || '—',
+        orderId: agg.orderId,
+        styleName: order?.styleName || agg.orderId.slice(0, 8),
+        styleRef: order?.styleRef || '',
+        buyerName: order?.buyerName || '',
+        poNumber: order?.poNumber || '',
+        colorwayId: agg.colorwayId,
+        colorName: colorwayDisplayLabel(agg.colorwayId, colorMap),
+        hours: {},
+        hourTargets: {},
+        hourlyTarget: 0,
+        total: agg.received,
+        workforce: null,
+        workforceBreakdown: [],
+        producedMins: 0,
+        resourceAvailableMins: 0,
+        daysRunning: null,
+        plannedEndDate: null,
+        efficiencyPct: null,
+        productivity: null,
+        logDate: date,
+      };
+    });
+
+  const orderIds = [...new Set(metricRows.map((row) => row.orderId).filter(Boolean))];
+  const sewingSamByOrder = new Map<string, number>();
+  const samByAllocKey = new Map<string, number>();
+  if (orderIds.length > 0) {
+    const allocPlanRows = await fetchLineAllocPlanRows(factoryId, orderIds);
+    const { data: samRows, error: samErr } = await supabase
+      .from('style_orders')
+      .select('id, sewing_sam')
+      .eq('factory_id', factoryId)
+      .in('id', orderIds);
+    if (samErr) throw samErr;
+    for (const raw of samRows || []) {
+      sewingSamByOrder.set(raw.id as string, Number(raw.sewing_sam) || 0);
+    }
+    for (const alloc of allocPlanRows) {
+      const plannedSam = allocationSamValue({ sam: alloc.sam, kpi_inputs: alloc.kpi_inputs });
+      if (plannedSam <= 0) continue;
+      samByAllocKey.set(allocRowKey(alloc.order_id, alloc.colorway_id, alloc.line_id), plannedSam);
+    }
+  }
+
+  const resourceWorkforce = buildResourceWorkforceDetails(
+    (workforceRes.data || []) as Array<Record<string, unknown>>,
+  );
+  enrichDayResourceRows(
+    metricRows,
+    samByAllocKey,
+    sewingSamByOrder,
+    resourceWorkforce,
+    productiveMinsPerWorker,
+  );
+  for (const [resourceId, wf] of resourceWorkforce) {
+    if (metricRows.some((row) => row.resourceId === resourceId)) continue;
+    metricRows.push({
+      resourceId,
+      resourceName: resourceMap.get(resourceId)?.name || '—',
+      orderId: '',
+      styleName: '',
+      styleRef: '',
+      buyerName: '',
+      poNumber: '',
+      colorwayId: null,
+      colorName: '',
+      hours: {},
+      hourTargets: {},
+      hourlyTarget: 0,
+      total: 0,
+      workforce: wf.total,
+      workforceBreakdown: wf.breakdown,
+      producedMins: 0,
+      resourceAvailableMins: wf.total * productiveMinsPerWorker,
+      daysRunning: null,
+      plannedEndDate: null,
+      efficiencyPct: null,
+      productivity: null,
+      logDate: date,
+    });
+  }
+  const deptMetrics = computeDayDeptMetricsFromRows(metricRows);
+
   return {
     isQcDept: false,
     isOutsource: true,
     hourColumns: [],
-    rows: [],
+    rows: metricRows,
     shiftSections: [],
     nativeEntries: [],
     outsourceEntries: entries,
     batchEntries: [],
-    productiveMinsPerWorker: 480,
+    productiveMinsPerWorker,
     kpi: {
       output,
       target: kpiBase.target,
-      efficiency: null,
-      productivity: null,
+      efficiency: deptMetrics.efficiency,
+      productivity: deptMetrics.productivity,
       dhu: kpiBase.dhu,
       wip: kpiBase.wip,
     },
@@ -1368,6 +1520,488 @@ async function buildBatchDayReport(
   };
 }
 
+/** Native cutting day report for a date or range — one RPC instead of per-day table fan-out. */
+async function fetchNativeCuttingDayReportRange(
+  factoryId: string,
+  dateFrom: string,
+  dateTo: string,
+  departmentId: string,
+  meta: ReportMeta,
+  colorwayLabels: ColorwayLabel[],
+): Promise<DayResourceHourReport | null> {
+  const sessionRows = await fetchDayCuttingSessionsRpc(factoryId, departmentId, dateFrom, dateTo);
+  if (sessionRows == null) return null;
+
+  const [kpiRows, shiftRes, workforceRes, handoverRange] = await Promise.all([
+    fetchDepartmentKpis(factoryId, departmentId, dateFrom, dateTo),
+    supabase.from('shifts').select('id, name, type, hours, productive_mins').eq('factory_id', factoryId),
+    supabase
+      .from('workforce_logs')
+      .select('resource_id, headcount_by_category, log_date')
+      .eq('factory_id', factoryId)
+      .eq('department_id', departmentId)
+      .gte('log_date', dateFrom)
+      .lte('log_date', dateTo),
+    fetchDayDeptHandoverRange(factoryId, dateFrom, dateTo, departmentId, meta, colorwayLabels),
+  ]);
+  if (shiftRes.error) throw shiftRes.error;
+  if (workforceRes.error) throw workforceRes.error;
+
+  const nativeEntries = sessionRows.map(mapCuttingSessionRpcToNativeEntry);
+  const operationSections = buildCuttingOperationSectionsFromRpc(sessionRows);
+
+  const logsByDate = new Map<string, Array<Record<string, unknown>>>();
+  for (const raw of (workforceRes.data || []) as Array<Record<string, unknown>>) {
+    const logDate = String(raw.log_date || '').slice(0, 10);
+    if (!logDate) continue;
+    const list = logsByDate.get(logDate) ?? [];
+    list.push(raw);
+    logsByDate.set(logDate, list);
+  }
+  const workforceByDate = new Map<string, ReturnType<typeof buildResourceWorkforceDetails>>();
+  for (const [logDate, logs] of logsByDate) {
+    workforceByDate.set(logDate, buildResourceWorkforceDetails(logs));
+  }
+  for (const section of operationSections) {
+    for (const row of section.rows) {
+      const wf = workforceByDate.get(row.logDate || '')?.get(row.resourceId);
+      if (wf) {
+        row.workforce = wf.total;
+        row.workforceBreakdown = wf.breakdown;
+      }
+    }
+  }
+
+  const shifts = (shiftRes.data || []).map((s) => mapShiftRow(s as Record<string, unknown>));
+  let productiveMinsPerWorker = regularShiftProductiveMins(shifts);
+  if (productiveMinsPerWorker <= 0) productiveMinsPerWorker = 480;
+
+  const rows = operationSections.flatMap((s) => s.rows);
+  const deptMetrics = computeDayDeptMetricsFromRows(rows);
+  const nativeOutput = nativeEntries.reduce((sum, e) => sum + e.outputQty, 0);
+  const kpiBase = aggregateDeptDayKpi((kpiRows || []) as DailyKpiRpcRow[]);
+  // Cutting sessions are often logged without an assigned cutter/resource, so
+  // deptMetrics.workforce (row.resourceId-based) frequently comes up empty here —
+  // compute the Workforce KPI straight from workforce_logs instead.
+  const workforce = averageDailyHeadcountFromLogs(workforceByDate);
+
+  return {
+    isQcDept: false,
+    isNativeCutting: true,
+    hourColumns: [CUTTING_OUTPUT_HOUR],
+    rows,
+    shiftSections: [],
+    operationSections,
+    nativeEntries,
+    productiveMinsPerWorker,
+    kpi: {
+      output: nativeOutput,
+      target: kpiBase.target,
+      efficiency: deptMetrics.efficiency,
+      productivity: deptMetrics.productivity,
+      dhu: kpiBase.dhu,
+      wip: kpiBase.wip,
+      workforce,
+    },
+    handover: handoverRange.handover,
+    handoverByDay: handoverRange.handoverByDay,
+  };
+}
+
+async function fetchStandardDayReportRange(
+  factoryId: string,
+  dateFrom: string,
+  dateTo: string,
+  departmentId: string,
+  meta: ReportMeta,
+  colorwayLabels: ColorwayLabel[],
+): Promise<DayResourceHourReport | null> {
+  const rpcRows = await fetchDayStandardReportRpc(factoryId, departmentId, dateFrom, dateTo);
+  if (rpcRows == null) return null;
+
+  const hourlyRows = rpcRows.filter((row) => row.source === 'hourly' || row.source === 'qc');
+  const batchRows = rpcRows.filter((row) => row.source === 'batch' && (Number(row.qty) || 0) > 0);
+  const isQcDept = rpcRows.some((row) => row.source === 'qc');
+  const isBatch = batchRows.length > 0 && hourlyRows.length === 0;
+
+  const [kpiRows, shiftRes, workforceRes, handoverRange, dbRouteSteps] = await Promise.all([
+    fetchDepartmentKpis(factoryId, departmentId, dateFrom, dateTo),
+    supabase.from('shifts').select('id, name, type, hours, productive_mins').eq('factory_id', factoryId),
+    supabase
+      .from('workforce_logs')
+      .select('resource_id, headcount_by_category, log_date')
+      .eq('factory_id', factoryId)
+      .eq('department_id', departmentId)
+      .gte('log_date', dateFrom)
+      .lte('log_date', dateTo),
+    fetchDayDeptHandoverRange(factoryId, dateFrom, dateTo, departmentId, meta, colorwayLabels),
+    // Real order_routing_steps.step_type (loading | produce | ...) — the RPC
+    // rows below don't carry it, so this is the only way to tell a "loading"
+    // capture (received/WIP-start, no SAM) apart from real production.
+    fetchRoutingStepsForDepartment(factoryId, departmentId),
+  ]);
+  if (shiftRes.error) throw shiftRes.error;
+  if (workforceRes.error) throw workforceRes.error;
+  const dbRouteStepById = new Map(dbRouteSteps.map((s) => [s.id, s]));
+
+  const kpiBase = aggregateDeptDayKpi((kpiRows || []) as DailyKpiRpcRow[]);
+  const batchEntries = batchRows.map(mapStandardRpcToBatchEntry).sort(
+    (a, b) =>
+      (a.resourceName || '').localeCompare(b.resourceName || '') ||
+      (a.startedAt || '').localeCompare(b.startedAt || ''),
+  );
+
+  if (isBatch) {
+    const output = batchEntries.reduce((sum, entry) => sum + entry.outputQty, 0);
+    return {
+      isQcDept: false,
+      isBatch: true,
+      hourColumns: [],
+      rows: [],
+      shiftSections: [],
+      nativeEntries: [],
+      batchEntries,
+      productiveMinsPerWorker: 480,
+      kpi: {
+        output,
+        target: kpiBase.target,
+        efficiency: null,
+        productivity: null,
+        dhu: kpiBase.dhu,
+        wip: kpiBase.wip,
+      },
+      handover: handoverRange.handover,
+      handoverByDay: handoverRange.handoverByDay,
+    };
+  }
+
+  const shifts = (shiftRes.data || []).map((s) => mapShiftRow(s as Record<string, unknown>));
+  const shiftRowMaps = new Map<string, Map<string, DayResourceHourRow>>();
+  const qcShiftRowMaps = new Map<string, Map<string, DayResourceHourRow>>();
+  const shiftDataSlots = new Map<string, Set<string>>();
+  const qcShiftDataSlots = new Map<string, Set<string>>();
+  const routeSteps: OriginRouteStepRow[] = [];
+
+  const ingest = (
+    targetRowMaps: Map<string, Map<string, DayResourceHourRow>>,
+    targetDataSlots: Map<string, Set<string>>,
+    captureKind: 'hourly' | 'qc',
+    resourceId: string,
+    orderId: string,
+    colorwayId: string | null,
+    hourSlot: string,
+    count: number,
+    inspectedQty: number,
+    storedShiftId: string | null,
+    orderRouteId: string | null,
+    logDate: string,
+    styleName: string,
+    styleRef: string,
+    buyerName: string,
+    poNumber: string,
+    colorName: string,
+    resourceName: string,
+    operationName: string,
+    operationDefId: string | null,
+  ) => {
+    // A QC session can legitimately pass 0 pieces (100% rejected) — only skip
+    // when the bucket truly has nothing (no hour slot, or no output/inspected count).
+    if (!hourSlot || (count <= 0 && inspectedQty <= 0)) return;
+    const shiftId = resolveShiftIdForSlot(shifts, hourSlot, storedShiftId);
+    if (!targetDataSlots.has(shiftId)) targetDataSlots.set(shiftId, new Set());
+    targetDataSlots.get(shiftId)!.add(hourSlot);
+    // Prefer the real routing step (carries step_type) — fall back to a
+    // synthetic one built from the RPC row if the step was since deleted.
+    const dbStep = orderRouteId ? dbRouteStepById.get(orderRouteId) : undefined;
+    const step: OriginRouteStepRow = dbStep ?? {
+      id: orderRouteId || '',
+      order_id: orderId,
+      seq: 0,
+      operation_name: operationName,
+      operation_def_id: operationDefId,
+    };
+    if (orderRouteId && !routeSteps.some((s) => s.id === orderRouteId)) routeSteps.push(step);
+    const operationGroupId = operationGroupKeyFromStep(step, orderRouteId ?? '');
+    if (!targetRowMaps.has(shiftId)) targetRowMaps.set(shiftId, new Map());
+    const rowMap = targetRowMaps.get(shiftId)!;
+    const key = `${logDate}|${operationGroupId}|${resourceId}|${orderId}|${colorwayId ?? ''}`;
+    const defectiveQty = captureKind === 'qc' ? Math.max(0, inspectedQty - count) : 0;
+    const existing = rowMap.get(key);
+    if (existing) {
+      if (count > 0) {
+        existing.hours[hourSlot] = (existing.hours[hourSlot] || 0) + count;
+        existing.total += count;
+      }
+      if (captureKind === 'qc') {
+        existing.inspectedQty = (existing.inspectedQty || 0) + inspectedQty;
+        existing.defectiveQty = (existing.defectiveQty || 0) + defectiveQty;
+      }
+      return;
+    }
+    rowMap.set(key, {
+      resourceId,
+      resourceName: resourceName || '—',
+      orderId,
+      styleName: styleName || orderId.slice(0, 8),
+      styleRef: styleRef || '',
+      buyerName: buyerName || '',
+      poNumber: poNumber || '',
+      colorwayId,
+      colorName: colorName || '—',
+      hours: count > 0 ? { [hourSlot]: count } : {},
+      hourTargets: {},
+      hourlyTarget: 0,
+      total: count,
+      workforce: null,
+      workforceBreakdown: [],
+      producedMins: 0,
+      resourceAvailableMins: 0,
+      daysRunning: null,
+      plannedEndDate: null,
+      efficiencyPct: null,
+      productivity: null,
+      shiftId,
+      logDate,
+      operationId: orderRouteId,
+      operationGroupId,
+      operationLabel: operationLabelFromStep(step),
+      captureKind,
+      inspectedQty: captureKind === 'qc' ? inspectedQty : undefined,
+      defectiveQty: captureKind === 'qc' ? defectiveQty : undefined,
+      stepType: step.step_type ?? null,
+    });
+  };
+
+  for (const row of hourlyRows) {
+    const captureKind: 'hourly' | 'qc' = row.source === 'qc' ? 'qc' : 'hourly';
+    ingest(
+      captureKind === 'qc' ? qcShiftRowMaps : shiftRowMaps,
+      captureKind === 'qc' ? qcShiftDataSlots : shiftDataSlots,
+      captureKind,
+      row.resource_id || '',
+      row.order_id,
+      row.colorway_id,
+      String(row.hour_slot ?? ''),
+      Number(row.qty) || 0,
+      captureKind === 'qc' ? Number(row.inspected_qty) || 0 : 0,
+      row.shift_id,
+      row.order_route_id,
+      String(row.log_date || '').slice(0, 10),
+      row.style_name || '',
+      row.style_ref || '',
+      row.buyer_name || '',
+      row.po_number || '',
+      row.color_name || '',
+      row.resource_name || '',
+      row.operation_name || '',
+      row.operation_def_id,
+    );
+  }
+
+  const hourColumns = allActiveHourSlots(shifts);
+  const regularShiftHours = getRegularShiftHours(shifts);
+  let productiveMinsPerWorker = regularShiftProductiveMins(shifts);
+  if (productiveMinsPerWorker <= 0) productiveMinsPerWorker = 480;
+
+  const buildSections = (
+    rowMaps: Map<string, Map<string, DayResourceHourRow>>,
+    dataSlots: Map<string, Set<string>>,
+    captureKind: 'hourly' | 'qc',
+    fallbackWhenEmpty: boolean,
+  ): DayShiftHourSection[] => {
+    const shiftIds =
+      rowMaps.size > 0
+        ? sortShiftIds(shifts, [...rowMaps.keys()])
+        : fallbackWhenEmpty
+          ? [UNASSIGNED_SHIFT]
+          : [];
+    const sections: DayShiftHourSection[] = [];
+    for (const shiftId of shiftIds) {
+      const rowMap = rowMaps.get(shiftId) ?? new Map<string, DayResourceHourRow>();
+      const sectionHourColumns = hourColumnsForShift(
+        shifts,
+        shiftId,
+        dataSlots.get(shiftId) ?? new Set(),
+      );
+      const sectionRows = [...rowMap.values()].sort(
+        (a, b) =>
+          (a.logDate || '').localeCompare(b.logDate || '') ||
+          a.resourceName.localeCompare(b.resourceName) ||
+          a.styleName.localeCompare(b.styleName) ||
+          a.colorName.localeCompare(b.colorName),
+      );
+      sections.push({
+        shiftId,
+        shiftName: shiftDisplayName(shifts, shiftId),
+        hourColumns: sectionHourColumns,
+        rows: sectionRows,
+        captureKind,
+      });
+    }
+    return sections;
+  };
+
+  const shiftSections = buildSections(shiftRowMaps, shiftDataSlots, 'hourly', true);
+  const qcShiftSections = buildSections(qcShiftRowMaps, qcShiftDataSlots, 'qc', false);
+
+  for (const section of qcShiftSections) {
+    for (const row of section.rows) {
+      const inspected = row.inspectedQty ?? 0;
+      const defective = row.defectiveQty ?? 0;
+      const pct = inspected > 0 ? (defective / inspected) * 100 : null;
+      row.defectivePct = pct;
+      row.dhu = pct;
+    }
+  }
+
+  const rows = [...shiftSections.flatMap((s) => s.rows), ...qcShiftSections.flatMap((s) => s.rows)];
+  const displayHourColumns =
+    shiftSections.length === 1 ? shiftSections[0].hourColumns : hourColumns;
+
+  const orderIds = [...new Set(rows.map((r) => r.orderId))];
+  const sewingSamByOrder = new Map<string, number>();
+  const samByAllocKey = new Map<string, number>();
+  let allocPlanRows: AllocPlanRow[] = [];
+  if (orderIds.length > 0) {
+    allocPlanRows = await fetchLineAllocPlanRows(factoryId, orderIds);
+    const { data: samRows, error: samErr } = await supabase
+      .from('style_orders')
+      .select('id, sewing_sam')
+      .eq('factory_id', factoryId)
+      .in('id', orderIds);
+    if (samErr) throw samErr;
+    for (const raw of samRows || []) {
+      sewingSamByOrder.set(raw.id as string, Number(raw.sewing_sam) || 0);
+    }
+    for (const alloc of allocPlanRows) {
+      const plannedSam = allocationSamValue({
+        sam: alloc.sam,
+        kpi_inputs: alloc.kpi_inputs,
+      });
+      if (plannedSam <= 0) continue;
+      samByAllocKey.set(allocRowKey(alloc.order_id, alloc.colorway_id, alloc.line_id), plannedSam);
+    }
+  }
+
+  const logsByDate = new Map<string, Array<Record<string, unknown>>>();
+  for (const raw of (workforceRes.data || []) as Array<Record<string, unknown>>) {
+    const logDate = String(raw.log_date || '').slice(0, 10);
+    if (!logDate) continue;
+    const list = logsByDate.get(logDate) ?? [];
+    list.push(raw);
+    logsByDate.set(logDate, list);
+  }
+
+  const rowsByDate = new Map<string, DayResourceHourRow[]>();
+  for (const row of rows) {
+    const logDate = row.logDate || '';
+    const list = rowsByDate.get(logDate) ?? [];
+    list.push(row);
+    rowsByDate.set(logDate, list);
+  }
+  for (const [logDate, dateRows] of rowsByDate) {
+    const resourceWorkforce = buildResourceWorkforceDetails(logsByDate.get(logDate) || []);
+    enrichDayResourceRows(
+      dateRows,
+      samByAllocKey,
+      sewingSamByOrder,
+      resourceWorkforce,
+      productiveMinsPerWorker,
+    );
+    applyAllocationPlanToDayRows(
+      dateRows,
+      allocPlanRows,
+      logDate,
+      displayHourColumns,
+      regularShiftHours,
+      departmentId,
+    );
+  }
+
+  // Loading rows are a receiving/WIP-start acknowledgement, not measured
+  // production — keep them out of the department's headline Output /
+  // Efficiency / Productivity / Workforce KPI (they still show in their own
+  // "Loading" operation card below).
+  const productionRows = rows.filter((r) => r.stepType !== 'loading');
+  const tableOutput = productionRows.reduce((sum, r) => sum + r.total, 0);
+  const deptMetrics = computeDayDeptMetricsFromRows(productionRows);
+  const kpi: DayResourceHourReport['kpi'] = {
+    ...kpiBase,
+    output: tableOutput,
+    efficiency: deptMetrics.efficiency,
+    productivity: deptMetrics.productivity,
+    workforce: deptMetrics.workforce,
+  };
+  if (isQcDept) {
+    let inspected = 0;
+    let passed = 0;
+    for (const row of rpcRows) {
+      if (row.source !== 'qc') continue;
+      inspected += Number(row.inspected_qty) || 0;
+      passed += Number(row.qty) || 0;
+    }
+    kpi.inspected = inspected;
+    kpi.passed = passed;
+    kpi.passPct = inspected > 0 ? (passed / inspected) * 100 : null;
+    kpi.defectivePct = inspected > 0 ? ((inspected - passed) / inspected) * 100 : null;
+  }
+
+  const operationSections = buildHourlyOperationSections(rows, routeSteps, displayHourColumns);
+
+  return {
+    isQcDept,
+    hourColumns: displayHourColumns,
+    rows,
+    shiftSections,
+    qcShiftSections,
+    operationSections,
+    batchEntries: batchEntries.length > 0 ? batchEntries : undefined,
+    productiveMinsPerWorker,
+    kpi,
+    handover: handoverRange.handover,
+    handoverByDay: handoverRange.handoverByDay,
+  };
+}
+
+async function fetchTerminalDayReportRange(
+  factoryId: string,
+  dateFrom: string,
+  dateTo: string,
+  departmentId: string,
+  meta: ReportMeta,
+  colorwayLabels: ColorwayLabel[],
+): Promise<DayResourceHourReport | null> {
+  const rpcRows = await fetchDayTerminalReportRpc(factoryId, departmentId, dateFrom, dateTo);
+  if (rpcRows == null) return null;
+
+  const [kpiRows, handoverRange] = await Promise.all([
+    fetchDepartmentKpis(factoryId, departmentId, dateFrom, dateTo),
+    fetchDayDeptHandoverRange(factoryId, dateFrom, dateTo, departmentId, meta, colorwayLabels),
+  ]);
+  const nativeEntries = rpcRows.map(mapTerminalRpcToNativeEntry);
+  const kpiBase = aggregateDeptDayKpi((kpiRows || []) as DailyKpiRpcRow[]);
+  const output = nativeEntries.reduce((sum, entry) => sum + entry.outputQty, 0);
+  return {
+    isQcDept: false,
+    isNativeShipment: true,
+    hourColumns: [],
+    rows: [],
+    shiftSections: [],
+    nativeEntries,
+    productiveMinsPerWorker: 480,
+    kpi: {
+      output,
+      target: kpiBase.target,
+      efficiency: null,
+      productivity: null,
+      dhu: kpiBase.dhu,
+      wip: kpiBase.wip,
+    },
+    handover: handoverRange.handover,
+    handoverByDay: handoverRange.handoverByDay,
+  };
+}
+
 /** Department day report: hourly_counts or inspection_sessions pivoted by resource × style × color. */
 export async function fetchDayResourceHourReport(
   factoryId: string,
@@ -1379,9 +2013,10 @@ export async function fetchDayResourceHourReport(
   const dept = meta.departments.find((d) => d.id === departmentId);
   const qcDept = isQcDept(dept?.apps ?? null);
   const planningMode = dept ? resolvePlanningMode(dept) : 'production';
-  const nativeCutting = planningMode === 'native_cutting';
-  const nativeShipment = planningMode === 'native_shipment';
-  const isOutsource = planningMode === 'outsource';
+  const roleKind = dayReportRoleKind(dept);
+  const nativeCutting = roleKind === 'origin' || planningMode === 'native_cutting';
+  const nativeShipment = roleKind === 'terminal' || planningMode === 'native_shipment';
+  const isOutsource = roleKind === 'outsource' || planningMode === 'outsource';
   const isBatch = dept?.productionPath === 'batch';
 
   if (isOutsource) {
@@ -1389,10 +2024,23 @@ export async function fetchDayResourceHourReport(
   }
 
   if (nativeShipment) {
+    const ranged = await fetchTerminalDayReportRange(
+      factoryId, date, date, departmentId, meta, colorwayLabels,
+    );
+    if (ranged) return ranged;
     return buildNativeShipmentDayReport(factoryId, date, departmentId, meta, colorwayLabels);
   }
 
   if (nativeCutting) {
+    const ranged = await fetchNativeCuttingDayReportRange(
+      factoryId,
+      date,
+      date,
+      departmentId,
+      meta,
+      colorwayLabels,
+    );
+    if (ranged) return ranged;
     const operationSections = await buildNativeCuttingDaySections(
       factoryId,
       date,
@@ -1473,6 +2121,13 @@ export async function fetchDayResourceHourReport(
     };
   }
 
+  if (!isOutsource && !nativeCutting && !nativeShipment) {
+    const ranged = await fetchStandardDayReportRange(
+      factoryId, date, date, departmentId, meta, colorwayLabels,
+    );
+    if (ranged) return ranged;
+  }
+
   if (isBatch) {
     return buildBatchDayReport(factoryId, date, departmentId, meta, colorwayLabels);
   }
@@ -1551,6 +2206,7 @@ export async function fetchDayResourceHourReport(
     row.operationId = orderRouteId;
     row.operationGroupId = operationGroupId;
     row.operationLabel = operationLabelFromStep(routeStep);
+    row.stepType = routeStep?.step_type ?? null;
     row.hours[hourSlot] = (row.hours[hourSlot] || 0) + count;
     row.total += count;
     rowMap.set(key, row);
@@ -1715,14 +2371,17 @@ export async function fetchDayResourceHourReport(
     (workforceRes.data || []) as Array<Record<string, unknown>>,
   );
 
+  // Enrich once across ALL of this day's rows (every shift section combined) so a
+  // resource that logs output in more than one shift the same day gets its true
+  // full-day totals for efficiency/productivity, not just one section's slice.
+  enrichDayResourceRows(
+    rows,
+    samByAllocKey,
+    sewingSamByOrder,
+    resourceWorkforce,
+    productiveMinsPerWorker,
+  );
   for (const section of shiftSections) {
-    enrichDayResourceRows(
-      section.rows,
-      samByAllocKey,
-      sewingSamByOrder,
-      resourceWorkforce,
-      productiveMinsPerWorker,
-    );
     applyAllocationPlanToDayRows(
       section.rows,
       allocPlanRows,
@@ -1733,8 +2392,11 @@ export async function fetchDayResourceHourReport(
     );
   }
 
-  const tableOutput = rows.reduce((sum, r) => sum + r.total, 0);
-  const deptMetrics = computeDayDeptMetricsFromRows(rows);
+  // Loading rows are a receiving/WIP-start acknowledgement, not measured
+  // production — keep them out of the headline KPI (see fetchStandardDayReportRange).
+  const productionRows = rows.filter((r) => r.stepType !== 'loading');
+  const tableOutput = productionRows.reduce((sum, r) => sum + r.total, 0);
+  const deptMetrics = computeDayDeptMetricsFromRows(productionRows);
 
   const kpiBase = aggregateDeptDayKpi((kpiRes.data || []) as DailyKpiRpcRow[]);
   const handover = await fetchDayDeptHandoverSummary(
@@ -1761,6 +2423,7 @@ export async function fetchDayResourceHourReport(
     kpi.inspected = inspected;
     kpi.passed = passed;
     kpi.passPct = inspected > 0 ? (passed / inspected) * 100 : null;
+    kpi.defectivePct = inspected > 0 ? ((inspected - passed) / inspected) * 100 : null;
   }
 
   const operationSections = buildHourlyOperationSections(
@@ -1812,6 +2475,24 @@ export async function fetchDayResourceHourReportRange(
   colorwayLabels: ColorwayLabel[],
 ): Promise<DayResourceHourReport> {
   const days = listDatesInRange(dateFrom, dateTo);
+  const dept = meta.departments.find((d) => d.id === departmentId);
+  const roleKind = dayReportRoleKind(dept);
+  if (roleKind === 'origin') {
+    const ranged = await fetchNativeCuttingDayReportRange(
+      factoryId, dateFrom, dateTo, departmentId, meta, colorwayLabels,
+    );
+    if (ranged) return ranged;
+  } else if (roleKind === 'standard') {
+    const ranged = await fetchStandardDayReportRange(
+      factoryId, dateFrom, dateTo, departmentId, meta, colorwayLabels,
+    );
+    if (ranged) return ranged;
+  } else if (roleKind === 'terminal') {
+    const ranged = await fetchTerminalDayReportRange(
+      factoryId, dateFrom, dateTo, departmentId, meta, colorwayLabels,
+    );
+    if (ranged) return ranged;
+  }
   if (days.length === 0) {
     return fetchDayResourceHourReport(
       factoryId,
@@ -1844,7 +2525,10 @@ export async function fetchDayResourceHourReportRange(
   const handover = mergeHandoverSummaries(handoverByDay.map((d) => d.handover));
 
   const shiftSections = mergeShiftSectionsFromDailyReports(dailyReports, days);
-  const rows = shiftSections.flatMap((s) => s.rows);
+  let rows = shiftSections.flatMap((s) => s.rows);
+  if (rows.length === 0) {
+    rows = dailyReports.flatMap((report) => report.rows);
+  }
 
   const hourColumns =
     shiftSections.length === 1
@@ -1900,14 +2584,15 @@ export async function fetchDayResourceHourReportRange(
     wip,
     dhu: dhuWeight > 0 ? Math.round(dhuSum / dhuWeight) : null,
     output: altOutput ?? deptMetrics.output,
-    efficiency: isOutsource || isBatch || isNativeShipment ? null : deptMetrics.efficiency,
-    productivity: isOutsource || isBatch || isNativeShipment ? null : deptMetrics.productivity,
+    efficiency: isNativeShipment ? null : deptMetrics.efficiency,
+    productivity: isNativeShipment ? null : deptMetrics.productivity,
   };
 
   if (isQcDept) {
     kpi.inspected = inspected;
     kpi.passed = passed;
     kpi.passPct = inspected > 0 ? (passed / inspected) * 100 : null;
+    kpi.defectivePct = inspected > 0 ? ((inspected - passed) / inspected) * 100 : null;
   }
 
   return {

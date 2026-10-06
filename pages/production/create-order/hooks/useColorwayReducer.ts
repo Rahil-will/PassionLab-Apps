@@ -1,5 +1,5 @@
 import { useReducer } from 'react';
-import type { Colorway } from '../../../../types';
+import type { Colorway, Material } from '../../../../types';
 import type { ColorTemplateAddPayload } from '../../../../components/production/ColorQtyWorkspace';
 import {
   calcAdjQty,
@@ -21,10 +21,14 @@ export const initialColorwayState: ColorwayState = {
   savedSnapshot: [],
 };
 
-function cloneColorways(rows: Colorway[]): Colorway[] {
+export function cloneColorways(rows: Colorway[]): Colorway[] {
   return rows.map((cw) => ({
     ...cw,
     sizes: cw.sizes.map((s) => ({ ...s })),
+    materials: (cw.materials ?? []).map((m) => ({
+      ...m,
+      paramValues: m.paramValues ? { ...m.paramValues } : undefined,
+    })),
   }));
 }
 
@@ -42,6 +46,35 @@ function recalcTotals(sizes: Colorway['sizes']): Pick<Colorway, 'orderQty' | 'ad
   return { orderQty, adjQty, totalQty: orderQty };
 }
 
+export function createEmptyColorway(displaySizes: string[]): Colorway {
+  const sizes = displaySizes.map((size) => ({ size, order_qty: 0, adj_qty: 0 }));
+  return {
+    id: crypto.randomUUID(),
+    name: '',
+    sizes,
+    materials: [],
+    ...recalcTotals(sizes),
+  };
+}
+
+export function createEmptyMaterial(category: 'Fabric' | 'Trim'): Material {
+  const isFabric = category === 'Fabric';
+  return {
+    id: crypto.randomUUID(),
+    category,
+    name: '',
+    placement: '',
+    type: '',
+    trimType: isFabric ? undefined : '',
+    fabricCategory: isFabric ? '' : undefined,
+    trimCategory: isFabric ? undefined : '',
+    unit: '',
+    avgCons: 0,
+    perPc: 0,
+    paramValues: {},
+  };
+}
+
 export type ColorwayAction =
   | { type: 'hydrate'; colorways: Colorway[]; selectedColorId?: string | null; snapshot?: Colorway[] }
   | { type: 'setColorways'; colorways: Colorway[] }
@@ -53,6 +86,10 @@ export type ColorwayAction =
   | { type: 'updateOrderQty'; id: string; size: string; qty: number; totalAllowancePct: number; displaySizes: string[] }
   | { type: 'updateAdjQty'; id: string; size: string; qty: number }
   | { type: 'applyAllowance'; totalAllowancePct: number; displaySizes: string[] }
+  | { type: 'addMaterial'; colorId: string; category: 'Fabric' | 'Trim' }
+  | { type: 'updateMaterial'; colorId: string; matId: string; field: keyof Material; value: string | number | null }
+  | { type: 'updateMaterialParam'; colorId: string; matId: string; key: string; value: string }
+  | { type: 'removeMaterial'; colorId: string; matId: string }
   | { type: 'reset' };
 
 function colorwayReducer(state: ColorwayState, action: ColorwayAction): ColorwayState {
@@ -82,6 +119,7 @@ function colorwayReducer(state: ColorwayState, action: ColorwayAction): Colorway
         id,
         name: action.payload.name.trim(),
         sizes,
+        materials: [],
         ...recalcTotals(sizes),
       };
       return {
@@ -108,6 +146,11 @@ function colorwayReducer(state: ColorwayState, action: ColorwayAction): Colorway
         id: newId,
         name: `${src.name} copy${copyNum > 1 ? ` ${copyNum}` : ''}`,
         sizes: src.sizes.map((s) => ({ ...s })),
+        materials: (src.materials ?? []).map((m) => ({
+          ...m,
+          id: crypto.randomUUID(),
+          paramValues: m.paramValues ? { ...m.paramValues } : undefined,
+        })),
       };
       const idx = state.colorways.findIndex((c) => c.id === action.id);
       const next = [...state.colorways.slice(0, idx + 1), copy, ...state.colorways.slice(idx + 1)];
@@ -153,6 +196,54 @@ function colorwayReducer(state: ColorwayState, action: ColorwayAction): Colorway
           });
           return { ...c, sizes, ...recalcTotals(sizes) };
         }),
+      };
+    case 'addMaterial': {
+      const newMat = createEmptyMaterial(action.category);
+      return {
+        ...state,
+        selectedColorId: action.colorId,
+        colorways: state.colorways.map((c) => {
+          if (c.id !== action.colorId) return c;
+          return { ...c, materials: [...(c.materials ?? []), newMat] };
+        }),
+      };
+    }
+    case 'updateMaterial':
+      return {
+        ...state,
+        colorways: state.colorways.map((c) => {
+          if (c.id !== action.colorId) return c;
+          return {
+            ...c,
+            materials: (c.materials ?? []).map((m) =>
+              m.id === action.matId ? { ...m, [action.field]: action.value } : m,
+            ),
+          };
+        }),
+      };
+    case 'updateMaterialParam':
+      return {
+        ...state,
+        colorways: state.colorways.map((c) => {
+          if (c.id !== action.colorId) return c;
+          return {
+            ...c,
+            materials: (c.materials ?? []).map((m) =>
+              m.id === action.matId
+                ? { ...m, paramValues: { ...(m.paramValues ?? {}), [action.key]: action.value } }
+                : m,
+            ),
+          };
+        }),
+      };
+    case 'removeMaterial':
+      return {
+        ...state,
+        colorways: state.colorways.map((c) =>
+          c.id === action.colorId
+            ? { ...c, materials: (c.materials ?? []).filter((m) => m.id !== action.matId) }
+            : c,
+        ),
       };
     case 'reset':
       return { ...initialColorwayState };

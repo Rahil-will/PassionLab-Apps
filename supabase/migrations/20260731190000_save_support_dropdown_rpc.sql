@@ -71,5 +71,4 @@ BEGIN
   WHERE sd.id = v_id AND sd.factory_id = p_factory_id;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.save_support_dropdown(text, uuid, uuid, text, text, jsonb) TO authenticated;

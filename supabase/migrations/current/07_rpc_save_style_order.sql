@@ -1,6 +1,7 @@
 -- =============================================================================
 -- save_style_order RPC
--- Upserts: style_orders + colorways + order_delivery_targets in one transaction.
+-- Upserts: style_orders + colorways + colorway_materials + order_delivery_targets
+-- in one transaction. Colorway `materials` JSON is RPC payload only.
 -- shipment_plan jsonb column was dropped from style_orders; shipment lines are
 -- now stored directly in order_delivery_targets.
 -- =============================================================================
@@ -18,6 +19,9 @@ DECLARE
   v_cw                jsonb;
   v_cw_id             uuid;
   v_keep_cw_ids       uuid[] := ARRAY[]::uuid[];
+  v_keep_mat_ids      uuid[] := ARRAY[]::uuid[];
+  v_mat               jsonb;
+  v_seq               integer;
   v_is_update         boolean;
   v_internal_no       text;
   v_line              jsonb;
@@ -135,10 +139,27 @@ BEGIN
         sizes            = EXCLUDED.sizes,
         planning_remarks = EXCLUDED.planning_remarks,
         updated_at       = now();
+
+      IF jsonb_typeof(COALESCE(v_cw->'materials', '[]'::jsonb)) = 'array' THEN
+        FOR v_mat, v_seq IN
+          SELECT t.elem, t.ord::integer
+          FROM jsonb_array_elements(COALESCE(v_cw->'materials', '[]'::jsonb))
+            WITH ORDINALITY AS t(elem, ord)
+        LOOP
+          v_keep_mat_ids := array_append(
+            v_keep_mat_ids,
+            public._upsert_colorway_material(p_factory_id, v_order_id, v_cw_id, v_mat, v_seq)
+          );
+        END LOOP;
+      END IF;
     END LOOP;
 
     DELETE FROM public.colorways
     WHERE order_id = v_order_id AND id <> ALL (v_keep_cw_ids);
+
+    DELETE FROM public.colorway_materials
+    WHERE order_id = v_order_id
+      AND NOT (id = ANY (v_keep_mat_ids));
   END IF;
 
   -- Upsert delivery targets from shipment_plan.lines[]

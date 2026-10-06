@@ -19,7 +19,6 @@ AS $$
     ''
   );
 $$;
-
 CREATE OR REPLACE FUNCTION public.is_floor_data_writer()
 RETURNS boolean
 LANGUAGE sql
@@ -32,7 +31,6 @@ AS $$
     'admin', 'superadmin'
   );
 $$;
-
 CREATE OR REPLACE FUNCTION public.can_desktop_fulfillment_write()
 RETURNS boolean
 LANGUAGE sql
@@ -42,7 +40,6 @@ SET search_path TO 'public'
 AS $$
   SELECT public.current_user_role() IN ('admin', 'superadmin', 'quality_manager');
 $$;
-
 -- ---------------------------------------------------------------------------
 -- Floor capture tables — block desktop viewer direct DML
 -- ---------------------------------------------------------------------------
@@ -51,68 +48,57 @@ CREATE POLICY audit_sessions_factory_write ON public.audit_sessions
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS batch_production_all ON public.batch_production;
 DROP POLICY IF EXISTS batch_production_factory_write ON public.batch_production;
 CREATE POLICY batch_production_factory_write ON public.batch_production
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS cutting_bundles_factory ON public.cutting_bundles;
 CREATE POLICY cutting_bundles_factory ON public.cutting_bundles
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS cutting_lays_factory ON public.cutting_lays;
 CREATE POLICY cutting_lays_factory ON public.cutting_lays
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS cutting_session_lots_factory ON public.cutting_session_lots;
 CREATE POLICY cutting_session_lots_factory ON public.cutting_session_lots
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS cutting_sessions_factory ON public.cutting_sessions;
 CREATE POLICY cutting_sessions_factory ON public.cutting_sessions
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS hourly_counts_factory_write ON public.hourly_counts;
 CREATE POLICY hourly_counts_factory_write ON public.hourly_counts
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS inspection_sessions_write ON public.inspection_sessions;
 CREATE POLICY inspection_sessions_write ON public.inspection_sessions
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS rejections_factory_write ON public.rejections;
 CREATE POLICY rejections_factory_write ON public.rejections
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS shipment_audits_factory_write ON public.shipment_audits;
 CREATE POLICY shipment_audits_factory_write ON public.shipment_audits
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 DROP POLICY IF EXISTS workforce_logs_factory_write ON public.workforce_logs;
 CREATE POLICY workforce_logs_factory_write ON public.workforce_logs
   FOR ALL TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 -- Shipments: no direct DELETE — desktop uses delete_desktop_shipment RPC
 DROP POLICY IF EXISTS shipments_factory_write ON public.shipments;
 CREATE POLICY shipments_factory_insert ON public.shipments
@@ -122,7 +108,6 @@ CREATE POLICY shipments_factory_update ON public.shipments
   FOR UPDATE TO authenticated
   USING (factory_id = current_factory_id() AND public.is_floor_data_writer())
   WITH CHECK (factory_id = current_factory_id() AND public.is_floor_data_writer());
-
 -- ---------------------------------------------------------------------------
 -- Master / settings gaps
 -- ---------------------------------------------------------------------------
@@ -130,12 +115,10 @@ DROP POLICY IF EXISTS dept_workforce_rates_delete ON public.department_workforce
 CREATE POLICY dept_workforce_rates_delete ON public.department_workforce_rates
   FOR DELETE TO authenticated
   USING (factory_id = current_factory_id() AND public.is_factory_admin());
-
 DROP POLICY IF EXISTS factories_insert ON public.factories;
 CREATE POLICY factories_insert ON public.factories
   FOR INSERT TO authenticated
   WITH CHECK (public.is_superadmin());
-
 -- ---------------------------------------------------------------------------
 -- delete_desktop_shipment (admin / QM — matches canCaptureOnDesktop)
 -- ---------------------------------------------------------------------------
@@ -185,9 +168,7 @@ BEGIN
   RETURN jsonb_build_object('deleted', v_deleted, 'id', p_shipment_id);
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.delete_desktop_shipment(uuid, uuid) TO authenticated;
-
 -- Desktop fulfillment auth — align with canCaptureOnDesktop (include quality_manager)
 CREATE OR REPLACE FUNCTION public.log_desktop_shipment(
   p_factory_id uuid,
@@ -321,7 +302,6 @@ BEGIN
   );
 END;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.log_desktop_rejection(
   p_factory_id uuid,
   p_payload jsonb
@@ -434,7 +414,6 @@ BEGIN
   );
 END;
 $function$;
-
 -- ---------------------------------------------------------------------------
 -- Harden log_audit_event (internal — no client EXECUTE)
 -- ---------------------------------------------------------------------------
@@ -475,14 +454,11 @@ BEGIN
   );
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.log_audit_event(uuid, text, text, uuid, jsonb) FROM PUBLIC;
-
 -- ---------------------------------------------------------------------------
 -- PIN rate-limit: avoid double-count on email login path
 -- ---------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.verify_floor_pin(uuid, text);
-
 CREATE OR REPLACE FUNCTION public.verify_floor_pin(
   p_user_id uuid,
   p_pin text,
@@ -538,7 +514,6 @@ BEGIN
   );
 END;
 $function$;
-
 CREATE OR REPLACE FUNCTION public.verify_floor_login_by_email(p_email text, p_pin text)
 RETURNS jsonb
 LANGUAGE plpgsql

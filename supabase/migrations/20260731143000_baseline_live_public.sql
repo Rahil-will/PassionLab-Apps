@@ -11,7 +11,6 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Tables
 CREATE TABLE IF NOT EXISTS public.app_configuration (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -22,7 +21,6 @@ CREATE TABLE IF NOT EXISTS public.app_configuration (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.assigned_resources (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -36,7 +34,6 @@ CREATE TABLE IF NOT EXISTS public.assigned_resources (
   description text,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.audit_sessions (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -62,7 +59,6 @@ CREATE TABLE IF NOT EXISTS public.audit_sessions (
   shift_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.batch_production (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -94,7 +90,6 @@ CREATE TABLE IF NOT EXISTS public.batch_production (
   line_allocation_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.buyers (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -120,7 +115,6 @@ CREATE TABLE IF NOT EXISTS public.buyers (
   destination_countries text[] DEFAULT '{}'::text[] NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.colorways (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   order_id uuid NOT NULL,
@@ -147,7 +141,6 @@ CREATE TABLE IF NOT EXISTS public.colorways (
   close_comment text,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.control_panel_audit_logs (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   actor_id uuid,
@@ -160,7 +153,6 @@ CREATE TABLE IF NOT EXISTS public.control_panel_audit_logs (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.cutting_bundles (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -186,7 +178,6 @@ CREATE TABLE IF NOT EXISTS public.cutting_bundles (
   fabric_component_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.cutting_lays (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -208,7 +199,6 @@ CREATE TABLE IF NOT EXISTS public.cutting_lays (
   fabric_component_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.cutting_session_lots (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -220,7 +210,6 @@ CREATE TABLE IF NOT EXISTS public.cutting_session_lots (
   lot_type text,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.cutting_sessions (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -254,7 +243,6 @@ CREATE TABLE IF NOT EXISTS public.cutting_sessions (
   efficiency_pct numeric(8,2),
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.dashboard_configs (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -269,7 +257,6 @@ CREATE TABLE IF NOT EXISTS public.dashboard_configs (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.dashboard_links (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -282,7 +269,6 @@ CREATE TABLE IF NOT EXISTS public.dashboard_links (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.defects (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -292,7 +278,6 @@ CREATE TABLE IF NOT EXISTS public.defects (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.department_workforce_rates (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -307,7 +292,6 @@ CREATE TABLE IF NOT EXISTS public.department_workforce_rates (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.departments (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -322,7 +306,6 @@ CREATE TABLE IF NOT EXISTS public.departments (
   supervisor_enabled boolean NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.fabric_components (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -336,7 +319,6 @@ CREATE TABLE IF NOT EXISTS public.fabric_components (
   is_active boolean NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.factories (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   name text NOT NULL,
@@ -354,7 +336,6 @@ CREATE TABLE IF NOT EXISTS public.factories (
   default_shift_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.floor_user_access (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   profile_id uuid NOT NULL,
@@ -366,7 +347,6 @@ CREATE TABLE IF NOT EXISTS public.floor_user_access (
   grant_ended_at timestamp with time zone,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.handover_slips (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -395,7 +375,6 @@ CREATE TABLE IF NOT EXISTS public.handover_slips (
   loss_rejection_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.hourly_counts (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -416,7 +395,6 @@ CREATE TABLE IF NOT EXISTS public.hourly_counts (
   line_allocation_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.inspection_sessions (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -452,7 +430,6 @@ CREATE TABLE IF NOT EXISTS public.inspection_sessions (
   produced_mins numeric,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.line_allocations (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -486,7 +463,6 @@ CREATE TABLE IF NOT EXISTS public.line_allocations (
   handover_available_qty integer,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.operations (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -499,7 +475,6 @@ CREATE TABLE IF NOT EXISTS public.operations (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.order_delivery_target_history (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -519,7 +494,6 @@ CREATE TABLE IF NOT EXISTS public.order_delivery_target_history (
   changed_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.order_delivery_targets (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -538,7 +512,6 @@ CREATE TABLE IF NOT EXISTS public.order_delivery_targets (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.order_routing_steps (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -559,7 +532,6 @@ CREATE TABLE IF NOT EXISTS public.order_routing_steps (
   visit_no integer,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.outsource_work_movements (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -585,7 +557,6 @@ CREATE TABLE IF NOT EXISTS public.outsource_work_movements (
   created_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.process_flows (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -596,7 +567,6 @@ CREATE TABLE IF NOT EXISTS public.process_flows (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid NOT NULL,
   factory_id uuid NOT NULL,
@@ -616,7 +586,6 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   preferred_resource_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.rejections (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -638,7 +607,6 @@ CREATE TABLE IF NOT EXISTS public.rejections (
   visit_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.shifts (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -654,7 +622,6 @@ CREATE TABLE IF NOT EXISTS public.shifts (
   productive_mins numeric DEFAULT 0 NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.shipment_audits (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -679,7 +646,6 @@ CREATE TABLE IF NOT EXISTS public.shipment_audits (
   reaudit_of uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.shipments (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -700,7 +666,6 @@ CREATE TABLE IF NOT EXISTS public.shipments (
   visit_id uuid,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.size_groups (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -711,7 +676,6 @@ CREATE TABLE IF NOT EXISTS public.size_groups (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.style_orders (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -743,7 +707,6 @@ CREATE TABLE IF NOT EXISTS public.style_orders (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.support_dropdowns (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -754,7 +717,6 @@ CREATE TABLE IF NOT EXISTS public.support_dropdowns (
   updated_at timestamp with time zone DEFAULT now() NOT NULL,
   PRIMARY KEY (id)
 );
-
 CREATE TABLE IF NOT EXISTS public.workforce_logs (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   factory_id uuid NOT NULL,
@@ -772,878 +734,550 @@ CREATE TABLE IF NOT EXISTS public.workforce_logs (
   order_id uuid,
   PRIMARY KEY (id)
 );
-
 -- Indexes
 CREATE UNIQUE INDEX app_configuration_factory_id_step_type_key ON public.app_configuration USING btree (factory_id, step_type);
-
 CREATE INDEX assigned_resources_factory_dept_idx ON public.assigned_resources USING btree (factory_id, department_id);
-
 CREATE UNIQUE INDEX assigned_resources_outsource_name_uidx ON public.assigned_resources USING btree (department_id, lower(resource_name)) WHERE ((resource_type = 'outsourced'::text) AND (status = 'active'::text));
-
 CREATE INDEX audit_sessions_factory_dept_logged_at_idx ON public.audit_sessions USING btree (factory_id, department_id, logged_at);
-
 CREATE INDEX audit_sessions_factory_order_colorway_dept_date_idx ON public.audit_sessions USING btree (factory_id, order_id, colorway_id, department_id, logged_at DESC) WHERE (colorway_id IS NOT NULL);
-
 CREATE INDEX audit_sessions_operation_idx ON public.audit_sessions USING btree (factory_id, order_id, colorway_id, order_route_id);
-
 CREATE UNIQUE INDEX idx_audit_sessions_one_pause_per_user ON public.audit_sessions USING btree (factory_id, order_id, colorway_id, department_id, resource_id, logged_by) WHERE (status = 'in_progress'::text);
-
 CREATE INDEX idx_audit_sessions_order_colorway ON public.audit_sessions USING btree (factory_id, order_id, colorway_id, logged_at DESC);
-
 CREATE INDEX batch_production_dept_date_idx ON public.batch_production USING btree (factory_id, department_id, log_date);
-
 CREATE INDEX batch_production_resource_date_idx ON public.batch_production USING btree (factory_id, resource_id, log_date);
-
 CREATE INDEX batch_production_route_idx ON public.batch_production USING btree (factory_id, order_id, colorway_id, order_route_id);
-
 CREATE INDEX idx_batch_production_factory_logged ON public.batch_production USING btree (factory_id, logged_at DESC);
-
 CREATE INDEX idx_batch_production_order_route ON public.batch_production USING btree (factory_id, order_id, colorway_id, order_route_id, resource_id, log_date);
-
 CREATE INDEX idx_batch_production_shift ON public.batch_production USING btree (factory_id, shift_id, log_date);
-
 CREATE INDEX colorways_factory_idx ON public.colorways USING btree (factory_id);
-
 CREATE INDEX colorways_order_idx ON public.colorways USING btree (order_id);
-
 CREATE INDEX idx_colorways_factory_id ON public.colorways USING btree (factory_id);
-
 CREATE INDEX idx_colorways_order_id ON public.colorways USING btree (order_id);
-
 CREATE INDEX idx_control_panel_audit_logs_created_at ON public.control_panel_audit_logs USING btree (created_at DESC);
-
 CREATE INDEX idx_control_panel_audit_logs_factory_id ON public.control_panel_audit_logs USING btree (factory_id);
-
 CREATE UNIQUE INDEX idx_cutting_bundles_factory_bundle_no ON public.cutting_bundles USING btree (factory_id, bundle_no);
-
 CREATE INDEX idx_cutting_bundles_lay ON public.cutting_bundles USING btree (lay_id);
-
 CREATE INDEX idx_cutting_bundles_session ON public.cutting_bundles USING btree (session_id);
-
 CREATE UNIQUE INDEX cutting_lays_lay_unique ON public.cutting_lays USING btree (lot_id, lay_no);
-
 CREATE INDEX idx_cutting_lays_lot ON public.cutting_lays USING btree (lot_id);
-
 CREATE INDEX idx_cutting_lays_session ON public.cutting_lays USING btree (session_id);
-
 CREATE INDEX idx_cutting_session_lots_session ON public.cutting_session_lots USING btree (session_id);
-
 CREATE UNIQUE INDEX idx_cutting_session_lots_unique ON public.cutting_session_lots USING btree (factory_id, session_id, lot_no);
-
 CREATE INDEX idx_cutting_sessions_factory_logged ON public.cutting_sessions USING btree (factory_id, logged_at DESC);
-
 CREATE UNIQUE INDEX idx_cutting_sessions_factory_order_session ON public.cutting_sessions USING btree (factory_id, order_id, colorway_id, session_no);
-
 CREATE INDEX idx_cutting_sessions_resource ON public.cutting_sessions USING btree (factory_id, resource_id, order_id);
-
 CREATE UNIQUE INDEX dashboard_configs_access_token_key ON public.dashboard_configs USING btree (access_token);
-
 CREATE INDEX dashboard_configs_token_idx ON public.dashboard_configs USING btree (access_token) WHERE is_active;
-
 CREATE INDEX defects_department_id_idx ON public.defects USING btree (department_id);
-
 CREATE UNIQUE INDEX defects_factory_id_department_id_key ON public.defects USING btree (factory_id, department_id);
-
 CREATE INDEX defects_factory_id_idx ON public.defects USING btree (factory_id);
-
 CREATE UNIQUE INDEX dept_workforce_rates_current_uidx ON public.department_workforce_rates USING btree (department_id, label, shift_id) WHERE (is_current = true);
-
 CREATE INDEX idx_dept_workforce_rates_dept_current ON public.department_workforce_rates USING btree (department_id) WHERE (is_current = true);
-
 CREATE UNIQUE INDEX departments_factory_id_name_key ON public.departments USING btree (factory_id, name);
-
 CREATE INDEX departments_factory_sequence_idx ON public.departments USING btree (factory_id, sequence);
-
 CREATE INDEX fabric_components_dept_idx ON public.fabric_components USING btree (department_id);
-
 CREATE INDEX fabric_components_factory_created_idx ON public.fabric_components USING btree (factory_id, created_at);
-
 CREATE UNIQUE INDEX fabric_components_factory_id_code_key ON public.fabric_components USING btree (factory_id, code);
-
 CREATE INDEX fabric_components_factory_idx ON public.fabric_components USING btree (factory_id);
-
 CREATE UNIQUE INDEX fabric_components_primary_uidx ON public.fabric_components USING btree (factory_id) WHERE is_primary;
-
 CREATE INDEX idx_fabric_components_factory_id_is_active ON public.fabric_components USING btree (factory_id, is_active);
-
 CREATE UNIQUE INDEX factories_code_key ON public.factories USING btree (code);
-
 CREATE UNIQUE INDEX floor_user_access_unified_profile_operation_key ON public.floor_user_access USING btree (profile_id, operation_id) NULLS NOT DISTINCT;
-
 CREATE INDEX idx_floor_user_access_current_profile ON public.floor_user_access USING btree (profile_id) WHERE (grant_ended_at IS NULL);
-
 CREATE INDEX idx_floor_user_access_factory ON public.floor_user_access USING btree (factory_id);
-
 CREATE INDEX idx_floor_user_access_operation ON public.floor_user_access USING btree (operation_id) WHERE (operation_id IS NOT NULL);
-
 CREATE INDEX idx_floor_user_access_profile ON public.floor_user_access USING btree (profile_id);
-
 CREATE INDEX handover_slips_factory_order_idx ON public.handover_slips USING btree (factory_id, order_id);
-
 CREATE INDEX handover_slips_from_allocation_idx ON public.handover_slips USING btree (from_line_allocation_id) WHERE (from_line_allocation_id IS NOT NULL);
-
 CREATE INDEX idx_handover_slips_factory_order_colorway ON public.handover_slips USING btree (factory_id, order_id, colorway_id);
-
 CREATE INDEX hourly_counts_factory_log_date_idx ON public.hourly_counts USING btree (factory_id, log_date);
-
 CREATE INDEX hourly_counts_line_allocation_idx ON public.hourly_counts USING btree (line_allocation_id) WHERE (line_allocation_id IS NOT NULL);
-
 CREATE INDEX hourly_counts_operation_idx ON public.hourly_counts USING btree (factory_id, order_id, colorway_id, order_route_id);
-
 CREATE INDEX hourly_counts_order_route_idx ON public.hourly_counts USING btree (factory_id, order_id, colorway_id, order_route_id);
-
 CREATE UNIQUE INDEX hourly_counts_slot_unique ON public.hourly_counts USING btree (factory_id, order_id, department_id, COALESCE(colorway_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(order_route_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(resource_id, '00000000-0000-0000-0000-000000000000'::uuid), hour_slot, log_date);
-
 CREATE INDEX idx_inspection_sessions_lookup ON public.inspection_sessions USING btree (factory_id, order_id, department_id, log_date);
-
 CREATE INDEX idx_inspection_sessions_resource ON public.inspection_sessions USING btree (resource_id, log_date);
-
 CREATE INDEX inspection_sessions_line_allocation_idx ON public.inspection_sessions USING btree (line_allocation_id) WHERE (line_allocation_id IS NOT NULL);
-
 CREATE INDEX inspection_sessions_operation_idx ON public.inspection_sessions USING btree (factory_id, order_id, colorway_id, order_route_id);
-
 CREATE UNIQUE INDEX inspection_sessions_slot_unique ON public.inspection_sessions USING btree (factory_id, order_id, department_id, log_date, COALESCE(hour_slot, ''::text), COALESCE(colorway_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(resource_id, '00000000-0000-0000-0000-000000000000'::uuid));
-
 CREATE INDEX la_colorway_idx ON public.line_allocations USING btree (colorway_id);
-
 CREATE INDEX la_date_idx ON public.line_allocations USING btree (start_date, end_date);
-
 CREATE INDEX la_factory_idx ON public.line_allocations USING btree (factory_id);
-
 CREATE INDEX la_order_color_visit_idx ON public.line_allocations USING btree (order_id, colorway_id, visit_id);
-
 CREATE INDEX la_order_idx ON public.line_allocations USING btree (order_id);
-
 CREATE INDEX la_order_visit_idx ON public.line_allocations USING btree (order_id, visit_id);
-
 CREATE INDEX la_visit_idx ON public.line_allocations USING btree (visit_id);
-
 CREATE INDEX operations_dept_idx ON public.operations USING btree (department_id);
-
 CREATE UNIQUE INDEX operations_factory_dept_name_active_uidx ON public.operations USING btree (factory_id, department_id, lower(name)) WHERE (is_active = true);
-
 CREATE INDEX odth_factory_idx ON public.order_delivery_target_history USING btree (factory_id);
-
 CREATE INDEX odth_order_idx ON public.order_delivery_target_history USING btree (order_id);
-
 CREATE INDEX odth_target_idx ON public.order_delivery_target_history USING btree (target_id);
-
 CREATE INDEX odt_date_idx ON public.order_delivery_targets USING btree (target_date);
-
 CREATE INDEX odt_factory_idx ON public.order_delivery_targets USING btree (factory_id);
-
 CREATE UNIQUE INDEX odt_natural_key_idx ON public.order_delivery_targets USING btree (order_id, colorway_id, destination_country, target_date) WHERE (colorway_id IS NOT NULL);
-
 CREATE INDEX odt_order_idx ON public.order_delivery_targets USING btree (order_id);
-
 CREATE INDEX idx_order_routing_steps_dept_id ON public.order_routing_steps USING btree (dept_id);
-
 CREATE INDEX idx_ors_operation_def_id ON public.order_routing_steps USING btree (operation_def_id);
-
 CREATE INDEX ors_factory_idx ON public.order_routing_steps USING btree (factory_id);
-
 CREATE INDEX ors_order_idx ON public.order_routing_steps USING btree (order_id);
-
 CREATE UNIQUE INDEX ors_order_seq_uidx ON public.order_routing_steps USING btree (order_id, seq);
-
 CREATE INDEX ors_order_visit_idx ON public.order_routing_steps USING btree (order_id, visit_id);
-
 CREATE INDEX outsource_work_movements_factory_date_idx ON public.outsource_work_movements USING btree (factory_id, occurred_at DESC);
-
 CREATE UNIQUE INDEX outsource_work_movements_idempotency_uidx ON public.outsource_work_movements USING btree (factory_id, idempotency_key) WHERE ((idempotency_key IS NOT NULL) AND (voided_at IS NULL));
-
 CREATE INDEX outsource_work_movements_linked_send_idx ON public.outsource_work_movements USING btree (linked_send_id) WHERE ((linked_send_id IS NOT NULL) AND (voided_at IS NULL));
-
 CREATE INDEX outsource_work_movements_visit_vendor_idx ON public.outsource_work_movements USING btree (factory_id, order_id, visit_id, vendor_resource_id) WHERE (voided_at IS NULL);
-
 CREATE INDEX pf_factory_idx ON public.process_flows USING btree (factory_id);
-
 CREATE INDEX profiles_factory_id_idx ON public.profiles USING btree (factory_id);
-
 CREATE INDEX idx_rejections_operation_id ON public.rejections USING btree (order_route_id);
-
 CREATE INDEX rejections_factory_date_idx ON public.rejections USING btree (factory_id, rejected_date);
-
 CREATE INDEX rejections_factory_order_idx ON public.rejections USING btree (factory_id, order_id);
-
 CREATE INDEX rejections_factory_reason_idx ON public.rejections USING btree (factory_id, reason_code);
-
 CREATE UNIQUE INDEX idx_shipment_audits_one_pause_per_user ON public.shipment_audits USING btree (factory_id, order_id, colorway_id, logged_by) WHERE (status = 'in_progress'::text);
-
 CREATE INDEX idx_shipment_audits_order_colorway ON public.shipment_audits USING btree (factory_id, order_id, colorway_id, logged_at DESC);
-
 CREATE INDEX idx_shipments_operation_id ON public.shipments USING btree (order_route_id);
-
 CREATE INDEX shipments_factory_date_idx ON public.shipments USING btree (factory_id, shipment_date);
-
 CREATE INDEX shipments_factory_order_idx ON public.shipments USING btree (factory_id, order_id);
-
 CREATE INDEX style_orders_buyer_idx ON public.style_orders USING btree (buyer_id);
-
 CREATE INDEX style_orders_factory_idx ON public.style_orders USING btree (factory_id);
-
 CREATE UNIQUE INDEX style_orders_factory_internal_order_no_unique ON public.style_orders USING btree (factory_id, internal_order_no);
-
 CREATE UNIQUE INDEX style_orders_factory_po_number_unique ON public.style_orders USING btree (factory_id, po_number) WHERE (po_number <> ''::text);
-
 CREATE INDEX style_orders_status_idx ON public.style_orders USING btree (status);
-
 CREATE UNIQUE INDEX support_dropdowns_factory_id_category_key ON public.support_dropdowns USING btree (factory_id, category);
-
 CREATE INDEX idx_workforce_logs_resource_id ON public.workforce_logs USING btree (resource_id);
-
 CREATE UNIQUE INDEX workforce_logs_allocation_shift_date_uidx ON public.workforce_logs USING btree (line_allocation_id, shift_id, log_date) WHERE (line_allocation_id IS NOT NULL);
-
 CREATE INDEX workforce_logs_factory_log_date_idx ON public.workforce_logs USING btree (factory_id, log_date);
-
 CREATE INDEX workforce_logs_line_allocation_idx ON public.workforce_logs USING btree (line_allocation_id) WHERE (line_allocation_id IS NOT NULL);
-
 -- Constraints (FK / UNIQUE / CHECK)
 ALTER TABLE ONLY public.app_configuration
   ADD CONSTRAINT app_configuration_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.app_configuration
   ADD CONSTRAINT app_configuration_factory_id_step_type_key UNIQUE (factory_id, step_type);
-
 ALTER TABLE ONLY public.app_configuration
   ADD CONSTRAINT app_configuration_step_type_check CHECK (step_type = ANY (ARRAY['loading'::text, 'produce'::text, 'store'::text, 'outsource'::text]));
-
 ALTER TABLE ONLY public.assigned_resources
   ADD CONSTRAINT assigned_resources_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.assigned_resources
   ADD CONSTRAINT assigned_resources_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id);
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_result_check CHECK (result = ANY (ARRAY['pass'::text, 'fail'::text]));
-
 ALTER TABLE ONLY public.audit_sessions
   ADD CONSTRAINT audit_sessions_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id);
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_qty_chk CHECK (produced_qty >= 0);
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.batch_production
   ADD CONSTRAINT batch_production_time_chk CHECK (end_time > start_time);
-
 ALTER TABLE ONLY public.buyers
   ADD CONSTRAINT buyers_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.colorways
   ADD CONSTRAINT colorways_completion_status_check CHECK (completion_status = ANY (ARRAY['in_progress'::text, 'completed'::text, 'closed'::text]));
-
 ALTER TABLE ONLY public.colorways
   ADD CONSTRAINT colorways_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.colorways
   ADD CONSTRAINT colorways_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.colorways
   ADD CONSTRAINT colorways_shipment_floor_status_check CHECK (shipment_floor_status = ANY (ARRAY['active'::text, 'ready_to_ship'::text, 'shipped_closed'::text, 'reaudit_open'::text]));
-
 ALTER TABLE ONLY public.control_panel_audit_logs
   ADD CONSTRAINT control_panel_audit_logs_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES auth.users(id);
-
 ALTER TABLE ONLY public.control_panel_audit_logs
   ADD CONSTRAINT control_panel_audit_logs_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id);
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_bundle_no_nonempty CHECK (length(TRIM(BOTH FROM bundle_no)) > 0);
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_bundle_sequence_check CHECK (bundle_sequence > 0);
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_check CHECK (piece_to >= piece_from);
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_fabric_component_id_fkey FOREIGN KEY (fabric_component_id) REFERENCES fabric_components(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_handover_slip_id_fkey FOREIGN KEY (handover_slip_id) REFERENCES handover_slips(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_lay_id_fkey FOREIGN KEY (lay_id) REFERENCES cutting_lays(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_lot_id_fkey FOREIGN KEY (lot_id) REFERENCES cutting_session_lots(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_piece_from_check CHECK (piece_from > 0);
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_qty_check CHECK (qty > 0);
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_session_id_fkey FOREIGN KEY (session_id) REFERENCES cutting_sessions(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_bundles
   ADD CONSTRAINT cutting_bundles_status_check CHECK (status = ANY (ARRAY['available'::text, 'sent'::text, 'received'::text]));
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_fabric_component_id_fkey FOREIGN KEY (fabric_component_id) REFERENCES fabric_components(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_lay_no_check CHECK (lay_no > 0);
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_lay_unique UNIQUE (lot_id, lay_no);
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_lot_id_fkey FOREIGN KEY (lot_id) REFERENCES cutting_session_lots(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_number_of_plies_check CHECK (number_of_plies IS NULL OR number_of_plies > 0);
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_ply_count_check CHECK (ply_count IS NULL OR ply_count > 0);
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_session_id_fkey FOREIGN KEY (session_id) REFERENCES cutting_sessions(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_lays
   ADD CONSTRAINT cutting_lays_total_qty_check CHECK (total_qty >= 0);
-
 ALTER TABLE ONLY public.cutting_session_lots
   ADD CONSTRAINT cutting_session_lots_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_session_lots
   ADD CONSTRAINT cutting_session_lots_lot_no_nonempty CHECK (length(TRIM(BOTH FROM lot_no)) > 0);
-
 ALTER TABLE ONLY public.cutting_session_lots
   ADD CONSTRAINT cutting_session_lots_session_id_fkey FOREIGN KEY (session_id) REFERENCES cutting_sessions(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_session_lots
   ADD CONSTRAINT cutting_session_lots_total_qty_check CHECK (total_qty >= 0);
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_end_after_start CHECK (end_time > start_time);
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_fabric_component_id_fkey FOREIGN KEY (fabric_component_id) REFERENCES fabric_components(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id);
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_session_no_nonempty CHECK (length(TRIM(BOTH FROM session_no)) > 0);
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id);
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_total_headcount_check CHECK (total_headcount >= 0);
-
 ALTER TABLE ONLY public.cutting_sessions
   ADD CONSTRAINT cutting_sessions_total_qty_check CHECK (total_qty >= 0);
-
 ALTER TABLE ONLY public.dashboard_configs
   ADD CONSTRAINT dashboard_configs_access_token_key UNIQUE (access_token);
-
 ALTER TABLE ONLY public.dashboard_configs
   ADD CONSTRAINT dashboard_configs_created_by_fkey FOREIGN KEY (created_by) REFERENCES profiles(id);
-
 ALTER TABLE ONLY public.dashboard_configs
   ADD CONSTRAINT dashboard_configs_dashboard_type_check CHECK (dashboard_type = ANY (ARRAY['floor'::text, 'pm_cabin'::text, 'overall'::text]));
-
 ALTER TABLE ONLY public.dashboard_configs
   ADD CONSTRAINT dashboard_configs_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.dashboard_configs
   ADD CONSTRAINT dashboard_configs_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.dashboard_configs
   ADD CONSTRAINT dashboard_configs_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.dashboard_links
   ADD CONSTRAINT dashboard_links_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.defects
   ADD CONSTRAINT defects_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id);
-
 ALTER TABLE ONLY public.defects
   ADD CONSTRAINT defects_factory_id_department_id_key UNIQUE (factory_id, department_id);
-
 ALTER TABLE ONLY public.defects
   ADD CONSTRAINT defects_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id);
-
 ALTER TABLE ONLY public.department_workforce_rates
   ADD CONSTRAINT department_workforce_rates_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.department_workforce_rates
   ADD CONSTRAINT department_workforce_rates_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.department_workforce_rates
   ADD CONSTRAINT department_workforce_rates_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.department_workforce_rates
   ADD CONSTRAINT department_workforce_rates_superseded_by_fkey FOREIGN KEY (superseded_by) REFERENCES department_workforce_rates(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.departments
   ADD CONSTRAINT departments_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.departments
   ADD CONSTRAINT departments_factory_id_name_key UNIQUE (factory_id, name);
-
 ALTER TABLE ONLY public.departments
   ADD CONSTRAINT departments_planning_mode_check CHECK (planning_mode = ANY (ARRAY['production'::text, 'storage'::text, 'outsource'::text, 'native_cutting'::text, 'native_shipment'::text]));
-
 ALTER TABLE ONLY public.departments
   ADD CONSTRAINT departments_role_chk CHECK (role = ANY (ARRAY['origin'::text, 'standard'::text, 'terminal'::text]));
-
 ALTER TABLE ONLY public.fabric_components
   ADD CONSTRAINT fabric_components_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.fabric_components
   ADD CONSTRAINT fabric_components_factory_id_code_key UNIQUE (factory_id, code);
-
 ALTER TABLE ONLY public.fabric_components
   ADD CONSTRAINT fabric_components_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_audit_apps_is_array CHECK (jsonb_typeof(audit_apps) = 'array'::text);
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_code_key UNIQUE (code);
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_default_shift_id_fkey FOREIGN KEY (default_shift_id) REFERENCES shifts(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_production_apps_is_array CHECK (jsonb_typeof(production_apps) = 'array'::text);
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_shipment_apps_is_array CHECK (jsonb_typeof(shipment_apps) = 'array'::text);
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_transaction_apps_is_array CHECK (jsonb_typeof(transaction_apps) = 'array'::text);
-
 ALTER TABLE ONLY public.factories
   ADD CONSTRAINT factories_workforce_apps_is_array CHECK (jsonb_typeof(workforce_apps) = 'array'::text);
-
 ALTER TABLE ONLY public.floor_user_access
   ADD CONSTRAINT floor_user_access_unified_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.floor_user_access
   ADD CONSTRAINT floor_user_access_unified_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.floor_user_access
   ADD CONSTRAINT floor_user_access_unified_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES operations(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.floor_user_access
   ADD CONSTRAINT floor_user_access_unified_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.floor_user_access
   ADD CONSTRAINT floor_user_access_unified_profile_operation_key UNIQUE NULLS NOT DISTINCT (profile_id, operation_id);
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id);
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_from_department_id_fkey FOREIGN KEY (from_department_id) REFERENCES departments(id);
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_from_line_allocation_id_fkey FOREIGN KEY (from_line_allocation_id) REFERENCES line_allocations(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_loss_closed_by_fkey FOREIGN KEY (loss_closed_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_loss_rejection_id_fkey FOREIGN KEY (loss_rejection_id) REFERENCES rejections(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id);
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_received_by_fkey FOREIGN KEY (received_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_sent_by_fkey FOREIGN KEY (sent_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_status_check CHECK (status = ANY (ARRAY['pending'::text, 'received'::text, 'disputed'::text, 'received_disputed'::text]));
-
 ALTER TABLE ONLY public.handover_slips
   ADD CONSTRAINT handover_slips_to_department_id_fkey FOREIGN KEY (to_department_id) REFERENCES departments(id);
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id);
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id);
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.hourly_counts
   ADD CONSTRAINT hourly_counts_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id);
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id);
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id);
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id);
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id);
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id);
-
 ALTER TABLE ONLY public.inspection_sessions
   ADD CONSTRAINT inspection_sessions_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id);
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id);
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_line_id_fkey FOREIGN KEY (line_id) REFERENCES assigned_resources(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_qty_nonneg CHECK (qty >= 0);
-
 ALTER TABLE ONLY public.line_allocations
   ADD CONSTRAINT line_allocations_status_check CHECK (status = ANY (ARRAY['planned'::text, 'active'::text, 'completed'::text, 'cancelled'::text]));
-
 ALTER TABLE ONLY public.operations
   ADD CONSTRAINT operations_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.operations
   ADD CONSTRAINT operations_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.operations
   ADD CONSTRAINT operations_step_type_check CHECK (step_type = ANY (ARRAY['loading'::text, 'produce'::text, 'store'::text, 'outsource'::text]));
-
 ALTER TABLE ONLY public.order_delivery_target_history
   ADD CONSTRAINT order_delivery_target_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.order_delivery_target_history
   ADD CONSTRAINT order_delivery_target_history_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.order_delivery_target_history
   ADD CONSTRAINT order_delivery_target_history_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_delivery_target_history
   ADD CONSTRAINT order_delivery_target_history_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_delivery_target_history
   ADD CONSTRAINT order_delivery_target_history_target_id_fkey FOREIGN KEY (target_id) REFERENCES order_delivery_targets(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_delivery_targets
   ADD CONSTRAINT order_delivery_targets_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_delivery_targets
   ADD CONSTRAINT order_delivery_targets_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_delivery_targets
   ADD CONSTRAINT order_delivery_targets_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_routing_steps
   ADD CONSTRAINT order_routing_steps_dept_id_fkey FOREIGN KEY (dept_id) REFERENCES departments(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.order_routing_steps
   ADD CONSTRAINT order_routing_steps_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_routing_steps
   ADD CONSTRAINT order_routing_steps_operation_def_id_fkey FOREIGN KEY (operation_def_id) REFERENCES operations(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.order_routing_steps
   ADD CONSTRAINT order_routing_steps_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.order_routing_steps
   ADD CONSTRAINT order_routing_steps_step_type_check CHECK (step_type = ANY (ARRAY['loading'::text, 'produce'::text, 'store'::text, 'outsource'::text]));
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_linked_send_id_fkey FOREIGN KEY (linked_send_id) REFERENCES outsource_work_movements(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_movement_type_check CHECK (movement_type = ANY (ARRAY['vendor_send'::text, 'vendor_receive'::text]));
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_qty_check CHECK (qty > 0);
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_receive_requires_send CHECK (movement_type = 'vendor_send'::text OR linked_send_id IS NOT NULL);
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_vendor_resource_id_fkey FOREIGN KEY (vendor_resource_id) REFERENCES assigned_resources(id) ON DELETE RESTRICT;
-
 ALTER TABLE ONLY public.outsource_work_movements
   ADD CONSTRAINT outsource_work_movements_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.process_flows
   ADD CONSTRAINT process_flows_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.profiles
   ADD CONSTRAINT profiles_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.profiles
   ADD CONSTRAINT profiles_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.profiles
   ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.profiles
   ADD CONSTRAINT profiles_status_check CHECK (status = ANY (ARRAY['Active'::text, 'Inactive'::text]));
-
 ALTER TABLE ONLY public.profiles
   ADD CONSTRAINT profiles_user_role_check CHECK (user_role = ANY (ARRAY['superadmin'::text, 'admin'::text, 'quality_manager'::text, 'supervisor'::text, 'auditor'::text, 'operator'::text]));
-
 ALTER TABLE ONLY public.rejections
   ADD CONSTRAINT rejections_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.rejections
   ADD CONSTRAINT rejections_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.rejections
   ADD CONSTRAINT rejections_order_id_fkey FOREIGN KEY (order_id) REFERENCES style_orders(id);
-
 ALTER TABLE ONLY public.rejections
   ADD CONSTRAINT rejections_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.rejections
   ADD CONSTRAINT rejections_qty_check CHECK (qty > 0);
-
 ALTER TABLE ONLY public.shifts
   ADD CONSTRAINT shifts_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_audit_type_check CHECK (audit_type = ANY (ARRAY['midline'::text, 'internal_final'::text, 'shipment'::text, 'reaudit'::text]));
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id);
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_reaudit_of_fkey FOREIGN KEY (reaudit_of) REFERENCES shipment_audits(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_result_check CHECK (result IS NULL OR (result = ANY (ARRAY['pass'::text, 'fail'::text])));
-
 ALTER TABLE ONLY public.shipment_audits
   ADD CONSTRAINT shipment_audits_status_check CHECK (status = ANY (ARRAY['in_progress'::text, 'completed'::text]));
-
 ALTER TABLE ONLY public.shipments
   ADD CONSTRAINT shipments_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.shipments
   ADD CONSTRAINT shipments_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.shipments
   ADD CONSTRAINT shipments_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.shipments
   ADD CONSTRAINT shipments_shipment_type_check CHECK (shipment_type = ANY (ARRAY['main'::text, 'partial'::text, 'replacement'::text, 'sample'::text, 'rejection_return'::text]));
-
 ALTER TABLE ONLY public.shipments
   ADD CONSTRAINT shipments_shipped_qty_check CHECK (shipped_qty > 0);
-
 ALTER TABLE ONLY public.size_groups
   ADD CONSTRAINT size_groups_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES buyers(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.size_groups
   ADD CONSTRAINT size_groups_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_adj_qty_nonneg CHECK (adj_qty >= 0);
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES buyers(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_factory_internal_order_no_unique UNIQUE (factory_id, internal_order_no);
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_order_qty_nonneg CHECK (order_qty >= 0);
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_order_type_check CHECK (order_type = ANY (ARRAY['new'::text, 'repeat'::text]));
-
 ALTER TABLE ONLY public.style_orders
   ADD CONSTRAINT style_orders_priority_check CHECK (priority = ANY (ARRAY['normal'::text, 'high'::text, 'critical'::text]));
-
 ALTER TABLE ONLY public.support_dropdowns
   ADD CONSTRAINT support_dropdowns_factory_id_category_key UNIQUE (factory_id, category);
-
 ALTER TABLE ONLY public.support_dropdowns
   ADD CONSTRAINT support_dropdowns_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_colorway_id_fkey FOREIGN KEY (colorway_id) REFERENCES colorways(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_department_id_fkey FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_factory_id_fkey FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_line_allocation_id_fkey FOREIGN KEY (line_allocation_id) REFERENCES line_allocations(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_logged_by_fkey FOREIGN KEY (logged_by) REFERENCES profiles(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_order_route_id_fkey FOREIGN KEY (order_route_id) REFERENCES order_routing_steps(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_resource_id_fkey FOREIGN KEY (resource_id) REFERENCES assigned_resources(id) ON DELETE SET NULL;
-
 ALTER TABLE ONLY public.workforce_logs
   ADD CONSTRAINT workforce_logs_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL;
-
 -- Row level security
 ALTER TABLE public.app_configuration ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assigned_resources ENABLE ROW LEVEL SECURITY;
@@ -1683,7 +1317,6 @@ ALTER TABLE public.size_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.style_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_dropdowns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workforce_logs ENABLE ROW LEVEL SECURITY;
-
 -- Functions / RPCs
 CREATE OR REPLACE FUNCTION public.aggregate_order_cut_qty(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -1832,9 +1465,7 @@ BEGIN
     'cut_qty_source', 'planned'
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.aggregate_top_defects(summaries jsonb[], p_limit integer DEFAULT 7)
  RETURNS jsonb
  LANGUAGE sql
@@ -1858,9 +1489,7 @@ AS $function$
     ),
     '[]'::jsonb
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.allocation_grained_batch_agg(p_factory_id uuid, p_order_id uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, operation_id uuid, qty_produced integer, qty_produced_by_size jsonb)
  LANGUAGE sql
@@ -1884,9 +1513,7 @@ AS $function$
   WHERE g.capture_app = 'batch'
     AND COALESCE(bp.produced_qty, 0) > 0
   GROUP BY g.factory_id, g.order_id, g.colorway_id, g.operation_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.allocation_grained_hourly_agg(p_factory_id uuid, p_order_id uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, operation_id uuid, qty_produced integer, qty_produced_by_size jsonb)
  LANGUAGE sql
@@ -1909,9 +1536,7 @@ AS $function$
    AND h.line_allocation_id = g.line_allocation_id
   WHERE g.capture_app = 'hourly' OR g.step_type IN ('loading', 'produce')
   GROUP BY g.factory_id, g.order_id, g.colorway_id, g.operation_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.allocation_grained_outsource_agg(p_factory_id uuid, p_order_id uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, operation_id uuid, qty_produced integer, qty_produced_by_size jsonb)
  LANGUAGE sql
@@ -1941,9 +1566,7 @@ AS $function$
     AND owm.movement_type = 'vendor_receive'
     AND owm.voided_at IS NULL
   GROUP BY g.factory_id, g.order_id, g.colorway_id, g.operation_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.allocation_grained_qc_agg(p_factory_id uuid, p_order_id uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, operation_id uuid, qty_produced integer, qty_produced_by_size jsonb)
  LANGUAGE sql
@@ -1966,9 +1589,7 @@ AS $function$
    AND s.line_allocation_id = g.line_allocation_id
   WHERE g.capture_app IN ('qc_log', 'shipment_qa')
   GROUP BY g.factory_id, g.order_id, g.colorway_id, g.operation_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.assert_colorway_allows_production(p_colorway_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1996,9 +1617,7 @@ BEGIN
 
   RETURN NULL;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.assert_outsource_vendor_resource(p_vendor_resource_id uuid, p_department_id uuid)
  RETURNS assigned_resources
  LANGUAGE plpgsql
@@ -2030,9 +1649,7 @@ BEGIN
 
   RETURN v_row;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.audit_pieces_defect_lines(pieces_json jsonb)
  RETURNS TABLE(defect_name text, defect_count integer)
  LANGUAGE sql
@@ -2050,9 +1667,7 @@ AS $function$
   ) d
   WHERE d.k IS NOT NULL AND d.k <> ''
   GROUP BY d.k;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.auto_reject_missing_pcs(p_factory_id uuid, p_order_id uuid DEFAULT NULL::uuid, p_colorway_id uuid DEFAULT NULL::uuid, p_visit_id uuid DEFAULT NULL::uuid, p_slip_id uuid DEFAULT NULL::uuid, p_user_id uuid DEFAULT NULL::uuid, p_dry_run boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2281,9 +1896,7 @@ BEGIN
     'skipped_count', jsonb_array_length(v_skipped),
     'inserted', v_inserted, 'skipped', v_skipped);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.auto_reject_missing_pcs_skip_qc_visit(p_order_id uuid, p_visit_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -2296,9 +1909,7 @@ AS $function$
       AND ors.visit_id = p_visit_id
       AND COALESCE(ors.capture_app, '') = 'qc_log'
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.batch_production_apply_kpi()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2346,17 +1957,13 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.batch_production_set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
 BEGIN NEW.updated_at := now(); RETURN NEW; END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.capture_app_for_route_step(p_factory_id uuid, p_operation_def_id uuid)
  RETURNS text
  LANGUAGE sql
@@ -2376,9 +1983,7 @@ AS $function$
     ),
     'hourly'
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.capture_fill_line_allocation()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2424,9 +2029,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.capture_matches_alloc_grid(p_capture_route_id uuid, p_capture_alloc_id uuid, p_capture_dept_id uuid, p_grid_route_id uuid, p_grid_alloc_id uuid, p_grid_dept_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -2435,9 +2038,7 @@ AS $function$
   SELECT
     p_capture_route_id = p_grid_route_id
     AND p_capture_alloc_id = p_grid_alloc_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.capture_route_step_id(p_row jsonb)
  RETURNS uuid
  LANGUAGE sql
@@ -2449,9 +2050,7 @@ AS $function$
     NULLIF(p_row->>'operation_id', '')::uuid,
     NULLIF(p_row->>'flow_step_id', '')::uuid
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.colorway_planned_by_size(p_colorway_id uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -2475,9 +2074,7 @@ AS $function$
     ),
     '{}'::jsonb
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.compute_capture_session_kpi(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_resource_id uuid, p_log_date date, p_order_route_id uuid, p_start_time timestamp with time zone, p_end_time timestamp with time zone, p_headcount_by_category jsonb, p_produced_qty integer)
  RETURNS TABLE(duration_mins numeric, worker_count integer, available_mins numeric, sam numeric, produced_mins numeric, efficiency_pct numeric)
  LANGUAGE plpgsql
@@ -2531,9 +2128,7 @@ BEGIN
   efficiency_pct := v_eff;
   RETURN NEXT;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.compute_inspection_session_kpi(p_total_inspected integer, p_passed integer, p_failed integer, p_rework_passed integer, p_passed_by_size jsonb, p_rework_by_size jsonb, p_defect_summary jsonb)
  RETURNS TABLE(first_time_pass integer, first_time_pass_by_size jsonb, ftr_pct numeric, defective_pct numeric, dhu numeric)
  LANGUAGE plpgsql
@@ -2574,9 +2169,7 @@ BEGIN
   dhu := v_dhu;
   RETURN NEXT;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.create_factory_floor_user(p_factory_id uuid, p_full_name text, p_email text, p_floor_pin text, p_department_id uuid, p_user_role text DEFAULT 'operator'::text, p_assigned_apps jsonb DEFAULT '[]'::jsonb, p_assigned_operation_ids jsonb DEFAULT '[]'::jsonb, p_status text DEFAULT 'Active'::text, p_handover_enabled boolean DEFAULT NULL::boolean, p_workforce_enabled boolean DEFAULT NULL::boolean, p_audit_enabled boolean DEFAULT NULL::boolean, p_shipment_qa_enabled boolean DEFAULT NULL::boolean)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -2667,9 +2260,7 @@ BEGIN
 
   RETURN v_user_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.current_factory_id()
  RETURNS uuid
  LANGUAGE sql
@@ -2687,9 +2278,7 @@ AS $function$
     )::uuid,
     (SELECT p.factory_id FROM public.profiles p WHERE p.id = auth.uid() LIMIT 1)
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2717,9 +2306,7 @@ BEGIN
   END IF;
   RETURN jsonb_set(event, '{claims}', claims);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cutting_bundles_fill_fabric_component()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2731,9 +2318,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cutting_component_progress_rows(p_factory_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, operation_id uuid, visit_id uuid, fabric_component_id uuid, fabric_code text, fabric_type text, is_primary boolean, qty integer, qty_by_size jsonb)
  LANGUAGE sql
@@ -2767,9 +2352,7 @@ AS $function$
     AND (p_order_id IS NULL OR cb.order_id = p_order_id)
   GROUP BY cb.factory_id, cb.order_id, cb.colorway_id, cs.order_route_id, ors.visit_id,
            cb.fabric_component_id, fc.code, fc.fabric_type, fc.is_primary;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cutting_primary_fabric_type(p_factory_id uuid)
  RETURNS text
  LANGUAGE sql
@@ -2795,9 +2378,7 @@ AS $function$
     ),
     'Shell'
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cutting_refresh_lot_total(p_lot_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -2811,9 +2392,7 @@ BEGIN
   ), 0)
   WHERE l.id = p_lot_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.cutting_refresh_session_total(p_session_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -2827,9 +2406,7 @@ BEGIN
   ), 0)
   WHERE s.id = p_session_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.default_defects_for_department(p_dept_name text)
  RETURNS jsonb
  LANGUAGE sql
@@ -2874,9 +2451,7 @@ AS $function$
         {"category":"General","name":"Rework needed","code":"GEN-02"}
       ]'::jsonb
   END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.delete_style_order(p_factory_id uuid, p_order_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -2963,9 +2538,7 @@ BEGIN
   DELETE FROM public.style_orders
   WHERE id = p_order_id AND factory_id = p_factory_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.department_effective_apps(p_apps jsonb, p_transaction boolean, p_audit boolean, p_supervisor boolean)
  RETURNS jsonb
  LANGUAGE sql
@@ -2981,9 +2554,7 @@ AS $function$
     ) s
     WHERE k NOT IN ('workforce', 'workforce_log', 'attendance', 'none', 'none_workforce')
   ), '[]'::jsonb);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.dept_is_floor_production(p_role text, p_name text)
  RETURNS boolean
  LANGUAGE sql
@@ -2991,9 +2562,7 @@ CREATE OR REPLACE FUNCTION public.dept_is_floor_production(p_role text, p_name t
 AS $function$
   SELECT COALESCE(p_role, 'standard') <> 'terminal'
     AND lower(trim(COALESCE(p_name, ''))) NOT IN ('quality audit', 'shipment');
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.ensure_department_defects(p_factory_id uuid, p_department_id uuid, p_default_defects jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3026,9 +2595,7 @@ BEGIN
 
   RETURN p_default_defects;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.ensure_factory_fabric_components(p_factory_id uuid, p_origin_department_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -3050,9 +2617,7 @@ BEGIN
     p_factory_id, p_origin_department_id, 'PRIMARY', 'Primary fabric', true
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.factory_rejection_stage_allowed(p_factory_id uuid, p_stage text)
  RETURNS boolean
  LANGUAGE sql
@@ -3073,9 +2638,7 @@ AS $function$
       AND sd.category = 'rejection_audit_type'
       AND public.rejection_audit_label_to_stage(label) = p_stage
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture(p_factory_id uuid, p_user_id uuid, p_type text, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3653,9 +3216,7 @@ BEGIN
 
   RETURN public.floor_capture_fail('Unknown capture type', 'UNKNOWN_CAPTURE_TYPE');
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_allocation_complete(p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3741,9 +3302,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_allocation_reopen(p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3818,9 +3377,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_audit_session(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3914,9 +3471,7 @@ BEGIN
   ) RETURNING id INTO v_id;
   RETURN jsonb_build_object('id', v_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_batch_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4133,9 +3688,7 @@ BEGIN
     'lineAllocationId', v_line_allocation_id
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_colorway_reaudit_complete(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4164,9 +3717,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_colorway_reaudit_open(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4206,9 +3757,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_colorway_ship_close(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4244,9 +3793,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_balance(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4295,9 +3842,7 @@ BEGIN
     'plannedTotal', v_planned_total
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_bundle(p_payload jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4322,9 +3867,7 @@ BEGIN
   RETURNING id INTO v_id;
   RETURN v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_bundles_generate(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4436,9 +3979,7 @@ BEGIN
     'fabricComponentId', v_fc_id
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_fabric_lot_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4448,9 +3989,7 @@ AS $function$
 BEGIN
   RETURN public.floor_capture_cutting_session_lot_upsert(p_factory_id, p_user_id, p_payload);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_lay(p_payload jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4478,9 +4017,7 @@ BEGIN
   RETURNING id INTO v_id;
   RETURN v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_lay_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4565,9 +4102,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'id', v_id, 'layNo', v_lay_no);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_session_lot_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4620,9 +4155,7 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_cutting_session_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -4816,9 +4349,7 @@ BEGIN
     'fabricComponentId', v_fabric_component_id
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_fail(p_message text, p_code text, p_details jsonb DEFAULT NULL::jsonb)
  RETURNS jsonb
  LANGUAGE sql
@@ -4831,9 +4362,7 @@ AS $function$
     'code', p_code,
     'details', p_details
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_handover_amend(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5105,9 +4634,7 @@ BEGIN
   UPDATE public.handover_slips SET status = 'disputed' WHERE id = v_slip.id;
   RETURN jsonb_build_object('ok', true, 'resolved', false, 'action', 'amend_still_disputed');
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_hourly_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5320,9 +4847,7 @@ BEGIN
     'producedMins', v_produced_mins
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_inspection_session_upsert(p_factory_id uuid, p_user_id uuid, p_payload jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5542,9 +5067,7 @@ BEGIN
     'producedMins', v_produced_mins
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_shipment_audit_session(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5695,9 +5218,7 @@ BEGIN
 
   RETURN jsonb_build_object('id', v_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_shipment_log(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -5835,9 +5356,7 @@ BEGIN
     'visitId', v_visit_id
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_capture_shipment_rejection_log(p_payload jsonb, p_factory_id uuid, p_user_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6056,9 +5575,7 @@ BEGIN
     'inserted', v_inserted
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_resolve_operation_step(p_factory_id uuid, p_user_id uuid, p_colorway_id uuid, p_flow_step_id uuid, p_expected_capture_app text DEFAULT NULL::text, p_skip_app_check boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6113,9 +5630,7 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'operation_id', v_ctx.order_route_id,
     'department_id', v_ctx.department_id, 'capture_app', v_ctx.capture_app, 'route_seq', v_ctx.route_seq);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_resolve_order_route_step(p_factory_id uuid, p_user_id uuid, p_order_id uuid, p_order_route_id uuid, p_expected_capture_app text DEFAULT NULL::text, p_skip_app_check boolean DEFAULT false)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6193,9 +5708,7 @@ BEGIN
     'step_label', v_ctx.step_label
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_user_can_log_workforce(p_profile_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -6209,9 +5722,7 @@ AS $function$
       AND p.user_role IN ('supervisor', 'quality_manager')
       AND COALESCE(p.workforce_enabled, false)
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_user_department_id(p_profile_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -6219,9 +5730,7 @@ CREATE OR REPLACE FUNCTION public.floor_user_department_id(p_profile_id uuid)
  SET search_path TO 'public'
 AS $function$
   SELECT p.department_id FROM public.profiles p WHERE p.id = p_profile_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_user_derived_apps(p_profile_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6278,9 +5787,7 @@ BEGIN
     FROM (SELECT jsonb_array_elements_text(v_apps) AS val) s
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_user_operation_ids_json(p_profile_id uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -6294,9 +5801,7 @@ AS $function$
   FROM public.floor_user_access fa
   WHERE fa.profile_id = p_profile_id
     AND fa.grant_ended_at IS NULL;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.floor_validate_handover_steps(p_factory_id uuid, p_colorway_id uuid, p_from_flow_step_id uuid, p_to_flow_step_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6347,9 +5852,7 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'from_department_id', v_from.dept_id, 'to_department_id', v_to.dept_id,
     'from_operation_id', v_from.id, 'to_operation_id', v_to.id, 'from_visit_id', v_from.visit_id, 'order_id', v_order_id);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_audit_report(p_factory_id uuid, p_date_from date, p_date_to date, p_colorway_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid, p_department_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, department_id uuid, log_date date, lots integer, total_samples integer, total_passed integer, total_failed integer, total_major_failed integer, total_minor_failed integer, aql_level text, aql_pass_pct numeric)
  LANGUAGE sql
@@ -6375,9 +5878,7 @@ AS $function$
     AND (p_department_id IS NULL OR a.department_id = p_department_id)
   GROUP BY a.factory_id, a.order_id, a.colorway_id, a.department_id, a.log_date
   ORDER BY a.log_date, a.department_id, a.order_id, a.colorway_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_cut_to_ship_detail(p_factory_id uuid, p_order_id uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -6385,9 +5886,7 @@ CREATE OR REPLACE FUNCTION public.get_cut_to_ship_detail(p_factory_id uuid, p_or
  SET search_path TO 'public'
 AS $function$
   SELECT public.get_order_detail_bundle(p_factory_id, p_order_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_cut_to_ship_journey(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, dept_id uuid, dept_name text, flow_step integer, is_in_flow boolean, qty_received integer, qty_produced integer, qty_sent integer, qty_rejected integer, wip_qty integer, wip_qty_by_size jsonb, qty_received_by_size jsonb, qty_produced_by_size jsonb, qty_sent_by_size jsonb, qty_rejected_by_size jsonb, status text, operation_id uuid)
  LANGUAGE sql
@@ -6402,9 +5901,7 @@ AS $function$
   FROM public.v_cut_to_ship_dept_journey j
   WHERE j.factory_id = p_factory_id AND j.order_id = p_order_id
     AND (p_colorway_id IS NULL OR j.colorway_id IS NOT DISTINCT FROM p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_cut_to_ship_report(p_factory_id uuid, p_date_from date DEFAULT NULL::date, p_date_to date DEFAULT NULL::date, p_buyer_id uuid DEFAULT NULL::uuid, p_balanced_only boolean DEFAULT NULL::boolean)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, style_name text, buyer_name text, po_number text, order_qty integer, cut_qty integer, cut_qty_source text, shipped_qty integer, rejected_qty integer, wip_qty integer, reconciliation_gap integer, is_balanced boolean, completion_pct numeric, order_status text, last_shipment_date date, cut_qty_by_size jsonb, cut_qty_by_component jsonb, shipped_qty_by_size jsonb, rejected_qty_by_size jsonb, wip_qty_by_size jsonb)
  LANGUAGE sql
@@ -6509,9 +6006,7 @@ AS $function$
   WHERE p_balanced_only IS NULL
      OR ((c.cut_qty - c.shipped_qty - c.rejected_qty) <= 0) = p_balanced_only
   ORDER BY c.po_number, c.style_name;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_cutting_department_id(p_factory_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -6534,9 +6029,7 @@ AS $function$
       ORDER BY d.id LIMIT 1
     )
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_cutting_department_id_for_order(p_order_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -6551,9 +6044,7 @@ AS $function$
      JOIN public.departments d ON d.factory_id = so.factory_id AND d.name ILIKE 'cutting' AND d.is_production = true
      WHERE so.id = p_order_id ORDER BY d.id LIMIT 1)
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_department_kpis_by_shift(p_factory_id uuid, p_department_id uuid, p_date_from date, p_date_to date)
  RETURNS TABLE(factory_id uuid, order_id uuid, department_id uuid, operation_id uuid, log_date date, shift_id uuid, shift_name text, daily_target integer, shift_output integer, shift_produced_mins numeric, shift_headcount integer, shift_available_mins integer, has_workforce boolean, has_output boolean, data_completeness text, shift_efficiency_pct numeric, shift_productivity numeric, dhu numeric, defective_pct numeric)
  LANGUAGE sql
@@ -6567,9 +6058,7 @@ AS $function$SELECT
   FROM public.v_department_kpis_by_shift s
   WHERE s.factory_id = p_factory_id
     AND s.department_id = p_department_id
-    AND s.log_date BETWEEN p_date_from AND p_date_to;$function$
-;
-
+    AND s.log_date BETWEEN p_date_from AND p_date_to;$function$;
 CREATE OR REPLACE FUNCTION public.get_dept_quality_for_date(p_factory_id uuid, p_department_id uuid, p_log_date date)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, department_id uuid, operation_id uuid, resource_id uuid, log_date date, shift_id uuid, inspected integer, first_time_pass integer, rework_pass integer, total_pass integer, failed integer, dhu numeric, defective_pct numeric, ftr_pct numeric, top_defects jsonb)
  LANGUAGE sql
@@ -6585,9 +6074,7 @@ AS $function$
   WHERE q.factory_id = p_factory_id
     AND q.department_id = p_department_id
     AND q.log_date = p_log_date;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_factory_primary_fabric_component(p_factory_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -6600,9 +6087,7 @@ AS $function$
     AND fc.is_primary IS TRUE
   ORDER BY fc.created_at
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_factory_production_summary(p_factory_id uuid)
  RETURNS TABLE(order_id uuid, colorway_id uuid, department_id uuid, operation_id uuid, output_qty integer, log_date date)
  LANGUAGE sql
@@ -6762,9 +6247,7 @@ AS $function$
   SELECT order_id, colorway_id, department_id, operation_id, output_qty, log_date FROM shipment
   UNION ALL
   SELECT order_id, colorway_id, department_id, operation_id, output_qty, log_date FROM outsource;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_factory_schedule_actuals(p_factory_id uuid)
  RETURNS TABLE(line_allocation_id uuid, order_id uuid, colorway_id uuid, department_id uuid, operation_id uuid, qty integer, first_output_date date, last_output_date date)
  LANGUAGE sql
@@ -6772,9 +6255,7 @@ CREATE OR REPLACE FUNCTION public.get_factory_schedule_actuals(p_factory_id uuid
  SET search_path TO 'public'
 AS $function$
   SELECT * FROM public.get_line_allocation_actuals(p_factory_id, NULL::uuid, NULL::uuid);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_floor_bootstrap(p_factory_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -6910,9 +6391,7 @@ BEGIN
 
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_floor_users(p_factory_code text)
  RETURNS TABLE(id uuid, full_name text, user_role text, department_id uuid, handover_enabled boolean, workforce_enabled boolean, audit_enabled boolean, assigned_apps jsonb, assigned_operation_ids jsonb, can_log_workforce boolean)
  LANGUAGE sql
@@ -6937,9 +6416,7 @@ AS $function$
     AND p.user_role IN ('operator', 'supervisor', 'auditor', 'quality_manager')
     AND p.department_id IS NOT NULL
   ORDER BY p.full_name;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_handover_report(p_factory_id uuid, p_date_from date DEFAULT NULL::date, p_date_to date DEFAULT NULL::date, p_from_department_id uuid DEFAULT NULL::uuid, p_to_department_id uuid DEFAULT NULL::uuid, p_status text DEFAULT NULL::text, p_order_id uuid DEFAULT NULL::uuid, p_colorway_id uuid DEFAULT NULL::uuid, p_search text DEFAULT NULL::text)
  RETURNS TABLE(id uuid, order_id uuid, colorway_id uuid, from_department_id uuid, to_department_id uuid, sent_qty integer, received_qty integer, qty_by_size jsonb, received_qty_by_size jsonb, sent_at timestamp with time zone, received_at timestamp with time zone, status text, challan_number text, notes text, received_notes text, sent_by uuid, received_by uuid, style_name text, po_number text, colorway_name text, color_code text, from_department_name text, to_department_name text, sent_by_name text, received_by_name text, from_produce_operation_names text, to_produce_operation_names text, from_resource_name text, to_resource_name text, log_date date, shift_id uuid, shift_name text, hour_slot text, loss_closed_by uuid, loss_closed_by_name text, loss_closed_at timestamp with time zone, loss_remark text, loss_rejection_id uuid, missing_in_transit integer)
  LANGUAGE sql
@@ -7042,9 +6519,7 @@ AS $function$
     )
   ORDER BY hs.sent_at DESC
   LIMIT 2000;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_line_allocation_actuals(p_factory_id uuid, p_order_id uuid DEFAULT NULL::uuid, p_colorway_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(line_allocation_id uuid, order_id uuid, colorway_id uuid, department_id uuid, operation_id uuid, qty integer, first_output_date date, last_output_date date)
  LANGUAGE sql
@@ -7203,9 +6678,7 @@ AS $function$
   FROM captured
   GROUP BY line_allocation_id, order_id, colorway_id, department_id, operation_id
   ORDER BY order_id, line_allocation_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_my_profile()
  RETURNS jsonb
  LANGUAGE sql
@@ -7216,9 +6689,7 @@ AS $function$
   FROM public.profiles p
   WHERE p.id = auth.uid()
   LIMIT 1
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_order_colorway_actuals(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(line_allocation_id uuid, order_id uuid, colorway_id uuid, department_id uuid, operation_id uuid, qty integer, first_output_date date, last_output_date date)
  LANGUAGE sql
@@ -7226,9 +6697,7 @@ CREATE OR REPLACE FUNCTION public.get_order_colorway_actuals(p_factory_id uuid, 
  SET search_path TO 'public'
 AS $function$
   SELECT * FROM public.get_line_allocation_actuals(p_factory_id, p_order_id, p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_order_dept_progress(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_date date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -7408,9 +6877,7 @@ BEGIN
     'remaining_qty', v_remaining
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_order_detail_bundle(p_factory_id uuid, p_order_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -7867,9 +7334,7 @@ BEGIN
     'rejections', COALESCE(v_rejections, '[]'::jsonb)
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_order_operation_progress(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_operation_id uuid, p_date date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -8097,9 +7562,7 @@ BEGIN
     'remaining_qty', v_remaining
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_shift_for_hour_slot(p_factory_id uuid, p_hour_slot text)
  RETURNS uuid
  LANGUAGE sql
@@ -8116,9 +7579,7 @@ AS $function$
     )
   ORDER BY s.id
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_style_kpis(p_factory_id uuid, p_order_id uuid)
  RETURNS SETOF v_department_kpis_by_shift
  LANGUAGE sql
@@ -8129,9 +7590,7 @@ AS $function$
   FROM public.v_department_kpis_by_shift
   WHERE factory_id = p_factory_id AND order_id = p_order_id
   ORDER BY log_date, shift_name, department_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.get_today_rejections_for_order(p_factory_id uuid, p_order_id uuid, p_rejected_date date DEFAULT CURRENT_DATE)
  RETURNS jsonb
  LANGUAGE sql
@@ -8169,9 +7628,7 @@ AS $function$
       ) y
     ), '[]'::jsonb)
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.handover_exit_operation_id(p_order_id uuid, p_department_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -8184,9 +7641,7 @@ AS $function$
     AND ors.dept_id = p_department_id
     AND ors.is_dept_exit_operation = true
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.handover_short_qty_by_size(p_sent jsonb, p_received jsonb)
  RETURNS jsonb
  LANGUAGE sql
@@ -8216,9 +7671,7 @@ AS $function$
     ),
     '{}'::jsonb
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.hash_floor_pin(p_pin text)
  RETURNS text
  LANGUAGE sql
@@ -8226,9 +7679,7 @@ CREATE OR REPLACE FUNCTION public.hash_floor_pin(p_pin text)
  SET search_path TO 'public', 'extensions'
 AS $function$
   SELECT extensions.crypt(nullif(trim(p_pin), ''), extensions.gen_salt('bf'));
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.hourly_counts_apply_kpi()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -8251,9 +7702,7 @@ BEGIN
   NEW.produced_mins := ROUND(COALESCE(NEW.count, 0)::numeric * COALESCE(v_kpi.sam, 0), 2);
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.infer_hour_slot_for_timestamp(p_factory_id uuid, p_ts timestamp with time zone)
  RETURNS text
  LANGUAGE sql
@@ -8281,9 +7730,7 @@ AS $function$
     to_char(date_trunc('hour', p_ts), 'HH24:MI') || '-' ||
       to_char(date_trunc('hour', p_ts) + interval '1 hour', 'HH24:MI')
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.infer_shift_id_for_inspection(p_factory_id uuid, p_logged_at timestamp with time zone)
  RETURNS uuid
  LANGUAGE sql
@@ -8299,9 +7746,7 @@ AS $function$
     )
   ORDER BY s.id
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.inspection_sessions_apply_kpi()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -8340,9 +7785,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.inspection_time_in_active_slot(p_hours jsonb, p_t time without time zone)
  RETURNS boolean
  LANGUAGE sql
@@ -8361,9 +7804,7 @@ AS $function$
           AND (p_t >= (slot->>'start')::time OR p_t < (slot->>'end')::time))
       )
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.is_factory_admin()
  RETURNS boolean
  LANGUAGE sql
@@ -8379,9 +7820,7 @@ AS $function$
     (SELECT p.user_role IN ('admin', 'superadmin') FROM public.profiles p WHERE p.id = auth.uid() LIMIT 1),
     false
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.is_superadmin()
  RETURNS boolean
  LANGUAGE sql
@@ -8397,9 +7836,7 @@ AS $function$
     (SELECT p.user_role = 'superadmin' FROM public.profiles p WHERE p.id = auth.uid() LIMIT 1),
     false
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.jsonb_map_subtract_nonneg(p_minuend jsonb, p_subtrahend jsonb)
  RETURNS jsonb
  LANGUAGE sql
@@ -8416,9 +7853,7 @@ AS $function$
     SELECT DISTINCT key AS k
     FROM jsonb_object_keys(COALESCE(p_minuend, '{}'::jsonb) || COALESCE(p_subtrahend, '{}'::jsonb)) AS key
   ) keys;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.jsonb_merge_sum_maps(p_maps jsonb[])
  RETURNS jsonb
  LANGUAGE sql
@@ -8436,9 +7871,7 @@ AS $function$
     ),
     '{}'::jsonb
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.jsonb_subtract_maps_nonneg(p_a jsonb, p_b jsonb)
  RETURNS jsonb
  LANGUAGE sql
@@ -8462,9 +7895,7 @@ AS $function$
     ),
     '{}'::jsonb
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.jsonb_sum_int_values(p_obj jsonb)
  RETURNS integer
  LANGUAGE sql
@@ -8472,9 +7903,7 @@ CREATE OR REPLACE FUNCTION public.jsonb_sum_int_values(p_obj jsonb)
 AS $function$
   SELECT COALESCE(SUM((value)::integer), 0)
   FROM jsonb_each_text(COALESCE(p_obj, '{}'::jsonb));
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.jsonb_sum_merge(existing jsonb, incoming jsonb)
  RETURNS jsonb
  LANGUAGE sql
@@ -8493,9 +7922,7 @@ AS $function$
     FROM jsonb_each(existing)
     WHERE NOT incoming ? key
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.jsonb_sum_size_maps(p_maps jsonb[])
  RETURNS jsonb
  LANGUAGE sql
@@ -8514,9 +7941,7 @@ AS $function$
     ),
     '{}'::jsonb
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.log_outsource_work_movement(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_visit_id uuid, p_order_route_id uuid, p_vendor_resource_id uuid, p_line_allocation_id uuid, p_movement_type text, p_qty integer, p_qty_by_size jsonb DEFAULT '{}'::jsonb, p_linked_send_id uuid DEFAULT NULL::uuid, p_challan_number text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_occurred_at timestamp with time zone DEFAULT now(), p_idempotency_key text DEFAULT NULL::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -8651,9 +8076,7 @@ BEGIN
 
   RETURN v_new_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.log_outsource_work_movement(p_factory_id uuid, p_user_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_visit_id uuid, p_order_route_id uuid, p_vendor_resource_id uuid, p_line_allocation_id uuid, p_movement_type text, p_qty integer, p_qty_by_size jsonb DEFAULT '{}'::jsonb, p_linked_send_id uuid DEFAULT NULL::uuid, p_challan_number text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_occurred_at timestamp with time zone DEFAULT now(), p_idempotency_key text DEFAULT NULL::text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -8767,9 +8190,7 @@ BEGIN
 
   RETURN v_new_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.lookup_line_allocation_kpi(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_resource_id uuid, p_log_date date, p_operation_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(sam numeric, daily_target integer)
  LANGUAGE plpgsql
@@ -8827,9 +8248,7 @@ BEGIN
   daily_target := COALESCE(v_line_target, 0);
   RETURN NEXT;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.next_internal_order_no(p_factory_id uuid)
  RETURNS text
  LANGUAGE plpgsql
@@ -8845,18 +8264,14 @@ BEGIN
   WHERE factory_id = p_factory_id;
   RETURN lpad(v_next::text, 5, '0');
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.normalize_hour_slot_start(p_hour_slot text)
  RETURNS time without time zone
  LANGUAGE sql
  IMMUTABLE
 AS $function$
   SELECT split_part(trim(p_hour_slot), '-', 1)::time;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.odt_log_history()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -8888,9 +8303,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.odt_set_total_qty()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -8913,9 +8326,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.operation_progress_rows(p_factory_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, operation_id uuid, visit_id uuid, dept_id uuid, dept_name text, capture_app text, step_type text, dept_role text, is_primary_output boolean, route_seq integer, qty_produced integer, qty_produced_by_size jsonb)
  LANGUAGE sql
@@ -9071,9 +8482,7 @@ AS $function$
     LEFT JOIN shipment_prod sp ON sp.factory_id = g.factory_id AND sp.order_id = g.order_id AND sp.colorway_id IS NOT DISTINCT FROM g.resolved_colorway_id AND sp.operation_id = g.operation_id
   ) prod ON true
   ORDER BY g.route_seq;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.order_dept_progress_rows(p_factory_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, visit_id uuid, dept_id uuid, dept_name text, flow_step integer, is_in_flow boolean, qty_received integer, qty_produced integer, qty_sent integer, qty_rejected integer, wip_qty integer, wip_qty_by_size jsonb, qty_received_by_size jsonb, qty_produced_by_size jsonb, qty_sent_by_size jsonb, qty_rejected_by_size jsonb, qty_in_transit integer, qty_missing_in_transit integer, status text, planned_qty integer, remaining_qty integer, available_to_send integer)
  LANGUAGE sql
@@ -9234,9 +8643,7 @@ AS $function$
   LEFT JOIN planned p ON p.factory_id = v.factory_id AND p.order_id = v.order_id
     AND p.colorway_id IS NOT DISTINCT FROM v.colorway_id AND p.visit_id = v.visit_id
   ORDER BY v.flow_step, v.colorway_id NULLS FIRST, v.dept_name;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.order_journey_by_resource_rows(p_factory_id uuid DEFAULT NULL::uuid, p_order_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, colorway_id uuid, visit_id uuid, department_id uuid, department_name text, resource_allocation_id uuid, resource_id uuid, resource_name text, resource_type text, operation_id uuid, operation_name text, resource_visit_status text, qty_received integer, qty_produced integer, produced_mins numeric, qty_sent integer, vendor_resource_id uuid, vendor_name text, vendor_sent_qty integer, vendor_received_qty integer, vendor_balance_qty integer, fabric_component_breakdown jsonb, sent_qty_by_resource jsonb, loading_operation_id uuid, loading_operation_name text, loading_qty_produced integer, loading_qty_produced_by_size jsonb)
  LANGUAGE sql
@@ -9345,9 +8752,7 @@ AS $function$
   LEFT JOIN loading_info li ON li.order_id = la.order_id AND li.visit_id = la.visit_id
   WHERE (p_factory_id IS NULL OR la.factory_id = p_factory_id)
     AND (p_order_id IS NULL OR la.order_id = p_order_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_movement_size_sum(p_qty_by_size jsonb)
  RETURNS integer
  LANGUAGE sql
@@ -9358,9 +8763,7 @@ AS $function$
     FROM jsonb_each_text(COALESCE(p_qty_by_size, '{}'::jsonb))
     WHERE (value)::integer > 0
   ), 0)::integer;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_send_returned_qty(p_send_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9372,9 +8775,7 @@ AS $function$
   WHERE owm.linked_send_id = p_send_id
     AND owm.movement_type = 'vendor_receive'
     AND owm.voided_at IS NULL;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_vendor_movement_net(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_visit_id uuid, p_vendor_resource_id uuid, p_movement_type text)
  RETURNS integer
  LANGUAGE sql
@@ -9390,9 +8791,7 @@ AS $function$
     AND owm.movement_type = p_movement_type
     AND owm.voided_at IS NULL
     AND (p_colorway_id IS NULL OR owm.colorway_id IS NOT DISTINCT FROM p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_visit_at_vendor_qty(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_visit_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9412,9 +8811,7 @@ AS $function$
     AND owm.visit_id = p_visit_id
     AND owm.voided_at IS NULL
     AND (p_colorway_id IS NULL OR owm.colorway_id IS NOT DISTINCT FROM p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_visit_available_for_handover_send(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_visit_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9430,9 +8827,7 @@ AS $function$
     ),
     0
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_visit_available_for_vendor_send(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_visit_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9451,9 +8846,7 @@ AS $function$
     ),
     0
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_visit_handover_received_qty(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_visit_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9469,9 +8862,7 @@ AS $function$
     AND hs.status IN ('received', 'disputed', 'received_disputed')
     AND hs.received_qty IS NOT NULL
     AND (p_colorway_id IS NULL OR hs.colorway_id IS NOT DISTINCT FROM p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_visit_handover_sent_qty(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_department_id uuid, p_visit_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9485,9 +8876,7 @@ AS $function$
     AND hs.from_department_id = p_department_id
     AND hs.from_visit_id = p_visit_id
     AND (p_colorway_id IS NULL OR hs.colorway_id IS NOT DISTINCT FROM p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_visit_returned_qty(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid, p_visit_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -9502,9 +8891,7 @@ AS $function$
     AND owm.movement_type = 'vendor_receive'
     AND owm.voided_at IS NULL
     AND (p_colorway_id IS NULL OR owm.colorway_id IS NOT DISTINCT FROM p_colorway_id);
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.outsource_work_movements_fill_allocation()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -9536,9 +8923,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.profile_dept_can_capture_cutting(p_user_id uuid, p_factory_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -9561,9 +8946,7 @@ AS $function$
       AND op.is_active IS NOT FALSE
       AND op.capture_app IN ('cutting_lay', 'lay_report')
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.profile_dept_has_app(p_user_id uuid, p_factory_id uuid, p_app text)
  RETURNS boolean
  LANGUAGE sql
@@ -9648,9 +9031,7 @@ AS $function$
         )
       )
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.profile_floor_flags_for_assignment(p_department_id uuid, p_operation_ids uuid[], p_handover_enabled boolean, p_workforce_enabled boolean, p_audit_enabled boolean, p_shipment_qa_enabled boolean)
  RETURNS TABLE(can_produce boolean, handover_enabled boolean, workforce_enabled boolean, audit_enabled boolean, shipment_qa_enabled boolean)
  LANGUAGE plpgsql
@@ -9706,9 +9087,7 @@ BEGIN
 
   RETURN QUERY SELECT false, false, false, false, false;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.profile_has_capture_app(p_user_id uuid, p_factory_id uuid, p_app text)
  RETURNS boolean
  LANGUAGE sql
@@ -9740,9 +9119,7 @@ AS $function$
     ELSE
       public.profile_dept_has_app(p_user_id, p_factory_id, p_app)
   END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.proportional_qty_by_size(p_total integer, p_planned jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -9779,9 +9156,7 @@ BEGIN
   END IF;
   RETURN v_result;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.rejection_audit_label_to_stage(p_label text)
  RETURNS text
  LANGUAGE sql
@@ -9796,9 +9171,7 @@ AS $function$
     WHEN 'end line' THEN 'end_line'
     ELSE lower(regexp_replace(trim(p_label), '\s+', '_', 'g'))
   END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.replace_floor_user_access(p_profile_id uuid, p_department_id uuid, p_handover_enabled boolean, p_workforce_enabled boolean, p_audit_enabled boolean, p_operation_ids uuid[] DEFAULT '{}'::uuid[], p_shipment_qa_enabled boolean DEFAULT false)
  RETURNS void
  LANGUAGE plpgsql
@@ -9912,9 +9285,7 @@ BEGIN
     END LOOP;
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_capture_line_allocation_id(p_existing uuid, p_order_id uuid, p_colorway_id uuid, p_resource_id uuid, p_route_step_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -9930,9 +9301,7 @@ AS $function$
       )
     END
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_capture_order_route_id(p_factory_id uuid, p_order_id uuid, p_department_id uuid, p_order_route_id uuid, p_line_allocation_id uuid, p_prefer_capture_apps text[] DEFAULT ARRAY['hourly'::text])
  RETURNS uuid
  LANGUAGE sql
@@ -9989,9 +9358,7 @@ AS $function$
       LIMIT 1
     )
   );
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_fabric_component_id(p_factory_id uuid, p_fabric_type text)
  RETURNS uuid
  LANGUAGE sql
@@ -10004,9 +9371,7 @@ AS $function$
     AND lower(btrim(fc.fabric_type)) = lower(btrim(COALESCE(p_fabric_type, '')))
   ORDER BY fc.updated_at DESC NULLS LAST
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_line_allocation_for_route(p_order_id uuid, p_colorway_id uuid, p_route_step_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -10021,9 +9386,7 @@ AS $function$
     AND la.colorway_id IS NOT DISTINCT FROM p_colorway_id
   ORDER BY la.line_id NULLS LAST, la.created_at DESC
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_line_allocation_id(p_order_id uuid, p_colorway_id uuid, p_resource_id uuid, p_route_step_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -10046,9 +9409,7 @@ AS $function$
     CASE WHEN la.line_id IS NULL THEN 2 ELSE 0 END,
     la.created_at DESC NULLS LAST
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_order_route_context(p_factory_id uuid, p_order_route_id uuid)
  RETURNS TABLE(order_route_id uuid, order_id uuid, department_id uuid, dept_name text, step_label text, capture_app text, operation_def_id uuid, visit_id uuid, route_seq integer)
  LANGUAGE sql
@@ -10086,9 +9447,7 @@ AS $function$
    AND d.factory_id = r.factory_id
   WHERE r.factory_id = p_factory_id
     AND r.id = p_order_route_id;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_outsource_line_allocation_id(p_order_id uuid, p_visit_id uuid, p_colorway_id uuid, p_vendor_resource_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -10109,9 +9468,7 @@ AS $function$
     END,
     la.created_at
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.resolve_rejection_department_id(p_factory_id uuid, p_order_id uuid, p_stage text)
  RETURNS uuid
  LANGUAGE sql
@@ -10136,9 +9493,7 @@ AS $function$
       ORDER BY ors.seq DESC LIMIT 1
     )
   END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_buyer(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_code text DEFAULT NULL::text, p_country text DEFAULT NULL::text, p_type text DEFAULT NULL::text, p_status text DEFAULT NULL::text, p_contact_name text DEFAULT NULL::text, p_contact_email text DEFAULT NULL::text, p_contact_phone text DEFAULT NULL::text, p_contact_role text DEFAULT NULL::text, p_over_shipment_pct numeric DEFAULT NULL::numeric, p_under_shipment_pct numeric DEFAULT NULL::numeric, p_packing_rule text DEFAULT NULL::text, p_ship_mode text DEFAULT NULL::text, p_destination text DEFAULT NULL::text, p_currency text DEFAULT NULL::text, p_ship_mode_options jsonb DEFAULT NULL::jsonb, p_shipment_type_options jsonb DEFAULT NULL::jsonb, p_destination_countries jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, code text, country text, type text, status text, contact_name text, contact_email text, contact_role text, over_shipment_pct numeric, under_shipment_pct numeric, packing_rule text, created_at timestamp with time zone, updated_at timestamp with time zone, ship_mode text, destination text, currency text, ship_mode_options jsonb, shipment_type_options jsonb, contact_phone text, destination_countries text[])
  LANGUAGE plpgsql
@@ -10221,9 +9576,7 @@ BEGIN
 
   RETURN QUERY SELECT b.* FROM public.buyers b WHERE b.id = v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_department(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_department jsonb DEFAULT '{}'::jsonb, p_defects jsonb DEFAULT NULL::jsonb, p_workforce_rates jsonb DEFAULT NULL::jsonb, p_operations jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, role text, is_native boolean, sequence integer, planning_mode text, transaction_enabled boolean, supervisor_enabled boolean, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -10421,9 +9774,7 @@ BEGIN
            d.created_at, d.updated_at
     FROM public.departments d WHERE d.id = v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_line_plan(p_factory_id uuid, p_order_id uuid, p_colorway_plans jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -10592,9 +9943,7 @@ BEGIN
       AND (cardinality(v_keep_ids) = 0 OR NOT (id = ANY (v_keep_ids)));
   END LOOP;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_order_routing(p_factory_id uuid, p_order_id uuid, p_steps jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -10779,9 +10128,7 @@ BEGIN
     AND order_id = p_order_id
     AND (cardinality(v_keep) = 0 OR NOT (id = ANY (v_keep)));
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_process_flow(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_old_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_description text DEFAULT NULL::text, p_steps jsonb DEFAULT NULL::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, description text, steps jsonb, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -10856,9 +10203,7 @@ BEGIN
 
   RETURN QUERY SELECT pf.* FROM public.process_flows pf WHERE pf.id = v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_resource(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_department_id uuid DEFAULT NULL::uuid, p_resource_name text DEFAULT NULL::text, p_resource_type text DEFAULT NULL::text, p_capacity integer DEFAULT NULL::integer, p_status text DEFAULT NULL::text, p_description text DEFAULT NULL::text)
  RETURNS TABLE(id uuid, factory_id uuid, department_id uuid, resource_name text, resource_type text, capacity integer, status text, description text, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -10935,9 +10280,7 @@ BEGIN
            ar.capacity, ar.status, ar.description, ar.created_at, ar.updated_at
     FROM public.assigned_resources ar WHERE ar.id = v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_shift(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_type text DEFAULT 'Regular'::text, p_start_time time without time zone DEFAULT NULL::time without time zone, p_end_time time without time zone DEFAULT NULL::time without time zone, p_break_start time without time zone DEFAULT NULL::time without time zone, p_break_end time without time zone DEFAULT NULL::time without time zone, p_hours jsonb DEFAULT '[]'::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, name text, type text, start_time time without time zone, end_time time without time zone, break_start time without time zone, break_end time without time zone, hours jsonb, created_at timestamp with time zone, updated_at timestamp with time zone, productive_mins numeric)
  LANGUAGE plpgsql
@@ -11068,9 +10411,7 @@ BEGIN
 
   RETURN QUERY SELECT s.* FROM public.shifts s WHERE s.id = v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_size_group(p_action text, p_factory_id uuid, p_id uuid DEFAULT NULL::uuid, p_name text DEFAULT NULL::text, p_buyer_id uuid DEFAULT NULL::uuid, p_sizes jsonb DEFAULT '[]'::jsonb)
  RETURNS TABLE(id uuid, factory_id uuid, buyer_id uuid, name text, sizes jsonb, created_at timestamp with time zone, updated_at timestamp with time zone)
  LANGUAGE plpgsql
@@ -11119,9 +10460,7 @@ BEGIN
 
   RETURN QUERY SELECT sg.* FROM public.size_groups sg WHERE sg.id = v_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.save_style_order(p_factory_id uuid, p_order jsonb, p_colorways jsonb DEFAULT '[]'::jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -11362,9 +10701,7 @@ BEGIN
 
   RETURN v_order_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.seed_department_defects()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11380,9 +10717,7 @@ BEGIN
   ON CONFLICT (factory_id, department_id) DO NOTHING;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.seed_factory_app_configuration(p_factory_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -11397,9 +10732,7 @@ BEGIN
     (p_factory_id, 'outsource', '[]'::jsonb)
   ON CONFLICT (factory_id, step_type) DO NOTHING;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.seed_factory_native_departments(p_factory_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -11492,9 +10825,7 @@ BEGIN
     );
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.set_defects_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11503,17 +10834,13 @@ BEGIN
   NEW.updated_at := now();
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.shift_productive_mins_from_hours(p_hours jsonb)
  RETURNS numeric
  LANGUAGE sql
@@ -11533,9 +10860,7 @@ AS $function$
     END
   ), 0)
   FROM jsonb_array_elements(COALESCE(p_hours, '[]'::jsonb)) AS slot;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.standard_production_alloc_grid(p_factory_id uuid, p_order_id uuid)
  RETURNS TABLE(factory_id uuid, order_id uuid, operation_id uuid, visit_id uuid, department_id uuid, dept_name text, capture_app text, step_type text, dept_role text, planning_mode text, is_primary_output boolean, line_allocation_id uuid, colorway_id uuid)
  LANGUAGE sql
@@ -11579,9 +10904,7 @@ AS $function$
     AND ors.visit_id IS NOT NULL
     AND COALESCE(d.role, 'standard') = 'standard'
     AND COALESCE(d.planning_mode, 'production') IN ('production', 'outsource');
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.sync_colorway_ready_to_ship(p_order_id uuid, p_colorway_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -11693,9 +11016,7 @@ BEGIN
     WHERE id = p_colorway_id;
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.sync_colorway_ready_to_ship_rpc(p_factory_id uuid, p_order_id uuid, p_colorway_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -11720,9 +11041,7 @@ BEGIN
 
   RETURN jsonb_build_object('status', COALESCE(v_status, 'active'));
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.sync_profile_to_auth_metadata()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11739,9 +11058,7 @@ BEGIN
   WHERE id = NEW.id;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.terminal_route_operation_id(p_order_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -11757,9 +11074,7 @@ AS $function$
     CASE WHEN COALESCE(ors.is_primary_output, false) THEN 0 ELSE 1 END,
     ors.seq DESC
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.time_in_shift_bounds(p_t time without time zone, p_start time without time zone, p_end time without time zone)
  RETURNS boolean
  LANGUAGE sql
@@ -11771,9 +11086,7 @@ AS $function$
     WHEN p_start <= p_end THEN p_t >= p_start AND p_t < p_end
     ELSE p_t >= p_start OR p_t < p_end
   END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.trg_assigned_resources_validate()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11783,9 +11096,7 @@ BEGIN
   PERFORM public.validate_assigned_resource_for_department(NEW.department_id, NEW.resource_type);
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.trg_sync_colorway_ready_after_handover()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11798,9 +11109,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.trg_sync_colorway_ready_generic()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11818,9 +11127,7 @@ BEGIN
   END IF;
   RETURN COALESCE(NEW, OLD);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.update_order_routing_steps_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -11829,9 +11136,7 @@ BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.validate_assigned_resource_for_department(p_department_id uuid, p_resource_type text)
  RETURNS void
  LANGUAGE plpgsql
@@ -11865,9 +11170,7 @@ BEGIN
     RAISE EXCEPTION 'Production work centers require resource_type = inhouse';
   END IF;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.verify_floor_login_by_email(p_email text, p_pin text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -11892,9 +11195,7 @@ BEGIN
   RETURN public.verify_floor_pin(v_profile.id, trim(p_pin))
          || jsonb_build_object('email', v_profile.email);
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.verify_floor_pin(p_user_id uuid, p_pin text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -11931,9 +11232,7 @@ BEGIN
     'factory_id', v_profile.factory_id
   );
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.visit_primary_route_step_id(p_order_id uuid, p_visit_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -11950,9 +11249,7 @@ AS $function$
     ors.seq DESC,
     ors.id
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.visit_route_step_id(p_order_id uuid, p_visit_id uuid, p_step_type text DEFAULT 'produce'::text)
  RETURNS uuid
  LANGUAGE sql
@@ -11968,9 +11265,7 @@ AS $function$
     CASE WHEN COALESCE(ors.is_primary_output, false) THEN 0 ELSE 1 END,
     ors.seq DESC
   LIMIT 1;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.void_outsource_work_movement(p_movement_id uuid, p_reason text DEFAULT NULL::text)
  RETURNS void
  LANGUAGE plpgsql
@@ -12023,18 +11318,14 @@ BEGIN
   SET voided_at = now(), voided_by = v_user_id, void_reason = NULLIF(trim(p_reason), '')
   WHERE id = p_movement_id;
 END;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.workforce_log_total_headcount(p_headcount jsonb DEFAULT '{}'::jsonb)
  RETURNS integer
  LANGUAGE sql
  IMMUTABLE
 AS $function$
   SELECT COALESCE(public.jsonb_sum_int_values(COALESCE(p_headcount, '{}'::jsonb)), 0)::integer;
-$function$
-;
-
+$function$;
 CREATE OR REPLACE FUNCTION public.workforce_logs_fill_from_allocation()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -12066,9 +11357,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
-;
-
+$function$;
 -- Deferred column defaults (depend on functions above)
 ALTER TABLE ONLY public.batch_production ALTER COLUMN worker_count SET DEFAULT jsonb_sum_int_values(headcount_by_category);
 ALTER TABLE ONLY public.batch_production ALTER COLUMN duration_mins SET DEFAULT round((EXTRACT(epoch FROM (end_time - start_time)) / 60.0), 2);
@@ -12097,7 +11386,6 @@ ALTER TABLE ONLY public.profiles ALTER COLUMN handover_enabled SET DEFAULT false
 ALTER TABLE ONLY public.profiles ALTER COLUMN workforce_enabled SET DEFAULT false;
 ALTER TABLE ONLY public.profiles ALTER COLUMN audit_enabled SET DEFAULT false;
 ALTER TABLE ONLY public.profiles ALTER COLUMN shipment_qa_enabled SET DEFAULT false;
-
 -- Views
 CREATE OR REPLACE VIEW public.v_cut_to_ship_summary AS
  WITH cut AS (
@@ -12134,8 +11422,7 @@ CREATE OR REPLACE VIEW public.v_cut_to_ship_summary AS
     GREATEST(COALESCE(c.qty_cut, 0) - COALESCE(s.qty_shipped, 0) - COALESCE(r.qty_rejected, 0), 0) AS qty_balance
    FROM cut c
      FULL JOIN shipped s ON s.factory_id = c.factory_id AND s.order_id = c.order_id AND NOT s.colorway_id IS DISTINCT FROM c.colorway_id
-     FULL JOIN rejected r ON r.factory_id = COALESCE(c.factory_id, s.factory_id) AND r.order_id = COALESCE(c.order_id, s.order_id) AND NOT r.colorway_id IS DISTINCT FROM COALESCE(c.colorway_id, s.colorway_id);;
-
+     FULL JOIN rejected r ON r.factory_id = COALESCE(c.factory_id, s.factory_id) AND r.order_id = COALESCE(c.order_id, s.order_id) AND NOT r.colorway_id IS DISTINCT FROM COALESCE(c.colorway_id, s.colorway_id);
 CREATE OR REPLACE VIEW public.v_cutting_component_progress AS
  SELECT factory_id,
     order_id,
@@ -12148,8 +11435,7 @@ CREATE OR REPLACE VIEW public.v_cutting_component_progress AS
     is_primary,
     qty,
     qty_by_size
-   FROM cutting_component_progress_rows(NULL::uuid, NULL::uuid) cutting_component_progress_rows(factory_id, order_id, colorway_id, operation_id, visit_id, fabric_component_id, fabric_code, fabric_type, is_primary, qty, qty_by_size);;
-
+   FROM cutting_component_progress_rows(NULL::uuid, NULL::uuid) cutting_component_progress_rows(factory_id, order_id, colorway_id, operation_id, visit_id, fabric_component_id, fabric_code, fabric_type, is_primary, qty, qty_by_size);
 CREATE OR REPLACE VIEW public.v_daily_audit AS
  SELECT a.factory_id,
     a.order_id,
@@ -12200,8 +11486,7 @@ CREATE OR REPLACE VIEW public.v_daily_audit AS
      LEFT JOIN assigned_resources ar ON ar.id = a.resource_id
      LEFT JOIN v_shift_minutes sm ON sm.shift_id = a.shift_id
   WHERE a.status = 'completed'::text
-  GROUP BY a.factory_id, a.order_id, a.colorway_id, a.department_id, d.name, a.line_allocation_id, a.resource_id, ar.resource_name, a.order_route_id, ors.operation_name, ors.step_type, a.shift_id, sm.shift_name, (COALESCE(a.completed_at, a.logged_at)::date);;
-
+  GROUP BY a.factory_id, a.order_id, a.colorway_id, a.department_id, d.name, a.line_allocation_id, a.resource_id, ar.resource_name, a.order_route_id, ors.operation_name, ors.step_type, a.shift_id, sm.shift_name, (COALESCE(a.completed_at, a.logged_at)::date);
 CREATE OR REPLACE VIEW public.v_daily_production AS
  WITH hourly AS (
          SELECT h.factory_id,
@@ -12404,8 +11689,7 @@ UNION ALL
     cutting.fabric_component_id,
     cutting.qty,
     cutting.produced_mins
-   FROM cutting;;
-
+   FROM cutting;
 CREATE OR REPLACE VIEW public.v_daily_quality AS
  WITH session_rows AS (
          SELECT s.factory_id,
@@ -12487,8 +11771,7 @@ CREATE OR REPLACE VIEW public.v_daily_quality AS
      LEFT JOIN order_routing_steps ors ON ors.id = a.operation_id
      LEFT JOIN departments d ON d.id = a.department_id
      LEFT JOIN assigned_resources ar ON ar.id = a.resource_id
-     LEFT JOIN v_shift_minutes sm ON sm.shift_id = a.shift_id;;
-
+     LEFT JOIN v_shift_minutes sm ON sm.shift_id = a.shift_id;
 CREATE OR REPLACE VIEW public.v_daily_target AS
  WITH alloc_rows AS (
          SELECT la.factory_id,
@@ -12512,8 +11795,7 @@ CREATE OR REPLACE VIEW public.v_daily_target AS
     sum(alloc_rows.effective_target)::integer AS daily_target
    FROM alloc_rows
      CROSS JOIN LATERAL ( SELECT generate_series(alloc_rows.start_date::timestamp with time zone, alloc_rows.end_date::timestamp with time zone, '1 day'::interval)::date AS log_date) d
-  GROUP BY alloc_rows.factory_id, alloc_rows.order_id, alloc_rows.colorway_id, alloc_rows.department_id, alloc_rows.operation_id, d.log_date;;
-
+  GROUP BY alloc_rows.factory_id, alloc_rows.order_id, alloc_rows.colorway_id, alloc_rows.department_id, alloc_rows.operation_id, d.log_date;
 CREATE OR REPLACE VIEW public.v_day_floor_board AS
  WITH produced AS (
          SELECT v_daily_production.factory_id,
@@ -12584,8 +11866,7 @@ CREATE OR REPLACE VIEW public.v_day_floor_board AS
    FROM keys k
      LEFT JOIN produced p ON p.factory_id = k.factory_id AND p.department_id = k.department_id AND p.order_id = k.order_id AND NOT p.colorway_id IS DISTINCT FROM k.colorway_id AND p.log_date = k.log_date
      LEFT JOIN sent s ON s.factory_id = k.factory_id AND s.department_id = k.department_id AND s.order_id = k.order_id AND NOT s.colorway_id IS DISTINCT FROM k.colorway_id AND s.log_date = k.log_date
-     LEFT JOIN received r ON r.factory_id = k.factory_id AND r.department_id = k.department_id AND r.order_id = k.order_id AND NOT r.colorway_id IS DISTINCT FROM k.colorway_id AND r.log_date = k.log_date;;
-
+     LEFT JOIN received r ON r.factory_id = k.factory_id AND r.department_id = k.department_id AND r.order_id = k.order_id AND NOT r.colorway_id IS DISTINCT FROM k.colorway_id AND r.log_date = k.log_date;
 CREATE OR REPLACE VIEW public.v_department_kpis_by_shift AS
  WITH output_by_key AS (
          SELECT v_daily_production.factory_id,
@@ -12666,8 +11947,7 @@ CREATE OR REPLACE VIEW public.v_department_kpis_by_shift AS
             v_daily_target.log_date,
             sum(v_daily_target.daily_target)::integer AS daily_target
            FROM v_daily_target
-          GROUP BY v_daily_target.factory_id, v_daily_target.order_id, v_daily_target.department_id, v_daily_target.operation_id, v_daily_target.log_date) dt ON dt.factory_id = m.factory_id AND dt.order_id = m.order_id AND dt.department_id = m.department_id AND NOT dt.operation_id IS DISTINCT FROM m.operation_id AND dt.log_date = m.log_date;;
-
+          GROUP BY v_daily_target.factory_id, v_daily_target.order_id, v_daily_target.department_id, v_daily_target.operation_id, v_daily_target.log_date) dt ON dt.factory_id = m.factory_id AND dt.order_id = m.order_id AND dt.department_id = m.department_id AND NOT dt.operation_id IS DISTINCT FROM m.operation_id AND dt.log_date = m.log_date;
 CREATE OR REPLACE VIEW public.v_department_progress AS
  SELECT factory_id,
     order_id,
@@ -12691,8 +11971,7 @@ CREATE OR REPLACE VIEW public.v_department_progress AS
     planned_qty,
     remaining_qty,
     available_to_send
-   FROM order_dept_progress_rows(NULL::uuid, NULL::uuid) order_dept_progress_rows(factory_id, order_id, colorway_id, visit_id, dept_id, dept_name, flow_step, is_in_flow, qty_received, qty_produced, qty_sent, qty_rejected, wip_qty, wip_qty_by_size, qty_received_by_size, qty_produced_by_size, qty_sent_by_size, qty_rejected_by_size, qty_in_transit, qty_missing_in_transit, status, planned_qty, remaining_qty, available_to_send);;
-
+   FROM order_dept_progress_rows(NULL::uuid, NULL::uuid) order_dept_progress_rows(factory_id, order_id, colorway_id, visit_id, dept_id, dept_name, flow_step, is_in_flow, qty_received, qty_produced, qty_sent, qty_rejected, wip_qty, wip_qty_by_size, qty_received_by_size, qty_produced_by_size, qty_sent_by_size, qty_rejected_by_size, qty_in_transit, qty_missing_in_transit, status, planned_qty, remaining_qty, available_to_send);
 CREATE OR REPLACE VIEW public.v_operation_progress AS
  SELECT factory_id,
     order_id,
@@ -12708,8 +11987,7 @@ CREATE OR REPLACE VIEW public.v_operation_progress AS
     route_seq,
     qty_produced,
     qty_produced_by_size
-   FROM operation_progress_rows(NULL::uuid, NULL::uuid) operation_progress_rows(factory_id, order_id, colorway_id, operation_id, visit_id, dept_id, dept_name, capture_app, step_type, dept_role, is_primary_output, route_seq, qty_produced, qty_produced_by_size);;
-
+   FROM operation_progress_rows(NULL::uuid, NULL::uuid) operation_progress_rows(factory_id, order_id, colorway_id, operation_id, visit_id, dept_id, dept_name, capture_app, step_type, dept_role, is_primary_output, route_seq, qty_produced, qty_produced_by_size);
 CREATE OR REPLACE VIEW public.v_order_journey_by_resource AS
  SELECT factory_id,
     order_id,
@@ -12739,8 +12017,7 @@ CREATE OR REPLACE VIEW public.v_order_journey_by_resource AS
     loading_operation_name,
     loading_qty_produced,
     loading_qty_produced_by_size
-   FROM order_journey_by_resource_rows(NULL::uuid, NULL::uuid) order_journey_by_resource_rows(factory_id, order_id, colorway_id, visit_id, department_id, department_name, resource_allocation_id, resource_id, resource_name, resource_type, operation_id, operation_name, resource_visit_status, qty_received, qty_produced, produced_mins, qty_sent, vendor_resource_id, vendor_name, vendor_sent_qty, vendor_received_qty, vendor_balance_qty, fabric_component_breakdown, sent_qty_by_resource, loading_operation_id, loading_operation_name, loading_qty_produced, loading_qty_produced_by_size);;
-
+   FROM order_journey_by_resource_rows(NULL::uuid, NULL::uuid) order_journey_by_resource_rows(factory_id, order_id, colorway_id, visit_id, department_id, department_name, resource_allocation_id, resource_id, resource_name, resource_type, operation_id, operation_name, resource_visit_status, qty_received, qty_produced, produced_mins, qty_sent, vendor_resource_id, vendor_name, vendor_sent_qty, vendor_received_qty, vendor_balance_qty, fabric_component_breakdown, sent_qty_by_resource, loading_operation_id, loading_operation_name, loading_qty_produced, loading_qty_produced_by_size);
 CREATE OR REPLACE VIEW public.v_order_rejected_qty_by_size AS
  SELECT factory_id,
     order_id,
@@ -12749,8 +12026,7 @@ CREATE OR REPLACE VIEW public.v_order_rejected_qty_by_size AS
     sum(qty)::integer AS rejected_qty,
     order_route_id AS operation_id
    FROM rejections r
-  GROUP BY factory_id, order_id, colorway_id, (COALESCE(size, 'UNSPEC'::text)), order_route_id;;
-
+  GROUP BY factory_id, order_id, colorway_id, (COALESCE(size, 'UNSPEC'::text)), order_route_id;
 CREATE OR REPLACE VIEW public.v_outsource_summary AS
  SELECT owm.factory_id,
     owm.order_id,
@@ -12774,16 +12050,14 @@ CREATE OR REPLACE VIEW public.v_outsource_summary AS
      LEFT JOIN assigned_resources ar ON ar.id = owm.vendor_resource_id
      LEFT JOIN line_allocations la ON la.id = owm.line_allocation_id
   WHERE owm.voided_at IS NULL
-  GROUP BY owm.factory_id, owm.order_id, owm.colorway_id, owm.department_id, d.name, owm.line_allocation_id, owm.vendor_resource_id, ar.resource_name, owm.order_route_id, ors.operation_name, ors.step_type, owm.visit_id, la.qty;;
-
+  GROUP BY owm.factory_id, owm.order_id, owm.colorway_id, owm.department_id, d.name, owm.line_allocation_id, owm.vendor_resource_id, ar.resource_name, owm.order_route_id, ors.operation_name, ors.step_type, owm.visit_id, la.qty;
 CREATE OR REPLACE VIEW public.v_shift_minutes AS
  SELECT id AS shift_id,
     factory_id,
     name AS shift_name,
     type AS shift_type,
     productive_mins
-   FROM shifts s;;
-
+   FROM shifts s;
 CREATE OR REPLACE VIEW public.v_shift_workforce_summary AS
  WITH line_based AS (
          SELECT wl.factory_id,
@@ -12890,443 +12164,319 @@ UNION ALL
     cutting_based.capture_source,
     cutting_based.headcount,
     cutting_based.available_mins
-   FROM cutting_based;;
-
+   FROM cutting_based;
 -- RLS policies
 -- policy app_configuration_all on app_configuration (ALL)
 CREATE POLICY "app_configuration_all" ON public.app_configuration
   FOR ALL TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy assigned_resources_delete on assigned_resources (DELETE)
 CREATE POLICY "assigned_resources_delete" ON public.assigned_resources
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy assigned_resources_insert on assigned_resources (INSERT)
 CREATE POLICY "assigned_resources_insert" ON public.assigned_resources
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy assigned_resources_select on assigned_resources (SELECT)
 CREATE POLICY "assigned_resources_select" ON public.assigned_resources
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy assigned_resources_update on assigned_resources (UPDATE)
 CREATE POLICY "assigned_resources_update" ON public.assigned_resources
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy audit_sessions_factory_read on audit_sessions (SELECT)
 CREATE POLICY "audit_sessions_factory_read" ON public.audit_sessions
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy audit_sessions_factory_write on audit_sessions (ALL)
 CREATE POLICY "audit_sessions_factory_write" ON public.audit_sessions
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy batch_production_all on batch_production (ALL)
 CREATE POLICY "batch_production_all" ON public.batch_production
   FOR ALL TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy batch_production_factory_read on batch_production (SELECT)
 CREATE POLICY "batch_production_factory_read" ON public.batch_production
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy batch_production_factory_write on batch_production (ALL)
 CREATE POLICY "batch_production_factory_write" ON public.batch_production
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy buyers_delete on buyers (DELETE)
 CREATE POLICY "buyers_delete" ON public.buyers
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy buyers_insert on buyers (INSERT)
 CREATE POLICY "buyers_insert" ON public.buyers
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy buyers_select on buyers (SELECT)
 CREATE POLICY "buyers_select" ON public.buyers
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy buyers_update on buyers (UPDATE)
 CREATE POLICY "buyers_update" ON public.buyers
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy colorways_delete on colorways (DELETE)
 CREATE POLICY "colorways_delete" ON public.colorways
   FOR DELETE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy colorways_insert on colorways (INSERT)
 CREATE POLICY "colorways_insert" ON public.colorways
   FOR INSERT TO authenticated WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy colorways_select on colorways (SELECT)
 CREATE POLICY "colorways_select" ON public.colorways
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy colorways_update on colorways (UPDATE)
 CREATE POLICY "colorways_update" ON public.colorways
   FOR UPDATE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy control_panel_audit_logs_read on control_panel_audit_logs (SELECT)
 CREATE POLICY "control_panel_audit_logs_read" ON public.control_panel_audit_logs
   FOR SELECT TO authenticated USING (is_superadmin());
-
 -- policy cutting_bundles_factory on cutting_bundles (ALL)
 CREATE POLICY "cutting_bundles_factory" ON public.cutting_bundles
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy cutting_lays_factory on cutting_lays (ALL)
 CREATE POLICY "cutting_lays_factory" ON public.cutting_lays
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy cutting_session_lots_factory on cutting_session_lots (ALL)
 CREATE POLICY "cutting_session_lots_factory" ON public.cutting_session_lots
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy cutting_sessions_factory on cutting_sessions (ALL)
 CREATE POLICY "cutting_sessions_factory" ON public.cutting_sessions
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy dashboard_configs_select on dashboard_configs (SELECT)
 CREATE POLICY "dashboard_configs_select" ON public.dashboard_configs
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy dashboard_configs_write on dashboard_configs (ALL)
 CREATE POLICY "dashboard_configs_write" ON public.dashboard_configs
   FOR ALL TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin())) WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy dashboard_links_select on dashboard_links (SELECT)
 CREATE POLICY "dashboard_links_select" ON public.dashboard_links
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy dashboard_links_write on dashboard_links (ALL)
 CREATE POLICY "dashboard_links_write" ON public.dashboard_links
   FOR ALL TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin())) WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy defects_read on defects (SELECT)
 CREATE POLICY "defects_read" ON public.defects
   FOR SELECT TO authenticated USING (true);
-
 -- policy defects_write on defects (ALL)
 CREATE POLICY "defects_write" ON public.defects
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy dept_workforce_rates_insert on department_workforce_rates (INSERT)
 CREATE POLICY "dept_workforce_rates_insert" ON public.department_workforce_rates
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy dept_workforce_rates_select on department_workforce_rates (SELECT)
 CREATE POLICY "dept_workforce_rates_select" ON public.department_workforce_rates
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy dept_workforce_rates_update on department_workforce_rates (UPDATE)
 CREATE POLICY "dept_workforce_rates_update" ON public.department_workforce_rates
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy departments_delete on departments (DELETE)
 CREATE POLICY "departments_delete" ON public.departments
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy departments_insert on departments (INSERT)
 CREATE POLICY "departments_insert" ON public.departments
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy departments_select on departments (SELECT)
 CREATE POLICY "departments_select" ON public.departments
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy departments_update on departments (UPDATE)
 CREATE POLICY "departments_update" ON public.departments
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy fabric_components_delete on fabric_components (DELETE)
 CREATE POLICY "fabric_components_delete" ON public.fabric_components
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy fabric_components_insert on fabric_components (INSERT)
 CREATE POLICY "fabric_components_insert" ON public.fabric_components
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy fabric_components_select on fabric_components (SELECT)
 CREATE POLICY "fabric_components_select" ON public.fabric_components
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy fabric_components_update on fabric_components (UPDATE)
 CREATE POLICY "fabric_components_update" ON public.fabric_components
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy factories_insert on factories (INSERT)
 CREATE POLICY "factories_insert" ON public.factories
   FOR INSERT TO authenticated WITH CHECK (true);
-
 -- policy factories_select on factories (SELECT)
 CREATE POLICY "factories_select" ON public.factories
   FOR SELECT TO authenticated USING (true);
-
 -- policy floor_user_access_admin_write on floor_user_access (ALL)
 CREATE POLICY "floor_user_access_admin_write" ON public.floor_user_access
   FOR ALL TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin())) WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy floor_user_access_select_factory on floor_user_access (SELECT)
 CREATE POLICY "floor_user_access_select_factory" ON public.floor_user_access
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy handover_slips_select_factory on handover_slips (SELECT)
 CREATE POLICY "handover_slips_select_factory" ON public.handover_slips
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy hourly_counts_factory_read on hourly_counts (SELECT)
 CREATE POLICY "hourly_counts_factory_read" ON public.hourly_counts
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy hourly_counts_factory_write on hourly_counts (ALL)
 CREATE POLICY "hourly_counts_factory_write" ON public.hourly_counts
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy inspection_sessions_read on inspection_sessions (SELECT)
 CREATE POLICY "inspection_sessions_read" ON public.inspection_sessions
   FOR SELECT TO authenticated USING (true);
-
 -- policy inspection_sessions_write on inspection_sessions (ALL)
 CREATE POLICY "inspection_sessions_write" ON public.inspection_sessions
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy la_all on line_allocations (ALL)
 CREATE POLICY "la_all" ON public.line_allocations
   FOR ALL TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy operations_all on operations (ALL)
 CREATE POLICY "operations_all" ON public.operations
   FOR ALL TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy odth_insert on order_delivery_target_history (INSERT)
 CREATE POLICY "odth_insert" ON public.order_delivery_target_history
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy odth_select on order_delivery_target_history (SELECT)
 CREATE POLICY "odth_select" ON public.order_delivery_target_history
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy odt_delete on order_delivery_targets (DELETE)
 CREATE POLICY "odt_delete" ON public.order_delivery_targets
   FOR DELETE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy odt_insert on order_delivery_targets (INSERT)
 CREATE POLICY "odt_insert" ON public.order_delivery_targets
   FOR INSERT TO authenticated WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy odt_select on order_delivery_targets (SELECT)
 CREATE POLICY "odt_select" ON public.order_delivery_targets
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy odt_update on order_delivery_targets (UPDATE)
 CREATE POLICY "odt_update" ON public.order_delivery_targets
   FOR UPDATE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy ors_delete on order_routing_steps (DELETE)
 CREATE POLICY "ors_delete" ON public.order_routing_steps
   FOR DELETE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy ors_insert on order_routing_steps (INSERT)
 CREATE POLICY "ors_insert" ON public.order_routing_steps
   FOR INSERT TO authenticated WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy ors_select on order_routing_steps (SELECT)
 CREATE POLICY "ors_select" ON public.order_routing_steps
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy ors_update on order_routing_steps (UPDATE)
 CREATE POLICY "ors_update" ON public.order_routing_steps
   FOR UPDATE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy outsource_work_movements_select on outsource_work_movements (SELECT)
 CREATE POLICY "outsource_work_movements_select" ON public.outsource_work_movements
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy pf_delete on process_flows (DELETE)
 CREATE POLICY "pf_delete" ON public.process_flows
   FOR DELETE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy pf_insert on process_flows (INSERT)
 CREATE POLICY "pf_insert" ON public.process_flows
   FOR INSERT TO authenticated WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy pf_select on process_flows (SELECT)
 CREATE POLICY "pf_select" ON public.process_flows
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy pf_update on process_flows (UPDATE)
 CREATE POLICY "pf_update" ON public.process_flows
   FOR UPDATE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy process_flows_delete on process_flows (DELETE)
 CREATE POLICY "process_flows_delete" ON public.process_flows
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy process_flows_insert on process_flows (INSERT)
 CREATE POLICY "process_flows_insert" ON public.process_flows
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy process_flows_select on process_flows (SELECT)
 CREATE POLICY "process_flows_select" ON public.process_flows
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy process_flows_update on process_flows (UPDATE)
 CREATE POLICY "process_flows_update" ON public.process_flows
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy profiles_insert_own on profiles (INSERT)
 CREATE POLICY "profiles_insert_own" ON public.profiles
   FOR INSERT TO authenticated WITH CHECK ((id = auth.uid()));
-
 -- policy profiles_select_factory on profiles (SELECT)
 CREATE POLICY "profiles_select_factory" ON public.profiles
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy profiles_select_own on profiles (SELECT)
 CREATE POLICY "profiles_select_own" ON public.profiles
   FOR SELECT TO authenticated USING ((id = auth.uid()));
-
 -- policy profiles_update_factory on profiles (UPDATE)
 CREATE POLICY "profiles_update_factory" ON public.profiles
   FOR UPDATE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin())) WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy rejections_factory_read on rejections (SELECT)
 CREATE POLICY "rejections_factory_read" ON public.rejections
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy rejections_factory_write on rejections (ALL)
 CREATE POLICY "rejections_factory_write" ON public.rejections
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy shifts_delete on shifts (DELETE)
 CREATE POLICY "shifts_delete" ON public.shifts
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy shifts_insert on shifts (INSERT)
 CREATE POLICY "shifts_insert" ON public.shifts
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy shifts_select on shifts (SELECT)
 CREATE POLICY "shifts_select" ON public.shifts
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy shifts_update on shifts (UPDATE)
 CREATE POLICY "shifts_update" ON public.shifts
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy shipment_audits_factory_read on shipment_audits (SELECT)
 CREATE POLICY "shipment_audits_factory_read" ON public.shipment_audits
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy shipment_audits_factory_write on shipment_audits (ALL)
 CREATE POLICY "shipment_audits_factory_write" ON public.shipment_audits
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy shipments_factory_read on shipments (SELECT)
 CREATE POLICY "shipments_factory_read" ON public.shipments
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy shipments_factory_write on shipments (ALL)
 CREATE POLICY "shipments_factory_write" ON public.shipments
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy size_groups_delete on size_groups (DELETE)
 CREATE POLICY "size_groups_delete" ON public.size_groups
   FOR DELETE TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy size_groups_insert on size_groups (INSERT)
 CREATE POLICY "size_groups_insert" ON public.size_groups
   FOR INSERT TO authenticated WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy size_groups_select on size_groups (SELECT)
 CREATE POLICY "size_groups_select" ON public.size_groups
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy size_groups_update on size_groups (UPDATE)
 CREATE POLICY "size_groups_update" ON public.size_groups
   FOR UPDATE TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- policy style_orders_all on style_orders (ALL)
 CREATE POLICY "style_orders_all" ON public.style_orders
   FOR ALL TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy support_dropdowns_delete on support_dropdowns (DELETE)
 CREATE POLICY "support_dropdowns_delete" ON public.support_dropdowns
   FOR DELETE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy support_dropdowns_insert on support_dropdowns (INSERT)
 CREATE POLICY "support_dropdowns_insert" ON public.support_dropdowns
   FOR INSERT TO authenticated WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy support_dropdowns_select on support_dropdowns (SELECT)
 CREATE POLICY "support_dropdowns_select" ON public.support_dropdowns
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy support_dropdowns_update on support_dropdowns (UPDATE)
 CREATE POLICY "support_dropdowns_update" ON public.support_dropdowns
   FOR UPDATE TO authenticated USING (((factory_id = current_factory_id()) AND is_factory_admin())) WITH CHECK (((factory_id = current_factory_id()) AND is_factory_admin()));
-
 -- policy workforce_logs_factory_read on workforce_logs (SELECT)
 CREATE POLICY "workforce_logs_factory_read" ON public.workforce_logs
   FOR SELECT TO authenticated USING ((factory_id = current_factory_id()));
-
 -- policy workforce_logs_factory_write on workforce_logs (ALL)
 CREATE POLICY "workforce_logs_factory_write" ON public.workforce_logs
   FOR ALL TO authenticated USING ((factory_id = current_factory_id())) WITH CHECK ((factory_id = current_factory_id()));
-
 -- Triggers
 CREATE TRIGGER assigned_resources_validate BEFORE INSERT OR UPDATE OF department_id, resource_type ON assigned_resources FOR EACH ROW EXECUTE FUNCTION trg_assigned_resources_validate();
-
 CREATE TRIGGER audit_sessions_fill_allocation BEFORE INSERT OR UPDATE ON audit_sessions FOR EACH ROW EXECUTE FUNCTION capture_fill_line_allocation();
-
 CREATE TRIGGER batch_production_apply_kpi BEFORE INSERT OR UPDATE OF start_time, end_time, headcount_by_category, produced_by_size, produced_qty, factory_id, order_id, colorway_id, department_id, resource_id, log_date ON batch_production FOR EACH ROW EXECUTE FUNCTION batch_production_apply_kpi();
-
 CREATE TRIGGER batch_production_fill_allocation BEFORE INSERT OR UPDATE ON batch_production FOR EACH ROW EXECUTE FUNCTION capture_fill_line_allocation();
-
 CREATE TRIGGER trg_batch_production_apply_kpi BEFORE INSERT OR UPDATE OF produced_qty, produced_by_size, order_route_id, resource_id, colorway_id, log_date ON batch_production FOR EACH ROW EXECUTE FUNCTION batch_production_apply_kpi();
-
 CREATE TRIGGER trg_batch_production_updated_at BEFORE UPDATE ON batch_production FOR EACH ROW EXECUTE FUNCTION batch_production_set_updated_at();
-
 CREATE TRIGGER cutting_bundles_fill_fabric_component_trigger BEFORE INSERT OR UPDATE ON cutting_bundles FOR EACH ROW EXECUTE FUNCTION cutting_bundles_fill_fabric_component();
-
 CREATE TRIGGER cutting_sessions_fill_allocation BEFORE INSERT OR UPDATE ON cutting_sessions FOR EACH ROW EXECUTE FUNCTION capture_fill_line_allocation();
-
 CREATE TRIGGER trg_defects_updated_at BEFORE UPDATE ON defects FOR EACH ROW EXECUTE FUNCTION set_defects_updated_at();
-
 CREATE TRIGGER trg_seed_department_defects AFTER INSERT ON departments FOR EACH ROW EXECUTE FUNCTION seed_department_defects();
-
 CREATE TRIGGER sync_colorway_ready_after_handover AFTER INSERT OR UPDATE ON handover_slips FOR EACH ROW EXECUTE FUNCTION trg_sync_colorway_ready_after_handover();
-
 CREATE TRIGGER hourly_counts_apply_kpi BEFORE INSERT OR UPDATE OF count, factory_id, order_id, colorway_id, department_id, resource_id, log_date, order_route_id ON hourly_counts FOR EACH ROW EXECUTE FUNCTION hourly_counts_apply_kpi();
-
 CREATE TRIGGER hourly_counts_fill_allocation BEFORE INSERT OR UPDATE ON hourly_counts FOR EACH ROW EXECUTE FUNCTION capture_fill_line_allocation();
-
 CREATE TRIGGER sync_colorway_ready_after_hourly AFTER INSERT OR DELETE OR UPDATE ON hourly_counts FOR EACH ROW EXECUTE FUNCTION trg_sync_colorway_ready_generic();
-
 CREATE TRIGGER inspection_sessions_apply_kpi BEFORE INSERT OR UPDATE ON inspection_sessions FOR EACH ROW EXECUTE FUNCTION inspection_sessions_apply_kpi();
-
 CREATE TRIGGER inspection_sessions_fill_allocation BEFORE INSERT OR UPDATE ON inspection_sessions FOR EACH ROW EXECUTE FUNCTION capture_fill_line_allocation();
-
 CREATE TRIGGER sync_colorway_ready_after_inspection AFTER INSERT OR DELETE OR UPDATE ON inspection_sessions FOR EACH ROW EXECUTE FUNCTION trg_sync_colorway_ready_generic();
-
 CREATE TRIGGER la_updated_at BEFORE UPDATE ON line_allocations FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER odt_history_trigger AFTER UPDATE ON order_delivery_targets FOR EACH ROW EXECUTE FUNCTION odt_log_history();
-
 CREATE TRIGGER odt_set_total_qty BEFORE INSERT OR UPDATE ON order_delivery_targets FOR EACH ROW EXECUTE FUNCTION odt_set_total_qty();
-
 CREATE TRIGGER odt_updated_at BEFORE UPDATE ON order_delivery_targets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER ors_updated_at BEFORE UPDATE ON order_routing_steps FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER outsource_work_movements_fill_allocation BEFORE INSERT OR UPDATE OF visit_id, colorway_id, order_route_id, line_allocation_id, vendor_resource_id ON outsource_work_movements FOR EACH ROW EXECUTE FUNCTION outsource_work_movements_fill_allocation();
-
 CREATE TRIGGER pf_updated_at BEFORE UPDATE ON process_flows FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER sync_profile_metadata AFTER INSERT OR UPDATE OF factory_id, user_role ON profiles FOR EACH ROW EXECUTE FUNCTION sync_profile_to_auth_metadata();
-
 CREATE TRIGGER sync_colorway_ready_after_rejection AFTER INSERT OR DELETE OR UPDATE ON rejections FOR EACH ROW EXECUTE FUNCTION trg_sync_colorway_ready_generic();
-
 CREATE TRIGGER style_orders_updated_at BEFORE UPDATE ON style_orders FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TRIGGER workforce_logs_fill_allocation BEFORE INSERT OR UPDATE OF line_allocation_id ON workforce_logs FOR EACH ROW EXECUTE FUNCTION workforce_logs_fill_from_allocation();
-

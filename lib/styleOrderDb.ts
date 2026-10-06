@@ -1,5 +1,6 @@
 import type { StyleOrder } from '../types';
 import { normalizeSizeRow } from './colorwaySizesUtils';
+import { materialToRpcPayload, materialsFromColorwayRow } from './colorwayMaterialsDb';
 import { parseOrderShipmentPlan, parseShipmentChangeHistory } from './orderShipmentPlan';
 import { supabase } from './supabase';
 
@@ -77,6 +78,7 @@ export function colorwayToDbPayload(c: StyleOrder['colorways'][0]): Record<strin
     adj_qty: c.adjQty ?? 0,
     sizes: c.sizes ?? [],
     planning_remarks: c.planningRemarks ?? null,
+    materials: (c.materials ?? []).map(materialToRpcPayload),
   };
 }
 
@@ -122,6 +124,7 @@ export function mapStyleOrderFromDb(o: Record<string, unknown>): StyleOrder {
     totalQty: (c.qty as number) || 0,
     sizes: ((c.sizes as StyleOrder['colorways'][0]['sizes']) || []).map(normalizeSizeRow),
     planningRemarks: (c.planning_remarks as string) || '',
+    materials: materialsFromColorwayRow(c),
     completionStatus: (c.completion_status as StyleOrder['colorways'][0]['completionStatus']) || 'ongoing',
     closedAt: (c.closed_at as string) || null,
     closeReason: (c.close_reason as string) || null,

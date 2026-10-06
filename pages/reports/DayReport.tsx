@@ -7,7 +7,7 @@ import { PageShell } from '../../components/layout/PageShell';
 import { ReportToolbar } from '../../components/reports/ReportToolbar';
 import { DayDeptCard } from '../../components/reports/DayDeptCard';
 import { DateRangePicker, type DateRangeValue } from '../../components/DateRangePicker';
-import { filterDayReportDepartments } from '../../lib/departmentFilters';
+import { filterDayReportDepartments, departmentDayReportAuditsEligible, isNativeShipmentDepartment } from '../../lib/departmentFilters';
 import { downloadExcelWorkbook, type ExcelSheet } from '../../lib/csvExport';
 import {
   isUuid,
@@ -19,12 +19,14 @@ import {
   dayHandoverStatusLabel,
   fetchColorwayLabels,
   fetchDayResourceHourReportRange,
+  filterDayAuditRows,
+  type DayAuditRow,
   type DayHandoverSummary,
   type DayResourceHourReport,
   type DayResourceHourRow,
   type DayShiftHourSection,
 } from '../../lib/reports';
-import { useColorwayLabels, useDayDeptReport, useReportMeta } from '../../lib/queries/reports';
+import { useColorwayLabels, useDayDeptAudits, useDayDeptReport, useReportMeta } from '../../lib/queries/reports';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 function todayRange(): DateRangeValue {
@@ -128,6 +130,8 @@ function exportDeptWorkbook(
   dateTo: string,
   report: DayResourceHourReport,
   visibleRows: DayResourceHourRow[],
+  auditRows: DayAuditRow[],
+  includeAudits: boolean,
 ): void {
   const handoverByDay =
     report.handoverByDay ??
@@ -145,6 +149,7 @@ function exportDeptWorkbook(
     'Buyer',
     'PO',
     'Color',
+    'SAM',
     'WF',
     'Planned End',
     'Hr Target',
@@ -169,9 +174,10 @@ function exportDeptWorkbook(
       row.buyerName,
       row.poNumber,
       row.colorName,
+      row.sam != null && row.sam > 0 ? row.sam : '',
       row.workforce ?? '',
       row.plannedEndDate ?? '',
-      row.hourlyTarget || '',
+      row.hourlyTarget > 0 ? Math.round(row.hourlyTarget) : '',
       ...hours.flatMap((h) => [row.hours[h] || 0, row.hourTargets[h] || 0]),
       row.total,
       row.efficiencyPct != null ? row.efficiencyPct.toFixed(1) : '',
@@ -189,7 +195,8 @@ function exportDeptWorkbook(
       '',
       '',
       '',
-      metrics.workforce > 0 ? metrics.workforce : '',
+      '',
+      metrics.workforce > 0 ? Number(metrics.workforce.toFixed(1)) : '',
       '',
       '',
       ...hours.flatMap((h) => {
@@ -214,6 +221,49 @@ function exportDeptWorkbook(
       headers: hourlyHeaders,
       rows: hourlyRows,
     },
+    ...(includeAudits
+      ? [
+          {
+            name: 'Audits',
+            headers: [
+              'Date',
+              'Style',
+              'Style Ref',
+              'Buyer',
+              'PO',
+              'Color',
+              'Resource',
+              'Operation',
+              'AQL',
+              'Lot size',
+              'Sample',
+              'Passed',
+              'Failed',
+              'Major',
+              'Minor',
+              'Result',
+            ],
+            rows: auditRows.map((row) => [
+              row.logDate,
+              row.styleName,
+              row.styleRef,
+              row.buyerName,
+              row.poNumber,
+              row.colorName,
+              row.resourceName,
+              row.operationName,
+              row.aqlLevel ?? '',
+              row.lotSize,
+              row.sampleSize,
+              row.passed,
+              row.failed,
+              row.majorFailed,
+              row.minorFailed,
+              row.result ?? '',
+            ]),
+          } satisfies ExcelSheet,
+        ]
+      : []),
   ];
 
   const slug = deptName.replace(/\s+/g, '-').toLowerCase();
@@ -276,8 +326,18 @@ export const DayReport: React.FC = () => {
     colorwayLabels,
     Boolean(meta && activeDeptId),
   );
+  const shipmentDesk = isNativeShipmentDepartment(selectedDept ?? undefined);
+  const showDeptAudits = departmentDayReportAuditsEligible(selectedDept ?? undefined);
+  const deptAuditsQuery = useDayDeptAudits(
+    factoryId,
+    activeDeptId || null,
+    dateFrom,
+    dateTo,
+    Boolean(activeDeptId && showDeptAudits),
+    shipmentDesk,
+  );
 
-  const reportRefreshing = deptReportQuery.isFetching;
+  const reportRefreshing = deptReportQuery.isFetching || deptAuditsQuery.isFetching;
   const report = deptReportQuery.data ?? null;
   const reportLoading =
     metaLoading ||
@@ -358,15 +418,28 @@ export const DayReport: React.FC = () => {
 
   const refreshReport = useCallback(async () => {
     setLoadError(null);
-    await Promise.all([metaQuery.refetch(), colorwayLabelsQuery.refetch(), deptReportQuery.refetch()]);
+    await Promise.all([
+      metaQuery.refetch(),
+      colorwayLabelsQuery.refetch(),
+      deptReportQuery.refetch(),
+      deptAuditsQuery.refetch(),
+    ]);
     setLastUpdated(new Date());
-  }, [metaQuery, colorwayLabelsQuery, deptReportQuery]);
+  }, [metaQuery, colorwayLabelsQuery, deptReportQuery, deptAuditsQuery]);
 
   const exportAll = useCallback(() => {
     if (!selectedDept || !report) return;
     const visible = filterRows(report.rows, searchQuery, linkOrderId, linkColorwayId);
-    exportDeptWorkbook(selectedDept.name, dateFrom, dateTo, report, visible);
-  }, [selectedDept, report, searchQuery, linkOrderId, linkColorwayId, dateFrom, dateTo]);
+    exportDeptWorkbook(
+      selectedDept.name,
+      dateFrom,
+      dateTo,
+      report,
+      visible,
+      filterDayAuditRows(deptAuditsQuery.data ?? [], searchQuery, linkOrderId, linkColorwayId),
+      showDeptAudits,
+    );
+  }, [selectedDept, report, searchQuery, linkOrderId, linkColorwayId, dateFrom, dateTo, deptAuditsQuery.data, showDeptAudits]);
 
   const exportAllDepartments = useCallback(async () => {
     if (!factoryId || !meta || departments.length === 0) return;
@@ -393,10 +466,11 @@ export const DayReport: React.FC = () => {
       const summaryRows = reports.map((report, i) => {
         const dept = departments[i];
         const metrics = computeDayDeptMetricsFromRows(report.rows);
+        const workforce = report.kpi.workforce ?? metrics.workforce;
         return [
           dept.name,
           report.kpi.output ?? 0,
-          metrics.workforce > 0 ? metrics.workforce : 0,
+          workforce > 0 ? Number(workforce.toFixed(1)) : 0,
           metrics.efficiency != null ? Number(metrics.efficiency.toFixed(1)) : '',
           metrics.productivity != null ? Number(metrics.productivity.toFixed(1)) : '',
           report.kpi.wip ?? 0,
@@ -425,9 +499,24 @@ export const DayReport: React.FC = () => {
     return sortDayRows(filtered);
   }, [report, searchQuery, linkOrderId, linkColorwayId]);
 
+  const visibleAuditRows = useMemo(
+    () => filterDayAuditRows(deptAuditsQuery.data ?? [], searchQuery, linkOrderId, linkColorwayId),
+    [deptAuditsQuery.data, searchQuery, linkOrderId, linkColorwayId],
+  );
+
   const visibleShiftSections = useMemo((): DayShiftHourSection[] | undefined => {
     if (!report?.shiftSections?.length) return undefined;
     return report.shiftSections
+      .map((sec) => ({
+        ...sec,
+        rows: sortDayRows(filterRows(sec.rows, searchQuery, linkOrderId, linkColorwayId)),
+      }))
+      .filter((sec) => sec.rows.length > 0);
+  }, [report, searchQuery, linkOrderId, linkColorwayId]);
+
+  const visibleQcShiftSections = useMemo((): DayShiftHourSection[] | undefined => {
+    if (!report?.qcShiftSections?.length) return undefined;
+    return report.qcShiftSections
       .map((sec) => ({
         ...sec,
         rows: sortDayRows(filterRows(sec.rows, searchQuery, linkOrderId, linkColorwayId)),
@@ -530,9 +619,14 @@ export const DayReport: React.FC = () => {
             report={report}
             visibleRows={visibleRows}
             visibleShiftSections={visibleShiftSections}
+            visibleQcShiftSections={visibleQcShiftSections}
             multiDay={dateFrom !== dateTo}
             fullHeight
             searchQuery={searchQuery}
+            auditRows={visibleAuditRows}
+            auditsLoading={deptAuditsQuery.isLoading && !deptAuditsQuery.data}
+            shipmentDesk={shipmentDesk}
+            showAudits={showDeptAudits}
           />
         </div>
       )}

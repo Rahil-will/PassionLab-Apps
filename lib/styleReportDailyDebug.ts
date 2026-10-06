@@ -12,6 +12,7 @@ export function logStyleReportDailyKpisDebug(
   dateFrom: string,
   dateTo: string,
 ): void {
+  if (!import.meta.env.DEV) return;
   const label = `[StyleReport] daily KPIs — order ${orderId}, colorway ${colorwayId ?? 'all'}`;
   console.group(label);
   console.log(

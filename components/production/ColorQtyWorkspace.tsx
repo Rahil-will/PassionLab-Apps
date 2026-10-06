@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Copy } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { Colorway } from '../../types';
 import { sizeOrderQty, sizeAdjQty } from '../../lib/colorwaySizesUtils';
 import { swatchStyleFromColorName } from '../../lib/colorNameSwatch';
@@ -37,13 +37,16 @@ interface ColorQtyWorkspaceProps {
   buyerExtraPct: number;
   selectedBuyer: string;
   onSelectColor: (id: string) => void;
+  /** Opens nested color details. Qty inputs do not trigger this. */
+  onOpenColorPage?: (id: string) => void;
+  /** Master list is display-only; click opens color details. */
+  readOnly?: boolean;
   onAddColor: (payload: { name: string; sizes: Colorway['sizes'] }) => void;
   onClearColorSelection: () => void;
   onNameChange: (id: string, name: string) => void;
   onOrderChange: (id: string, size: string, qty: number) => void;
   onAdjChange: (id: string, size: string, qty: number) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onCuttingAllowanceChange: (pct: number) => void;
   onToggleExtraAllowance: () => void;
   onNotify: (message: string) => void;
@@ -57,13 +60,15 @@ interface ColorQtyWorkspaceProps {
 export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
   colorways,
   displaySizes,
-  totalAllowancePct,
   hasSizeContext,
+  selectedColorId,
+  onSelectColor,
+  onOpenColorPage,
+  readOnly = false,
   onNameChange,
   onOrderChange,
   onAdjChange,
   onDelete,
-  onDuplicate,
   rowOrderTotal,
   rowAdjTotal,
   aggregateBySize,
@@ -71,19 +76,18 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
   totalAdjustedQty,
 }) => {
   const hasSizes = displaySizes.length > 0;
-  // total cols: sno + color + type + [sizes] + total + actions
   const totalCols = 3 + (hasSizes ? displaySizes.length : 0) + 1 + 1;
 
+  const openDetails = (id: string) => (onOpenColorPage ?? onSelectColor)(id);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse" style={{ minWidth: hasSizes ? '32rem' : '22rem' }}>
+    <div className="p-4">
+      <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+        <div className="overflow-x-auto">
+      <table className="w-full border-collapse table-fixed" style={{ width: '100%' }}>
         <colgroup>
-          <col style={{ width: '2rem' }} />
-          <col style={{ width: '11rem' }} />
-          <col style={{ width: '4rem' }} />
-          {hasSizes && displaySizes.map((s) => <col key={s} style={{ width: '4.5rem' }} />)}
-          <col style={{ width: '4.5rem' }} />
-          <col style={{ width: '2.5rem' }} />
+          <col style={{ width: '6%' }} />
+          <col style={{ width: '24%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -92,14 +96,14 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
             <th className={thLeftCls}>Type</th>
             {hasSizes && displaySizes.map((s) => <th key={s} className={thCls}>{s}</th>)}
             <th className={thCls}>Total</th>
-            <th className="border border-slate-200 bg-slate-50" />
+            <th className="border border-slate-200 bg-slate-50 w-8" />
           </tr>
         </thead>
         <tbody>
           {colorways.length === 0 ? (
             <tr>
-              <td colSpan={totalCols} className="text-center py-8 text-[11px] text-slate-400 italic border border-slate-200">
-                {hasSizeContext ? 'Click "Add Color" to start' : 'Select a size group to enter colors'}
+              <td colSpan={totalCols} className="text-center py-8 text-[11px] text-slate-400 italic border-b border-slate-200">
+                {hasSizeContext ? 'Click "Add Color" to open color details' : 'Select a size group to enter colors'}
               </td>
             </tr>
           ) : (
@@ -107,79 +111,98 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
               const swatch = swatchStyleFromColorName(cw.name || '');
               const orderTotal = rowOrderTotal(cw);
               const adjTotal = rowAdjTotal(cw);
+              const isSelected = selectedColorId === cw.id;
               return (
                 <React.Fragment key={cw.id}>
-                  {/* Order Qty row */}
-                  <tr className="bg-white">
-                    {/* S.No — spans both rows */}
-                    <td className="border border-slate-200 text-center text-[10px] font-semibold text-slate-400 tabular-nums align-middle" rowSpan={2}>
+                  <tr
+                    className={`${isSelected ? 'bg-blue-50/40' : 'bg-white'} ${readOnly ? 'cursor-pointer hover:bg-blue-50/70' : ''}`}
+                    onClick={() => openDetails(cw.id)}
+                  >
+                    <td className="border-b border-slate-200 text-center text-[10px] font-semibold text-slate-400 tabular-nums align-middle" rowSpan={2}>
                       {idx + 1}
                     </td>
-                    <td className="border border-slate-200 px-3 align-middle" rowSpan={2}>
-                      <div className="flex items-center gap-2">
+                    <td className="border-b border-slate-200 px-3 align-middle" rowSpan={2}>
+                      <div className="flex items-center gap-2 min-w-0">
                         <div className="w-3 h-3 rounded-full shrink-0 border border-slate-200" style={swatch} />
-                        <input
-                          type="text"
-                          value={cw.name || ''}
-                          onChange={(e) => onNameChange(cw.id, e.target.value)}
-                          placeholder="Color name"
-                          className="flex-1 min-w-0 text-[11px] font-semibold text-slate-800 bg-transparent border-0 border-b border-transparent focus:border-blue-400 focus:outline-none py-0.5 placeholder:text-slate-300"
-                        />
+                        {readOnly ? (
+                          <span className={`text-[11px] font-semibold truncate ${cw.name ? 'text-slate-800' : 'text-slate-400 italic'}`}>
+                            {cw.name || 'Untitled'}
+                          </span>
+                        ) : (
+                          <input
+                            type="text"
+                            value={cw.name || ''}
+                            onChange={(e) => onNameChange(cw.id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={() => onSelectColor(cw.id)}
+                            placeholder="Color name"
+                            className="flex-1 min-w-0 text-[11px] font-semibold text-slate-800 bg-transparent border-0 border-b border-transparent focus:border-blue-400 focus:outline-none py-0.5 placeholder:text-slate-300"
+                          />
+                        )}
                       </div>
                     </td>
                     <td className={metaOrderCls}>Order</td>
                     {hasSizes && displaySizes.map((s) => (
                       <td key={s} className={dataCellCls}>
-                        <input
-                          type="number"
-                          min={0}
-                          value={sizeOrderQty(cw.sizes.find((sz) => sz.size === s)) || ''}
-                          placeholder="0"
-                          onChange={(e) => onOrderChange(cw.id, s, parseInt(e.target.value, 10) || 0)}
-                          className={qtyInputCls}
-                          aria-label={`${cw.name} ${s} order qty`}
-                        />
+                        {readOnly ? (
+                          <span className="block h-9 px-2 text-center text-[11px] tabular-nums leading-9 text-slate-700">
+                            {sizeOrderQty(cw.sizes.find((sz) => sz.size === s)) || '—'}
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={0}
+                            value={sizeOrderQty(cw.sizes.find((sz) => sz.size === s)) || ''}
+                            placeholder="0"
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={() => onSelectColor(cw.id)}
+                            onChange={(e) => onOrderChange(cw.id, s, parseInt(e.target.value, 10) || 0)}
+                            className={qtyInputCls}
+                            aria-label={`${cw.name} ${s} order qty`}
+                          />
+                        )}
                       </td>
                     ))}
                     <td className={totalCellCls}>{orderTotal.toLocaleString()}</td>
-                    {/* Actions — spans both rows */}
-                    <td className="border border-slate-200 align-middle text-center p-0" rowSpan={2} style={{ width: '2.5rem' }}>
-                      <div className="flex flex-col items-center justify-center gap-0">
-                        <button
-                          type="button"
-                          onClick={() => onDuplicate(cw.id)}
-                          className="p-1 rounded text-slate-300 hover:text-blue-500 transition-colors"
-                          aria-label={`Duplicate ${cw.name}`}
-                          title="Duplicate"
-                        >
-                          <Copy size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(cw.id)}
-                          className="p-1 rounded text-slate-300 hover:text-red-500 transition-colors"
-                          aria-label={`Delete ${cw.name}`}
-                          title="Delete"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                    <td className="border-b border-slate-200 align-middle text-center p-0" rowSpan={2}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(cw.id);
+                        }}
+                        className="p-1 rounded text-slate-300 hover:text-red-500 transition-colors"
+                        aria-label={`Delete ${cw.name}`}
+                        title="Delete"
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     </td>
                   </tr>
-                  {/* Adjusted Qty row */}
-                  <tr className="bg-blue-50">
+                  <tr
+                    className={`${isSelected ? 'bg-blue-100/50' : 'bg-blue-50'} ${readOnly ? 'cursor-pointer hover:bg-blue-100/80' : ''}`}
+                    onClick={() => openDetails(cw.id)}
+                  >
                     <td className={metaAdjCls}>Adj.</td>
                     {hasSizes && displaySizes.map((s) => (
                       <td key={s} className={dataAdjCls}>
-                        <input
-                          type="number"
-                          min={0}
-                          value={sizeAdjQty(cw.sizes.find((sz) => sz.size === s)) || ''}
-                          placeholder="0"
-                          onChange={(e) => onAdjChange(cw.id, s, parseInt(e.target.value, 10) || 0)}
-                          className={qtyAdjInputCls}
-                          aria-label={`${cw.name} ${s} adj qty`}
-                        />
+                        {readOnly ? (
+                          <span className="block h-9 px-2 text-center text-[11px] tabular-nums leading-9 text-blue-700">
+                            {sizeAdjQty(cw.sizes.find((sz) => sz.size === s)) || '—'}
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={0}
+                            value={sizeAdjQty(cw.sizes.find((sz) => sz.size === s)) || ''}
+                            placeholder="0"
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={() => onSelectColor(cw.id)}
+                            onChange={(e) => onAdjChange(cw.id, s, parseInt(e.target.value, 10) || 0)}
+                            className={qtyAdjInputCls}
+                            aria-label={`${cw.name} ${s} adj qty`}
+                          />
+                        )}
                       </td>
                     ))}
                     <td className={totalAdjCellCls}>{adjTotal.toLocaleString()}</td>
@@ -191,9 +214,8 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
         </tbody>
         {colorways.length > 0 && (
           <tfoot>
-            {/* Merged total row — spans 2 body rows worth, with stacked order/adj values */}
             <tr className="bg-slate-50">
-              <td className="border border-slate-200 bg-slate-50" colSpan={2} rowSpan={2}>
+              <td className="border-t border-slate-200 bg-slate-50" colSpan={2} rowSpan={2}>
                 <div className="px-3 py-1 flex flex-col gap-0">
                   <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Total</span>
                   <span className="text-[9px] text-slate-400">{colorways.length} color{colorways.length !== 1 ? 's' : ''}</span>
@@ -208,7 +230,7 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
                   <span>{totalOrderQty.toLocaleString()}</span>
                 </div>
               </td>
-              <td className="border border-slate-200 bg-slate-50" rowSpan={2} />
+              <td className="border-t border-slate-200 bg-slate-50" rowSpan={2} />
             </tr>
             <tr className="bg-blue-50">
               <td className={metaAdjCls}>Adj.</td>
@@ -220,6 +242,8 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
           </tfoot>
         )}
       </table>
+        </div>
+      </div>
     </div>
   );
 };

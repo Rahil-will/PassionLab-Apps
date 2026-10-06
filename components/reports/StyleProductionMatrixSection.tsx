@@ -190,8 +190,9 @@ export const StyleProductionMatrixSection: React.FC<StyleProductionMatrixSection
     column: Parameters<typeof sumMatrixColumnSize>[0],
     size?: string,
   ) => {
-    if (value <= 0 || column.deptId !== originDepartmentId) return value || '—';
+    if (column.deptId !== originDepartmentId) return value || '—';
     const components = componentsFor(column.stepId, colorwayId ?? undefined, size);
+    if (value <= 0 && components.length === 0) return value || '—';
     return <FabricOutputBreakdownPopover value={value} components={components} size={size} />;
   };
 

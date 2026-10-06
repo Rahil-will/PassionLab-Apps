@@ -15,6 +15,7 @@ export interface CreateFactoryUserInput {
   shipmentQaEnabled?: boolean;
   userRole?: string;
   status?: 'Active' | 'Inactive';
+  password?: string;
 }
 
 function edgeDeployHint(message: string): string {
@@ -43,6 +44,7 @@ export async function createFactoryUser(input: CreateFactoryUserInput): Promise<
     userRole: input.userRole ?? 'operator',
     status: input.status ?? 'Active',
     workforceEnabled: input.workforceEnabled,
+    password: input.password,
   }).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : 'Failed to create user';
     throw new Error(message + edgeDeployHint(message));

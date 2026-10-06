@@ -14,13 +14,14 @@ interface BreadcrumbProps {
 
 export const Breadcrumb: React.FC<BreadcrumbProps> = ({ titleOverride, subtitleOverride, actions: propActions }) => {
   const { currentRoute } = useNavigationStore();
-  const { actionsRef, version } = usePageHeaderContext();
+  const { actionsRef, metaRef, version } = usePageHeaderContext();
   const entry = getRouteEntry(currentRoute);
   const actions = propActions || (version >= 0 ? actionsRef.current : null);
+  const pageMeta = version >= 0 ? metaRef.current : {};
 
-  const trail = buildBreadcrumbTrail(currentRoute, titleOverride);
+  const trail = buildBreadcrumbTrail(currentRoute, titleOverride || pageMeta?.title || undefined);
   const current = trail[trail.length - 1];
-  const pageSubtitle = subtitleOverride || entry?.subtitle;
+  const pageSubtitle = subtitleOverride ?? pageMeta?.subtitle ?? entry?.subtitle;
 
   return (
     <div className="bg-gray-100 rounded-l-xl shadow-md border border-slate-200 px-6 py-4 mb-3 flex-shrink-0 min-h-[60px]">
@@ -50,4 +51,4 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ titleOverride, subtitleO
   );
 };
 
-export { PageHeaderProvider, usePageActions } from './PageHeaderContext';
+export { PageHeaderProvider, usePageActions, usePageHeader } from './PageHeaderContext';

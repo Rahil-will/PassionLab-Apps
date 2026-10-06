@@ -48,6 +48,8 @@ export interface DayResourceHourRow {
   allocationId?: string | null;
   efficiencyPct: number | null;
   productivity: number | null;
+  /** Planned SAM minutes per piece for this resource × order (standard hourly). */
+  sam?: number | null;
   /** Origin cutting — routing operation for this row. */
   operationId?: string | null;
   /** Group key for splitting hourly cards (operation_def / name). */
@@ -56,6 +58,28 @@ export interface DayResourceHourRow {
   /** Shell vs lining fabric aspect (native cutting). */
   fabricAspect?: 'shell' | 'lining' | null;
   layNo?: string | null;
+  /**
+   * Which capture mode produced this row — a department's operation can move
+   * between QC (piece-wise inspection) and hourly output over time, so rows
+   * from the two modes are kept separate and rendered as separate tables
+   * rather than merged. Defaults to 'hourly' when absent (older report shapes).
+   */
+  captureKind?: 'hourly' | 'qc';
+  /** QC rows only — total pieces inspected in this bucket. */
+  inspectedQty?: number | null;
+  /** QC rows only — inspectedQty minus passed (row.total). */
+  defectiveQty?: number | null;
+  /** QC rows only — defectiveQty ÷ inspectedQty × 100. */
+  defectivePct?: number | null;
+  /** QC rows only — defects per hundred units (same formula as defectivePct; no distinct per-defect count is captured). */
+  dhu?: number | null;
+  /**
+   * Routing step type for this row's operation (`loading` | `produce` | ...).
+   * `loading` rows are a receiving/WIP-start acknowledgement, not measured
+   * production — they're excluded from SAM/efficiency/productivity and from
+   * the department's headline output KPI, but still shown in their own card.
+   */
+  stepType?: string | null;
 }
 
 export interface DayOperationHourSection {
@@ -64,6 +88,13 @@ export interface DayOperationHourSection {
   fabricAspect?: 'shell' | 'lining' | null;
   hourColumns: string[];
   rows: DayResourceHourRow[];
+  captureKind?: 'hourly' | 'qc';
+  /**
+   * Routing step type for this operation (`loading` | `produce` | ...). Drives
+   * which card template renders it — `loading` gets a simpler table with no
+   * SAM/Eff%/Productivity columns, since those never apply to it.
+   */
+  stepType?: string | null;
 }
 
 export interface DayShiftHourSection {
@@ -71,6 +102,7 @@ export interface DayShiftHourSection {
   shiftName: string;
   hourColumns: string[];
   rows: DayResourceHourRow[];
+  captureKind?: 'hourly' | 'qc';
 }
 
 export interface DayResourceHourReport {
@@ -82,6 +114,12 @@ export interface DayResourceHourReport {
   hourColumns: string[];
   rows: DayResourceHourRow[];
   shiftSections: DayShiftHourSection[];
+  /**
+   * QC-captured rows for this department, kept in their own shift sections so
+   * they render as a separate "QC output" table (with Inspected/Defective %/DHU
+   * columns) instead of being merged into the hourly-output table.
+   */
+  qcShiftSections?: DayShiftHourSection[];
   operationSections?: DayOperationHourSection[];
   nativeEntries?: DayNativeEntry[];
   outsourceEntries?: DayNativeEntry[];
@@ -96,7 +134,11 @@ export interface DayResourceHourReport {
     inspected?: number;
     passed?: number;
     passPct?: number | null;
+    /** QC depts only — 100 − passPct, i.e. (inspected − passed) ÷ inspected × 100. */
+    defectivePct?: number | null;
     wip?: number;
+    /** Average daily headcount over the report period (see computeDayDeptMetricsFromRows). */
+    workforce?: number;
   };
   handover?: DayHandoverSummary;
   handoverByDay?: Array<{ date: string; handover: DayHandoverSummary }>;

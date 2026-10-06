@@ -1,6 +1,7 @@
 import type { StyleOrder } from '../types';
 import { supabase } from './supabase';
 import { mapStyleOrderFromDb } from './styleOrderDb';
+import { COLORWAY_WITH_MATERIALS_SELECT } from './colorwayMaterialsDb';
 import {
   ORDER_ROUTING_STEP_SELECT_SLIM,
   mapRoutingRecordToRow,
@@ -18,7 +19,7 @@ export async function reloadOrderFromDb(
       .eq('factory_id', factoryId)
       .eq('id', orderId)
       .maybeSingle(),
-    supabase.from('colorways').select('*').eq('order_id', orderId),
+    supabase.from('colorways').select(COLORWAY_WITH_MATERIALS_SELECT).eq('order_id', orderId),
     supabase
       .from('order_delivery_targets')
       .select('id, order_id, colorway_id, target_date, ship_mode, shipment_type, qty_by_size, destination_country, status, change_history, notes')

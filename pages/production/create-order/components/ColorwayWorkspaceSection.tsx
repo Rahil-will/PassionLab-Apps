@@ -15,6 +15,7 @@ interface ColorwayWorkspaceSectionProps {
   hasSizeContext: boolean;
   headerState: HeaderState;
   buyerExtraPct: number;
+  onOpenColorPage: (opts: { addNew?: boolean; colorId?: string }) => void;
 }
 
 export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> = ({
@@ -25,6 +26,7 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
   hasSizeContext,
   headerState,
   buyerExtraPct,
+  onOpenColorPage,
 }) => {
   const { showNotification } = useNotificationStore();
 
@@ -47,16 +49,11 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
   }, [colorwayState.colorways, displaySizes]);
 
   const handleAddColor = () => {
-    if (!hasSizeContext) return;
-    colorwayDispatch({
-      type: 'addColor',
-      payload: {
-        name: '',
-        sizes: displaySizes.map((s) => ({ size: s, order_qty: 0, adj_qty: 0 })),
-      },
-      displaySizes,
-      totalAllowancePct,
-    });
+    if (!hasSizeContext) {
+      showNotification('Select a size group first', 'error');
+      return;
+    }
+    onOpenColorPage({ addNew: true });
   };
 
   return (
@@ -66,7 +63,7 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
         subtitle={[
           headerState.cuttingAllowance > 0 ? `Cut ${headerState.cuttingAllowance}%` : '',
           headerState.applyExtraAllowance && buyerExtraPct > 0 ? `Buyer ${buyerExtraPct}%` : '',
-          totalAllowancePct > 0 ? `Total ${totalAllowancePct.toFixed(1)}% allowance` : 'Order qty × size breakdown per colour',
+          totalAllowancePct > 0 ? `Total ${totalAllowancePct.toFixed(1)}% allowance` : 'Click a color to edit sizes and materials',
         ]
           .filter(Boolean)
           .join(' · ')}
@@ -95,7 +92,9 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
           buyerExtraPct={buyerExtraPct}
           selectedBuyer={headerState.selectedBuyer}
           onSelectColor={(id) => colorwayDispatch({ type: 'selectColor', id })}
-          onAddColor={handleAddColor}
+          onOpenColorPage={(id) => onOpenColorPage({ colorId: id })}
+          readOnly
+          onAddColor={() => handleAddColor()}
           onClearColorSelection={() => colorwayDispatch({ type: 'selectColor', id: null })}
           onNameChange={(id, name) => colorwayDispatch({ type: 'renameColor', id, name })}
           onOrderChange={(id, size, qty) =>
@@ -103,7 +102,6 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
           }
           onAdjChange={(id, size, qty) => colorwayDispatch({ type: 'updateAdjQty', id, size, qty })}
           onDelete={(id) => colorwayDispatch({ type: 'deleteColor', id })}
-          onDuplicate={(id) => colorwayDispatch({ type: 'duplicateColor', id })}
           onCuttingAllowanceChange={() => {}}
           onToggleExtraAllowance={() => {}}
           onNotify={(msg) => showNotification(msg, 'error')}

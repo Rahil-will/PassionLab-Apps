@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, Factory, Package } from 'lucide-react';
 import { flowTableClasses as t } from '../../lib/productionFlowTable';
 import type { StyleJourneyDept } from '../../lib/mesReportsApi';
+import { shipmentFlowDisplayQty } from '../../lib/orderFlowMetrics';
 
 export interface StyleFlowTableProps {
   flowDepts: StyleJourneyDept[];
@@ -53,6 +54,7 @@ export const StyleFlowTable: React.FC<StyleFlowTableProps> = ({ flowDepts, adjQt
                 const operationLabel = dept.activitiesLabel || '—';
                 const inTransit = dept.inTransit ?? 0;
                 const missing = dept.missingInTransit ?? 0;
+                const cols = shipmentFlowDisplayQty(dept);
 
                 return (
                   <tr key={dept.visitId} className="hover:bg-slate-50/80">
@@ -74,8 +76,10 @@ export const StyleFlowTable: React.FC<StyleFlowTableProps> = ({ flowDepts, adjQt
                       {operationLabel}
                     </td>
                     <td className={t.numCell}>{isFirst ? '—' : dept.received.toLocaleString()}</td>
-                    <td className={`${t.numCell} text-slate-900`}>{dept.produced.toLocaleString()}</td>
-                    <td className={t.numCell}>{isLast ? '—' : dept.sent.toLocaleString()}</td>
+                    <td className={`${t.numCell} text-slate-900`}>{qtyCell(cols.produced)}</td>
+                    <td className={t.numCell}>
+                      {cols.isShipment ? qtyCell(cols.sent) : isLast ? '—' : dept.sent.toLocaleString()}
+                    </td>
                     <td className={t.numCell}>{qtyCell(inTransit)}</td>
                     <td className={t.numCell}>
                       {missing > 0 ? (
@@ -87,7 +91,7 @@ export const StyleFlowTable: React.FC<StyleFlowTableProps> = ({ flowDepts, adjQt
                         '—'
                       )}
                     </td>
-                    <td className={t.numCell}>{dept.wip.toLocaleString()}</td>
+                    <td className={t.numCell}>{qtyCell(cols.wip)}</td>
                   </tr>
                 );
               })}

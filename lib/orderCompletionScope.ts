@@ -2,6 +2,8 @@ import type { CutToShipRow } from './mesReportsApi';
 import { type SizeMap } from './mesSizeDisplay';
 import type { ColorwayCutShipItem } from './cutToShipList';
 import type { FabricCutQtyComponentRow } from './fabricCutQtyDisplay';
+import { deliverySortKey } from './planningOrderStatus';
+import { supabase } from './supabase';
 
 function mergeSizeMaps(a: SizeMap, b: SizeMap): SizeMap {
   const out: SizeMap = { ...a };
@@ -36,9 +38,66 @@ export interface OrderCompletionGroup {
   styleName: string;
   buyerName: string;
   items: ColorwayCutShipItem[];
+  /** When sidebar is loaded from paginated RPC, color count may be set without items. */
+  colorCount?: number;
   cutQty: number;
   shippedQty: number;
   rejectedQty: number;
+  /** Earliest active shipment / delivery target date (YYYY-MM-DD). */
+  earliestDeliveryDate?: string;
+}
+
+/** Earliest non-rescheduled target_date per order — used to sort the completion sidebar. */
+export async function fetchEarliestDeliveryDateByOrder(
+  factoryId: string,
+  orderIds: string[],
+): Promise<Map<string, string>> {
+  if (orderIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('order_delivery_targets')
+    .select('order_id, target_date, status')
+    .eq('factory_id', factoryId)
+    .in('order_id', orderIds);
+
+  if (error) throw error;
+
+  const datesByOrder = new Map<string, string[]>();
+  for (const row of data ?? []) {
+    if ((row.status as string) === 'rescheduled') continue;
+    const orderId = row.order_id as string;
+    const date = String(row.target_date ?? '').split('T')[0];
+    if (!date) continue;
+    const list = datesByOrder.get(orderId) ?? [];
+    list.push(date);
+    datesByOrder.set(orderId, list);
+  }
+
+  const out = new Map<string, string>();
+  for (const [orderId, dates] of datesByOrder) {
+    out.set(orderId, dates.slice().sort()[0]);
+  }
+  return out;
+}
+
+export function sortOrderCompletionGroupsByDelivery(
+  groups: OrderCompletionGroup[],
+  earliestDateByOrderId: Map<string, string>,
+): OrderCompletionGroup[] {
+  return [...groups]
+    .map((group) => ({
+      ...group,
+      earliestDeliveryDate: earliestDateByOrderId.get(group.orderId),
+    }))
+    .sort((a, b) => {
+      const byDate = deliverySortKey(
+        a.earliestDeliveryDate ? [a.earliestDeliveryDate] : [],
+      ).localeCompare(
+        deliverySortKey(b.earliestDeliveryDate ? [b.earliestDeliveryDate] : [],
+      ));
+      if (byDate !== 0) return byDate;
+      return a.poNumber.localeCompare(b.poNumber) || a.styleName.localeCompare(b.styleName);
+    });
 }
 
 export function groupColorwayItemsByOrder(items: ColorwayCutShipItem[]): OrderCompletionGroup[] {

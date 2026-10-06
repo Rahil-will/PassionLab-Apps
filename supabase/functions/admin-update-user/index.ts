@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
 
     const { data: target, error: targetError } = await admin
       .from('profiles')
-      .select('id, factory_id, email, department_id, handover_enabled, workforce_enabled, audit_enabled, shipment_qa_enabled')
+      .select('id, factory_id, email, department_id, user_role, handover_enabled, workforce_enabled, audit_enabled, shipment_qa_enabled')
       .eq('id', userId)
       .maybeSingle();
 
@@ -77,6 +77,19 @@ Deno.serve(async (req) => {
       patch.floor_pin = hashed;
     }
 
+    if (body.password?.trim()) {
+      const nextPassword = body.password.trim();
+      if (nextPassword.length < 6) {
+        return jsonResponse({ error: 'Password must be at least 6 characters' }, 400);
+      }
+      const { error: passwordError } = await admin.auth.admin.updateUserById(userId, {
+        password: nextPassword,
+      });
+      if (passwordError) {
+        return jsonResponse({ error: 'Failed to update password: ' + passwordError.message }, 400);
+      }
+    }
+
     if (Object.keys(patch).length > 0) {
       const { error: updateError } = await admin.from('profiles').update(patch).eq('id', userId);
       if (updateError) {
@@ -94,7 +107,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (body.assignedOperationIds !== undefined || body.assignedApps !== undefined) {
+    const targetRole = (body.userRole ?? target.user_role) as string;
+    const skipFloorAccess =
+      targetRole === 'viewer'
+      || targetRole === 'admin'
+      || targetRole === 'superadmin';
+
+    if (
+      !skipFloorAccess
+      && (body.assignedOperationIds !== undefined || body.assignedApps !== undefined)
+    ) {
       const appsSet = new Set(body.assignedApps ?? []);
       const deriveFromApps = body.assignedApps !== undefined;
       const userClient = getUserClient(req.headers.get('authorization'));

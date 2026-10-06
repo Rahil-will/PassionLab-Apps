@@ -208,6 +208,5 @@ AS $function$
     AND n.rn <= GREATEST(p_page, 1) * GREATEST(p_page_size, 1)
   ORDER BY n.rn;
 $function$;
-
 REVOKE ALL ON FUNCTION public.get_orders_pipeline_page(uuid, text, integer, integer, text, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_orders_pipeline_page(uuid, text, integer, integer, text, uuid) TO authenticated;

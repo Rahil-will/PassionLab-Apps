@@ -84,6 +84,29 @@ body,
   scrollbar-color: rgba(200, 200, 200, 0.45) transparent;
 }
 
+.hairline-scrollbar::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+.hairline-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hairline-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+}
+
+.hairline-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.4);
+}
+
+.hairline-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+}
+
 .lot-select {
   max-height: 120px;
 }

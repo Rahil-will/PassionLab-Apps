@@ -3,9 +3,9 @@ import {
   handoverDisplayLabel,
   handoverQtyGap,
 } from '../../handoverStatus';
-import { fetchHandoverReport } from '../../transactionReportApi';
+import { fetchHandoverReport, type HandoverReportRow } from '../../transactionReportApi';
 import { resolveOrderMap } from '../reportMeta';
-import type { ColorwayLabel, ReportMeta } from '../reportMeta';
+import type { ColorwayLabel, ReportMeta, ReportOrderSummary } from '../reportMeta';
 import type {
   DayDeptReceivedRow,
   DayDeptSentRow,
@@ -19,32 +19,11 @@ function mergeMissingInTransit(a: number | null, b: number | null): number | nul
   return (a ?? 0) + (b ?? 0);
 }
 
-/** Handovers in/out of one department for the selected day (attributed by sent_at, same as transaction report). */
-export async function fetchDayDeptHandoverSummary(
-  factoryId: string,
-  date: string,
-  departmentId: string,
-  _meta: ReportMeta,
-  _colorwayLabels: ColorwayLabel[],
-): Promise<DayHandoverSummary> {
-  const [inbound, outbound] = await Promise.all([
-    fetchHandoverReport(factoryId, {
-      dateFrom: date,
-      dateTo: date,
-      toDepartmentId: departmentId,
-    }),
-    fetchHandoverReport(factoryId, {
-      dateFrom: date,
-      dateTo: date,
-      fromDepartmentId: departmentId,
-    }),
-  ]);
-
-  const orderMap = await resolveOrderMap(
-    factoryId,
-    _meta,
-    [...inbound, ...outbound].map((row) => row.orderId),
-  );
+function summarizeHandoverRows(
+  inbound: HandoverReportRow[],
+  outbound: HandoverReportRow[],
+  orderMap: Map<string, ReportOrderSummary>,
+): DayHandoverSummary {
 
   const receivedMap = new Map<string, DayDeptReceivedRow>();
   for (const row of inbound) {
@@ -133,6 +112,69 @@ export async function fetchDayDeptHandoverSummary(
         a.styleName.localeCompare(b.styleName) ||
         a.toDepartmentName.localeCompare(b.toDepartmentName),
     ),
+  };
+}
+
+/** Handovers in/out of one department for a day or date range (attributed by sent_at). */
+export async function fetchDayDeptHandoverSummary(
+  factoryId: string,
+  dateFrom: string,
+  departmentId: string,
+  _meta: ReportMeta,
+  _colorwayLabels: ColorwayLabel[],
+  dateTo: string = dateFrom,
+): Promise<DayHandoverSummary> {
+  const range = await fetchDayDeptHandoverRange(
+    factoryId,
+    dateFrom,
+    dateTo,
+    departmentId,
+    _meta,
+    _colorwayLabels,
+  );
+  return range.handover;
+}
+
+export async function fetchDayDeptHandoverRange(
+  factoryId: string,
+  dateFrom: string,
+  dateTo: string,
+  departmentId: string,
+  _meta: ReportMeta,
+  _colorwayLabels: ColorwayLabel[],
+): Promise<{ handover: DayHandoverSummary; handoverByDay: Array<{ date: string; handover: DayHandoverSummary }> }> {
+  const [inbound, outbound] = await Promise.all([
+    fetchHandoverReport(factoryId, {
+      dateFrom,
+      dateTo,
+      toDepartmentId: departmentId,
+    }),
+    fetchHandoverReport(factoryId, {
+      dateFrom,
+      dateTo,
+      fromDepartmentId: departmentId,
+    }),
+  ]);
+
+  const orderMap = await resolveOrderMap(
+    factoryId,
+    _meta,
+    [...inbound, ...outbound].map((row) => row.orderId),
+  );
+
+  const dates = [...new Set([...inbound, ...outbound].map((row) => row.logDate).filter(Boolean))].sort();
+  const handoverByDay = dates.map((date) => ({
+    date,
+    handover: summarizeHandoverRows(
+      inbound.filter((row) => row.logDate === date),
+      outbound.filter((row) => row.logDate === date),
+      orderMap,
+    ),
+  }));
+
+  return {
+    handover: summarizeHandoverRows(inbound, outbound, orderMap),
+    handoverByDay,
   };
 }
 

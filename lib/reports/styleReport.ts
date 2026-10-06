@@ -31,7 +31,7 @@ import {
 import { fetchHandoverReport } from '../transactionReportApi';
 import { fetchOrderRoutingSteps } from '../orderRoutingEditor';
 import { visitPipelineCellsFromRouting } from '../orderRoutingFlow';
-import { qcSessionOutputQty, qcSessionDefectiveQty } from './shared/qcUtils';
+import { qcSessionOutputQty, qcSessionDefectiveQty, qualityDayDefectivePct } from './shared/qcUtils';
 import { inDateRange, isPostgrestRpcMissing, isMissingRelationError, isMissingColumnError } from './shared/rpcUtils';
 import {
   fetchReportMeta,
@@ -1023,7 +1023,10 @@ function aggregateQualityViewRows(
   let dhuWeight = 0;
   let defSum = 0;
   let defWeight = 0;
-  const byDate = new Map<string, { inspected: number; failed: number }>();
+  const byDate = new Map<
+    string,
+    { inspected: number; failed: number; firstTimePass: number; defSum: number; defWeight: number }
+  >();
   const topDefectParts: unknown[] = [];
 
   for (const raw of rows) {
@@ -1055,9 +1058,23 @@ function aggregateQualityViewRows(
     }
 
     if (date) {
-      const cur = byDate.get(date) ?? { inspected: 0, failed: 0 };
+      const cur = byDate.get(date) ?? {
+        inspected: 0,
+        failed: 0,
+        firstTimePass: 0,
+        defSum: 0,
+        defWeight: 0,
+      };
       cur.inspected += rowInspected;
       cur.failed += rowFailed;
+      cur.firstTimePass += rowFirst;
+      if (raw.defective_pct != null && rowInspected > 0) {
+        const def = Number(raw.defective_pct);
+        if (!Number.isNaN(def)) {
+          cur.defSum += def * rowInspected;
+          cur.defWeight += rowInspected;
+        }
+      }
       byDate.set(date, cur);
     }
     if (raw.top_defects) topDefectParts.push(raw.top_defects);
@@ -1069,7 +1086,14 @@ function aggregateQualityViewRows(
     .map(([date, d]) => ({
       date,
       label: date.slice(5),
-      pct: d.inspected > 0 ? (d.failed / d.inspected) * 100 : null,
+      pct:
+        d.defWeight > 0
+          ? d.defSum / d.defWeight
+          : qualityDayDefectivePct({
+              inspected: d.inspected,
+              failed: d.failed,
+              firstTimePass: d.firstTimePass,
+            }),
     }));
 
   return {
@@ -1078,7 +1102,10 @@ function aggregateQualityViewRows(
     reworkPass,
     ftrPct,
     avgDhu: dhuWeight > 0 ? dhuSum / dhuWeight : null,
-    avgDefectivePct: defWeight > 0 ? defSum / defWeight : null,
+    avgDefectivePct:
+      defWeight > 0
+        ? defSum / defWeight
+        : qualityDayDefectivePct({ inspected, failed: 0, firstTimePass }),
     topDefects: mergeTopDefectsFromView(topDefectParts),
     dailyDefective,
   };
@@ -1207,7 +1234,7 @@ export async function fetchStyleDeptQualitySummary(
   if (!needsSessionGrain) {
     const { data, error } = await supabase
       .from('v_daily_quality')
-      .select('log_date, inspected, first_time_pass, rework_pass, total_pass, dhu, defective_pct, top_defects')
+      .select('log_date, inspected, first_time_pass, rework_pass, total_pass, failed, dhu, defective_pct, top_defects')
       .eq('factory_id', factoryId)
       .eq('order_id', orderId)
       .eq('department_id', departmentId)

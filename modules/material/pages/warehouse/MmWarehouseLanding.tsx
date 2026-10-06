@@ -16,7 +16,6 @@ import {
   storeDispatchStatusLabel,
 } from '../../lib/inboundDisplay';
 import { useMmInChallans, useMmStoreChallans, useMmWarehouseDashboard, useMmFptSummary } from '../../lib/useMmOps';
-import { useFabricV4Enabled } from '../../lib/useMmV4Config';
 
 const thCls =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
@@ -190,7 +189,6 @@ const RECENT = 7;
 
 export default function MmWarehouseLanding() {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-  const fabricV4 = useFabricV4Enabled();
   const dashboard = useMmWarehouseDashboard();
   const millIn = useMmInChallans('mill', '');
   const vendorIn = useMmInChallans('vendor', '');
@@ -388,9 +386,9 @@ export default function MmWarehouseLanding() {
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_RETURNS)}
                 />
                 <HubLink
-                  title="Process"
-                  subtitle="Greige out for dyeing or printing"
-                  onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS)}
+                  title="Send to processing"
+                  subtitle="Create process challan"
+                  onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND)}
                 />
               </HubGroup>
               <HubGroup label="Inventory" tone="inventory">
@@ -430,31 +428,24 @@ export default function MmWarehouseLanding() {
                 />
                 <HubLink
                   title="History"
-                  subtitle="Sent challans"
+                  subtitle="Cutting challans"
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STORE)}
+                />
+                <HubLink
+                  title="Process history"
+                  subtitle="Open and returned process challans"
+                  onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS)}
                 />
               </HubGroup>
               <HubGroup label="Quality" tone="quality">
-                {fabricV4 ? (
-                  <HubLink
-                    title="QC queue"
-                    subtitle="Warehouse rolls that still need test or inspection"
-                    onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_QC)}
-                  />
-                ) : null}
                 <HubLink
                   title="Testing"
                   subtitle={
                     fpt.data && fpt.data.rolls > 0 && fpt.data.failPct != null
-                      ? `${data?.testing_pending ?? 0} awaiting 4-point · ${Math.round(fpt.data.failPct)}% fail / 30d`
-                      : `${data?.testing_pending ?? 0} awaiting 4-point`
+                      ? `${data?.testing_pending ?? 0} awaiting test · ${Math.round(fpt.data.failPct)}% fail / 30d`
+                      : `${data?.testing_pending ?? 0} awaiting test`
                   }
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING)}
-                />
-                <HubLink
-                  title="After process"
-                  subtitle="4-point warehouse rolls when they return from a process vendor"
-                  onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS)}
                 />
               </HubGroup>
             </div>

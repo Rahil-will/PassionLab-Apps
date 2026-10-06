@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   fetchColorwayLabels,
+  fetchDayDeptAudits,
   fetchDayResourceHourReportRange,
   fetchReportMetaLite,
   fetchReportOrdersPage,
@@ -8,6 +9,7 @@ import {
   fetchStyleJourneyReport,
   type ColorwayLabel,
   type ColorwayLabelScope,
+  type DayAuditRow,
   type DayResourceHourReport,
   type ReportMeta,
   type ReportMetaLite,
@@ -150,6 +152,29 @@ export function useDayDeptReport(
         colorwayLabels,
       ),
     enabled: Boolean(factoryId && deptId && meta && enabled),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 2 * 60 * 60 * 1000,
+    refetchOnMount: false,
+  });
+}
+
+/** Completed AQL audit sessions for one department and date range. */
+export function useDayDeptAudits(
+  factoryId: string | null | undefined,
+  deptId: string | null | undefined,
+  dateFrom: string,
+  dateTo: string,
+  enabled = true,
+  shipmentDesk = false,
+) {
+  return useQuery<DayAuditRow[]>({
+    queryKey: [
+      ...queryKeys.reportDayAudits(factoryId ?? '', dateFrom, dateTo, deptId ?? undefined),
+      shipmentDesk ? 'shipment' : 'floor',
+    ] as const,
+    queryFn: () =>
+      fetchDayDeptAudits(factoryId!, deptId!, dateFrom, dateTo, { shipmentDesk }),
+    enabled: Boolean(factoryId && deptId && enabled),
     staleTime: 2 * 60 * 1000,
     gcTime: 2 * 60 * 60 * 1000,
     refetchOnMount: false,
