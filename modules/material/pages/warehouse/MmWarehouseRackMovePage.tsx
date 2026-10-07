@@ -32,6 +32,7 @@ import {
   stylesFromRolls,
 } from '../../lib/mmRackOps';
 import MmWarehouseRackBrowsePanel from './MmWarehouseRackBrowsePanel';
+import { locationDisplayLine } from '../../lib/mmUnitForm';
 
 type OpsAction = 'browse' | 'add' | 'move' | 'redlabel' | 'allocate';
 
@@ -646,13 +647,6 @@ export default function MmWarehouseRackMovePage() {
   );
 }
 
-function locLine(code: string | null | undefined, name: string | null | undefined): string {
-  const n = (name ?? '').trim();
-  const c = (code ?? '').trim();
-  if (n && c && n !== c) return `${n} · ${c}`;
-  return n || c || '—';
-}
-
 function RackAllocatePanel({
   rows,
   loading,
@@ -720,7 +714,9 @@ function RackAllocatePanel({
                   <td className={tdCls}>{row.fabric_name || row.fabric_type || '—'}</td>
                   <td className={tdCls}>{[row.color_ref, row.lot_no].filter(Boolean).join(' · ') || '—'}</td>
                   <td className={`${tdCls} tabular-nums`}>{formatQtyM(row.qty, row.uom)}</td>
-                  <td className={tdCls}>{locLine(row.location_code, row.location_name)}</td>
+                  <td className={tdCls}>
+                    {locationDisplayLine(row.location_code, row.location_name)}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -951,6 +951,7 @@ export interface MmRackOpsRoll {
   challan_no?: string | null;
   challan_source?: string | null;
   reference_no?: string | null;
+  unit_form?: string | null;
   location_id: string | null;
   location_code: string | null;
   location_name: string | null;
@@ -1367,6 +1368,8 @@ export interface MmWarehouseStockRow {
   status: string;
   bucket: string;
   status_label: string;
+  /** roll | lap | pieces — set at create / receive */
+  unit_form?: string | null;
   location_code: string | null;
   location_name: string | null;
   order_id: string | null;

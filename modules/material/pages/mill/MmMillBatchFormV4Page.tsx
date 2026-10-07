@@ -16,6 +16,7 @@ import {
 } from '../../lib/mmRollDraft';
 import { mmMillSaveBatchV4, type MmV4BatchKind } from '../../lib/mmV4Rpc';
 import { useFabricV4Enabled, useMmV4Config, useRefreshMmV4Config } from '../../lib/useMmV4Config';
+import { unitFormOptionLabel } from '../../lib/mmUnitForm';
 
 function todayIso(): string {
   const now = new Date();
@@ -228,8 +229,8 @@ export default function MmMillBatchFormV4Page() {
                 <th className="px-2 py-1.5 text-left">Roll</th>
                 <th className="px-2 py-1.5 text-left">Machine</th>
                 <th className="px-2 py-1.5 text-left">Shift</th>
-                <th className="px-2 py-1.5 text-left">Roll / Lap</th>
-                <th className="px-2 py-1.5 text-left">Tubular / Open</th>
+                <th className="px-2 py-1.5 text-left">Form</th>
+                <th className="px-2 py-1.5 text-left">Width</th>
               </tr>
             </thead>
             <tbody>
@@ -266,7 +267,7 @@ export default function MmMillBatchFormV4Page() {
                       <SelectDropdown
                         value={meta.unit_form}
                         onChange={(v) => patchMeta(row.localId, { unit_form: v })}
-                        options={unitForms.map((f) => ({ value: f, label: f }))}
+                        options={unitForms.map((f) => ({ value: f, label: unitFormOptionLabel(f) }))}
                         className="w-28"
                       />
                     </td>
@@ -274,7 +275,10 @@ export default function MmMillBatchFormV4Page() {
                       <SelectDropdown
                         value={meta.width_form}
                         onChange={(v) => patchMeta(row.localId, { width_form: v })}
-                        options={widthForms.map((f) => ({ value: f, label: f }))}
+                        options={widthForms.map((f) => ({
+                          value: f,
+                          label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
+                        }))}
                         className="w-28"
                       />
                     </td>

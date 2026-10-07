@@ -54,7 +54,8 @@ export const queryKeys = {
     location: string,
     buyer: string,
     page: number,
-  ) => ['mm', factoryId, 'ops', 'warehouseStock', search, location, buyer, page] as const,
+    pageSize?: number,
+  ) => ['mm', factoryId, 'ops', 'warehouseStock', search, location, buyer, page, pageSize ?? 50] as const,
   mmStockMovements: (factoryId: string, search: string, kind: string, page: number) =>
     ['mm', factoryId, 'ops', 'stockMovements', search, kind, page] as const,
   mmExpectedBoard: (factoryId: string, status: string, search: string, page: number) =>

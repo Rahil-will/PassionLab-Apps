@@ -30,6 +30,7 @@ import {
   type MmV4RollTags,
 } from '../../lib/mmV4Rpc';
 import { useFabricV4Enabled, useMmV4Config } from '../../lib/useMmV4Config';
+import { unitFormOptionLabel } from '../../lib/mmUnitForm';
 
 const th =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
@@ -609,21 +610,24 @@ export default function MmMillBatchDetailV4Page() {
           />
           <div className="grid grid-cols-2 gap-2">
             <SelectDropdown
-              label="Roll / Lap"
+              label="Form"
               value={String(tagDraft.unit_form ?? '')}
               onChange={(v) => setTagDraft((d) => ({ ...d, unit_form: v || null }))}
               options={[
                 { value: '', label: '—' },
-                ...unitForms.map((f) => ({ value: f, label: f })),
+                ...unitForms.map((f) => ({ value: f, label: unitFormOptionLabel(f) })),
               ]}
             />
             <SelectDropdown
-              label="Tubular / Open"
+              label="Width form"
               value={String(tagDraft.width_form ?? '')}
               onChange={(v) => setTagDraft((d) => ({ ...d, width_form: v || null }))}
               options={[
                 { value: '', label: '—' },
-                ...widthForms.map((f) => ({ value: f, label: f })),
+                ...widthForms.map((f) => ({
+                  value: f,
+                  label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
+                })),
               ]}
             />
           </div>
@@ -680,8 +684,8 @@ export default function MmMillBatchDetailV4Page() {
                   <th className="px-2 py-1.5 text-left">Roll</th>
                   <th className="px-2 py-1.5 text-left">Machine</th>
                   <th className="px-2 py-1.5 text-left">Shift</th>
-                  <th className="px-2 py-1.5 text-left">Roll / Lap</th>
-                  <th className="px-2 py-1.5 text-left">Tubular / Open</th>
+                  <th className="px-2 py-1.5 text-left">Form</th>
+                  <th className="px-2 py-1.5 text-left">Width</th>
                 </tr>
               </thead>
               <tbody>
@@ -718,7 +722,7 @@ export default function MmMillBatchDetailV4Page() {
                         <SelectDropdown
                           value={meta.unit_form}
                           onChange={(v) => patchAddMeta(row.localId, { unit_form: v })}
-                          options={unitForms.map((f) => ({ value: f, label: f }))}
+                          options={unitForms.map((f) => ({ value: f, label: unitFormOptionLabel(f) }))}
                           className="w-28"
                         />
                       </td>
@@ -726,7 +730,10 @@ export default function MmMillBatchDetailV4Page() {
                         <SelectDropdown
                           value={meta.width_form}
                           onChange={(v) => patchAddMeta(row.localId, { width_form: v })}
-                          options={widthForms.map((f) => ({ value: f, label: f }))}
+                          options={widthForms.map((f) => ({
+                            value: f,
+                            label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
+                          }))}
                           className="w-28"
                         />
                       </td>

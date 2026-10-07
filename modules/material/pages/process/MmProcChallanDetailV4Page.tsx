@@ -21,6 +21,7 @@ import {
   type MmV4ReturnMode,
 } from '../../lib/mmV4Rpc';
 import { useMmV4Config } from '../../lib/useMmV4Config';
+import { unitFormOptionLabel } from '../../lib/mmUnitForm';
 
 const th =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
@@ -582,7 +583,10 @@ export default function MmProcChallanDetailV4Page() {
                                   [lineId]: { ...d, unit_form: v },
                                 }))
                               }
-                              options={unitForms.map((f) => ({ value: f, label: f }))}
+                              options={unitForms.map((f) => ({
+                                value: f,
+                                label: unitFormOptionLabel(f),
+                              }))}
                               className="w-24"
                             />
                           </td>
@@ -595,7 +599,10 @@ export default function MmProcChallanDetailV4Page() {
                                   [lineId]: { ...d, width_form: v },
                                 }))
                               }
-                              options={widthForms.map((f) => ({ value: f, label: f }))}
+                              options={widthForms.map((f) => ({
+                                value: f,
+                                label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
+                              }))}
                               className="w-24"
                             />
                           </td>

@@ -22,6 +22,12 @@ import { mmWhSaveVendorGrnV4 } from '../../lib/mmV4Rpc';
 import { useInvalidateMmOps } from '../../lib/useMmOps';
 import { useMmConfigBundle } from '../../lib/useMmConfigBundle';
 import { useFabricV4Enabled, useMmV4Config } from '../../lib/useMmV4Config';
+import { unitFormLabel, unitFormOptionLabel } from '../../lib/mmUnitForm';
+
+function countFieldLabel(form: string): string {
+  const word = unitFormLabel(form, 2);
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)} *`;
+}
 
 export default function MmWarehouseReceiveUnallocatedPage() {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
@@ -243,17 +249,20 @@ export default function MmWarehouseReceiveUnallocatedPage() {
                   className="w-full"
                 />
                 <SelectDropdown
-                  label="Roll / Lap"
+                  label="Form"
                   value={unitForm}
                   onChange={setUnitForm}
-                  options={unitForms.map((f) => ({ value: f, label: f }))}
+                  options={unitForms.map((f) => ({ value: f, label: unitFormOptionLabel(f) }))}
                   className="w-full"
                 />
                 <SelectDropdown
-                  label="Tubular / Open"
+                  label="Width form"
                   value={widthForm}
                   onChange={setWidthForm}
-                  options={widthForms.map((f) => ({ value: f, label: f }))}
+                  options={widthForms.map((f) => ({
+                    value: f,
+                    label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
+                  }))}
                   className="w-full"
                 />
               </>
@@ -261,7 +270,7 @@ export default function MmWarehouseReceiveUnallocatedPage() {
             <div>
               <Input
                 id="mm-unalloc-count"
-                label="Rolls *"
+                label={countFieldLabel(unitForm)}
                 type="number"
                 min={1}
                 max={MAX_MILL_BATCH_ROLLS}

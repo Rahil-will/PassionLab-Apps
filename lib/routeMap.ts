@@ -384,7 +384,7 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     displayName: 'Style-wise fabrics summary',
     parent: RoutePath.MATERIAL_WAREHOUSE,
     section: 'Material',
-    subtitle: 'One row per style. Expand to see each fabric with its own qty. Meters are never added across fabrics.',
+    subtitle: 'Each row is one style, color, and fabric. Meters are never added across fabrics.',
   },
   [RoutePath.MATERIAL_WAREHOUSE_STYLE]: {
     path: RoutePath.MATERIAL_WAREHOUSE_STYLE,
@@ -502,7 +502,7 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     displayName: 'Stock on hand',
     parent: RoutePath.MATERIAL_WAREHOUSE,
     section: 'Material',
-    subtitle: 'View-only list of rolls and where they sit. Putaway and allocate from Rack.',
+    subtitle: 'Style, color, and fabric totals. Open a row for rolls, invoice, and test values.',
   },
   [RoutePath.MATERIAL_WAREHOUSE_MOVEMENTS]: {
     path: RoutePath.MATERIAL_WAREHOUSE_MOVEMENTS,

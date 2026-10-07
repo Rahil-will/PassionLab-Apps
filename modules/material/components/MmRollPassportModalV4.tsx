@@ -5,6 +5,7 @@ import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
 import { queryKeys } from '../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../stores';
 import { mmQcApproveDeviation, mmQcGetRoll, mmQcVoid } from '../lib/mmV4Rpc';
+import { unitFormOptionLabel } from '../lib/mmUnitForm';
 
 function statusBadgeVariant(
   status: string | null | undefined,
@@ -119,8 +120,10 @@ export function MmRollPassportModalV4({
             </h4>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {roll?.stage_code || '—'}
-              {roll?.unit_form ? ` · ${roll.unit_form}` : ''}
-              {roll?.width_form ? ` / ${roll.width_form}` : ''}
+              {roll?.unit_form ? ` · ${unitFormOptionLabel(roll.unit_form)}` : ''}
+              {roll?.width_form
+                ? ` / ${roll.width_form === 'tubular' ? 'Tubular' : roll.width_form === 'open' ? 'Open' : roll.width_form}`
+                : ''}
               {roll?.machine?.code ? ` · ${roll.machine.code}` : ''}
               {roll?.batch_no ? ` · ${roll.batch_no}` : ''}
               {roll?.dye_lot ? ` · dye ${roll.dye_lot}` : ''}

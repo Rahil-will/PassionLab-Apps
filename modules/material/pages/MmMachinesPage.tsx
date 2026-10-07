@@ -111,7 +111,32 @@ const MmMachinesPage = forwardRef<
     onDirtyChange?.(false);
   }, [data, onDirtyChange]);
 
-  const formDirty = Boolean(facilityId || code.trim() || name.trim() || machineKind);
+  const formDirty = useMemo(() => {
+    if (editingLocalId) {
+      const row = machines.find((m) => m.localId === editingLocalId);
+      if (!row) return false;
+      return (
+        row.facilityId !== facilityId
+        || row.machine_kind !== machineKind
+        || row.code !== code
+        || row.name !== name
+        || row.is_active !== isActive
+        || JSON.stringify(row.specs ?? {}) !== JSON.stringify(specs ?? {})
+      );
+    }
+    // Default machine kind alone must not count as unsaved.
+    return Boolean(facilityId || code.trim() || name.trim());
+  }, [
+    editingLocalId,
+    machines,
+    facilityId,
+    machineKind,
+    code,
+    name,
+    isActive,
+    specs,
+  ]);
+
   const dirty = useMemo(
     () => machines.some((m) => m.dirty) || formDirty,
     [machines, formDirty],
@@ -199,7 +224,7 @@ const MmMachinesPage = forwardRef<
     save: async () => {
       let pending = machines;
       const trimmedCode = code.trim();
-      if (facilityId || trimmedCode || name.trim() || machineKind) {
+      if (facilityId || trimmedCode || name.trim()) {
         if (!facilityId) {
           showNotification('Select a facility', 'error');
           return false;

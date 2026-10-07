@@ -284,12 +284,13 @@ export function useMmWarehouseStock(
   buyer: string,
   page: number,
   enabled = true,
+  pageSize = 50,
 ) {
   const factoryId = useNavigationStore((s) => s.factoryId);
   return useQuery({
-    queryKey: queryKeys.mmWarehouseStock(factoryId ?? '', search, location, buyer, page),
+    queryKey: queryKeys.mmWarehouseStock(factoryId ?? '', search, location, buyer, page, pageSize),
     queryFn: async (): Promise<MmWarehouseStockList> => {
-      const data = unwrap(await mmListWarehouseStock(search, location, buyer, page, 50));
+      const data = unwrap(await mmListWarehouseStock(search, location, buyer, page, pageSize));
       return {
         total: Number(data.total) || 0,
         counts: {
