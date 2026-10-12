@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Database, Plus, Search, Trash2 } from 'lucide-react';
 import { Button, SelectDropdown } from '../../../components/ui';
 import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
+import { MmSheetGrid, type SheetColumn } from './MmSheetGrid';
 import type { MmTestField } from '../lib/mmRpc';
 import {
   applyFieldValue,
+  applyMeasureQc,
   autoFillDraftRolls,
   blankDraftRoll,
+  DEFAULT_MEASURE_TOLERANCE,
+  LOT_TYPE_OPTIONS,
   millRollWorkStatus,
   millRollWorkStatusClass,
   millRollWorkStatusLabel,
@@ -14,11 +18,14 @@ import {
   nextRollNo,
   parseRollCount,
   parseTestOptions,
+  QC_DISPOSITIONS,
   resizeDraftRolls,
+  rollOutOfSpec,
   withLengthField,
   qtyFieldLabel,
   fieldRole,
   type MmDraftRoll,
+  type MmMeasureSpec,
 } from '../lib/mmRollDraft';
 
 interface MmRollEntryGridProps {
@@ -45,7 +52,34 @@ interface MmRollEntryGridProps {
   lockIdentity?: boolean;
   showShade?: boolean;
   allowShadeEdit?: boolean;
+  excel?: boolean;
+  /** Drop the inset around the grid so the table meets the card edges. */
+  flush?: boolean;
+  /** When false, a shade column is shown only if the fabric's test list includes shade. */
+  injectShade?: boolean;
+  /** Fixed roll measures: target, ±% tolerance, actual. Not test-requirement columns. */
+  nativeMeasures?: MmMeasureSpec[];
+  showLotType?: boolean;
+  showQcStatus?: boolean;
+  /** Extra cells on the same row. Omitted callers keep the current columns. */
+  extraColumns?: MmRollExtraColumn[];
+  extraValues?: Record<string, Record<string, string>>;
+  onExtraChange?: (localId: string, key: string, value: string) => void;
+  /** Stock-mode headers. Defaults stay "Qty" and "Weight". */
+  lengthHeader?: string;
+  weightHeader?: string;
+  /** Which stock measure stays the blue required column. Default: both blue, as before. */
+  emphasizeMeasure?: 'length' | 'weight';
 }
+
+export type MmRollExtraColumn = {
+  key: string;
+  label: string;
+  width?: string;
+  input?: 'text' | 'number' | 'select';
+  options?: { value: string; label: string }[];
+  placeholder?: string;
+};
 
 const thBase =
   'px-3 py-2 text-[10px] font-semibold uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap';
@@ -124,13 +158,27 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
   lockIdentity = false,
   showShade = false,
   allowShadeEdit = false,
+  excel = false,
+  flush = false,
+  injectShade = true,
+  nativeMeasures = [],
+  showLotType = false,
+  showQcStatus = false,
+  extraColumns = [],
+  extraValues,
+  onExtraChange,
+  lengthHeader,
+  weightHeader,
+  emphasizeMeasure,
 }) => {
   const [rollCount, setRollCount] = useState('');
   const [countError, setCountError] = useState<string | null>(null);
   const [rollFilter, setRollFilter] = useState('');
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
   const displayFields = useMemo(
-    () => (columnSource === 'fields' ? withLengthField(fields, uom) : fields),
-    [columnSource, fields, uom],
+    () => (columnSource === 'fields' ? withLengthField(fields, uom, { injectShade }) : fields),
+    [columnSource, fields, injectShade, uom],
   );
   const center = align === 'center';
   const thCls = `${thBase} text-slate-500 ${center ? 'text-center' : 'text-left'}`;
@@ -169,13 +217,145 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
     return rows.filter((row) => row.roll_no.toLowerCase().includes(q));
   }, [rows, rollFilter]);
 
+  const useSheet = excel && columnSource === 'fields';
+  const sheetColumns = useMemo((): SheetColumn[] => {
+    if (!useSheet) return [];
+    const cols: SheetColumn[] = [];
+    if (showSerialNumber) cols.push({ key: 'sno', label: 'S.No', width: flush ? undefined : '3.25rem' });
+    cols.push({
+      key: 'roll',
+      label: 'Roll no.',
+      width: flush ? undefined : '6.5rem',
+      editable: !disabled && !lockIdentity,
+    });
+    if (showShade) {
+      cols.push({
+        key: 'shade',
+        label: 'Shade',
+        width: flush ? undefined : '6rem',
+        editable: !disabled && (allowShadeEdit || !lockIdentity),
+      });
+    }
+    const pushField = (field: MmTestField) => {
+      if (showShade && fieldRole(field) === 'shade') return;
+      const role = fieldRole(field);
+      const options = parseTestOptions(field.options);
+      cols.push({
+        key: field.key,
+        label: field.label,
+        editable: !disabled && !(lockIdentity && role !== 'attr'),
+        width: flush ? undefined : (role === 'length' ? '6rem' : '7rem'),
+        kind: field.data_type === 'select' ? 'select' : 'text',
+        options: field.data_type === 'select'
+          ? [{ value: '', label: '—' }, ...options.map((opt) => ({ value: opt, label: opt }))]
+          : undefined,
+        headerClassName: role === 'length' ? 'text-blue-700 bg-blue-50' : undefined,
+        cellClassName: role === 'length' ? 'bg-blue-50/40' : undefined,
+      });
+    };
+    const lengthFields = displayFields.filter((field) => fieldRole(field) === 'length');
+    const otherFields = displayFields.filter((field) => fieldRole(field) !== 'length');
+    lengthFields.forEach(pushField);
+    if (showLotType) {
+      cols.push({
+        key: 'lot_type',
+        label: 'Lot type',
+        editable: !disabled,
+        kind: 'select',
+        options: [{ value: '', label: '—' }, ...LOT_TYPE_OPTIONS.map((lot) => ({ value: lot, label: lot }))],
+      });
+    }
+    for (const measure of nativeMeasures) {
+      cols.push({ key: measure.targetKey, label: `Target ${measure.label}`, editable: false });
+      cols.push({ key: measure.tolKey, label: `${measure.label} ±%`, editable: !disabled });
+      cols.push({
+        key: measure.actualKey,
+        label: `Actual ${measure.label}`,
+        editable: !disabled,
+        headerClassName: 'text-blue-700 bg-blue-50',
+      });
+    }
+    otherFields.forEach(pushField);
+    if (showQcStatus) {
+      cols.push({
+        key: 'qc_status',
+        label: 'QC',
+        editable: !disabled,
+        kind: 'select',
+        options: QC_DISPOSITIONS.map((item) => ({ value: item.value, label: item.label })),
+      });
+    }
+    if (showStatus) cols.push({ key: 'status', label: 'Status', width: flush ? undefined : '7.5rem' });
+    return cols;
+  }, [allowShadeEdit, disabled, displayFields, flush, lockIdentity, nativeMeasures, showLotType, showQcStatus, showSerialNumber, showShade, showStatus, useSheet]);
+
+  const sheetValue = (rowIndex: number, key: string): string => {
+    const row = visibleRows[rowIndex];
+    if (!row) return '';
+    if (key === 'sno') return String(rows.findIndex((item) => item.localId === row.localId) + 1);
+    if (key === 'roll') return row.roll_no;
+    if (key === 'shade') return row.shade;
+    if (key === 'lot_type') return row.lot_no;
+    if (key === 'qc_status') return row.attributes.qc_status || 'pass';
+    if (nativeMeasures.some((measure) => measure.targetKey === key || measure.tolKey === key || measure.actualKey === key)) {
+      if (nativeMeasures.some((measure) => measure.tolKey === key) && !(row.attributes[key] ?? '').trim()) {
+        return DEFAULT_MEASURE_TOLERANCE;
+      }
+      return row.attributes[key] ?? '';
+    }
+    if (key === 'status') return millRollWorkStatusLabel(row.millWorkStatus ?? millRollWorkStatus(row));
+    const field = displayFields.find((item) => item.key === key);
+    if (!field) return '';
+    if (field.key === 'length_m' && !row.attributes[field.key]) return row.length_m;
+    return row.attributes[field.key] ?? '';
+  };
+
+  const sheetChange = (rowIndex: number, key: string, value: string) => {
+    const current = rowsRef.current;
+    const row = visibleRows[rowIndex];
+    if (!row) return;
+    let next = current;
+    if (key === 'roll') {
+      next = current.map((item) => (item.localId === row.localId ? { ...item, roll_no: value } : item));
+    } else if (key === 'shade') {
+      next = current.map((item) => (item.localId === row.localId ? { ...item, shade: value } : item));
+    } else if (key === 'lot_type') {
+      next = current.map((item) => (item.localId === row.localId ? { ...item, lot_no: value } : item));
+    } else if (key === 'qc_status') {
+      next = current.map((item) => (
+        item.localId === row.localId
+          ? { ...item, attributes: { ...item.attributes, qc_status: value } }
+          : item
+      ));
+    } else if (nativeMeasures.some((measure) => measure.targetKey === key || measure.tolKey === key || measure.actualKey === key)) {
+      next = current.map((item) => {
+        if (item.localId !== row.localId) return item;
+        const attributes = { ...item.attributes, [key]: value };
+        return applyMeasureQc({ ...item, attributes }, nativeMeasures);
+      });
+    } else {
+      const field = displayFields.find((item) => item.key === key);
+      if (!field) return;
+      next = current.map((item) => (item.localId === row.localId ? applyFieldValue(item, field, value) : item));
+    }
+    rowsRef.current = next;
+    onChange(next);
+  };
+
   const colSpan =
     1 +
     (showSerialNumber ? 1 : 0) +
     (showStatus ? 1 : 0) +
     (columnSource === 'stock' ? 4 : 0) +
     displayFields.length +
+    extraColumns.length +
     (showRemove ? 1 : 0);
+  const lengthLabel = lengthHeader ?? qtyFieldLabel(uom);
+  const weightLabel = weightHeader ?? 'Weight';
+  const lengthHeadCls = emphasizeMeasure === 'weight' ? thCls : qtyHeadCls;
+  const weightHeadCls = emphasizeMeasure === 'length' ? thCls : qtyHeadCls;
+  const lengthCellCls = emphasizeMeasure === 'weight' ? tdBase : qtyCellCls;
+  const weightCellCls = emphasizeMeasure === 'length' ? tdBase : qtyCellCls;
 
   const showHeader = Boolean(title || subtitle || showRollSearch || (showAutoFill && rows.length > 0));
   const showFooter = entryMode === 'generate' || entryMode === 'add' || Boolean(footerActions) || (showAutoFill && rows.length > 0);
@@ -185,7 +365,7 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
       {showHeader && (
         <div
           className={`py-4 flex items-center justify-between gap-3 ${
-            framed ? 'px-4 bg-slate-50/50 border-b border-slate-100' : 'px-6 bg-white border-b border-slate-100'
+            flush ? 'px-4 bg-white border-b border-slate-100' : framed ? 'px-4 bg-slate-50/50 border-b border-slate-100' : 'px-6 bg-white border-b border-slate-100'
           }`}
         >
           <div className="min-w-0 flex items-start gap-2.5">
@@ -241,7 +421,41 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
           </div>
         </div>
       )}
-      {rows.length === 0 ? (
+      {useSheet ? (
+        <div className={framed || flush ? '' : 'px-1 pb-1'}>
+          <MmSheetGrid
+            columns={sheetColumns}
+            rowCount={visibleRows.length}
+            getValue={sheetValue}
+            onChange={sheetChange}
+            isRowLocked={(index) => Boolean(visibleRows[index]?.locked)}
+            emptyText={emptyMessage}
+            fit={flush}
+            rowClassName={(index) => (
+              nativeMeasures.length > 0 && visibleRows[index] && rollOutOfSpec(visibleRows[index], nativeMeasures)
+                ? 'bg-red-50'
+                : undefined
+            )}
+            rowAction={showRemove ? (index) => {
+              const row = visibleRows[index];
+              if (!row) return null;
+              return (
+                <DesktopWriteGate>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center w-full h-8 text-slate-400 hover:text-red-600 disabled:opacity-40"
+                    disabled={disabled || Boolean(row.locked || row.id)}
+                    onClick={() => onChange(rows.filter((item) => item.localId !== row.localId))}
+                    aria-label="Remove roll"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </DesktopWriteGate>
+              );
+            } : undefined}
+          />
+        </div>
+      ) : rows.length === 0 ? (
         <p className="text-[11px] text-slate-400 italic py-8 text-center">{emptyMessage}</p>
       ) : (
         <div className="overflow-x-auto">
@@ -254,8 +468,12 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
                 <th className={thCls} style={{ width: '5.5rem' }}>Roll no.</th>
                 {columnSource === 'stock' && (
                   <>
-                    <th className={qtyHeadCls} style={{ width: '12%' }}>{qtyFieldLabel(uom)}</th>
-                    <th className={qtyHeadCls} style={{ width: '12%' }}>Weight</th>
+                    <th className={lengthHeadCls} style={{ width: '12%' }}>
+                      {lengthLabel}{emphasizeMeasure === 'length' ? ' *' : ''}
+                    </th>
+                    <th className={weightHeadCls} style={{ width: '12%' }}>
+                      {weightLabel}{emphasizeMeasure === 'weight' ? ' *' : ''}
+                    </th>
                     <th className={thCls} style={{ width: '12%' }}>Shade</th>
                     <th className={thCls} style={{ width: '12%' }}>Lot</th>
                   </>
@@ -266,8 +484,11 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
                 {displayFields.map((field) => (
                   <th key={field.id} className={thCls}>{field.label}</th>
                 ))}
+                {extraColumns.map((col) => (
+                  <th key={col.key} className={thCls} style={col.width ? { width: col.width } : undefined}>{col.label}</th>
+                ))}
                 {showStatus ? (
-                  <th className={thCls} style={{ width: '6.75rem' }}>Status</th>
+                  <th className={`${thBase} text-slate-500 text-center`} style={{ width: '6.75rem' }}>Status</th>
                 ) : null}
                 {showRemove ? <th className={deleteHeadCls} style={{ width: '2.5rem' }} /> : null}
               </tr>
@@ -303,9 +524,9 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
                   </td>
                   {columnSource === 'stock' && (
                     <>
-                      <td className={qtyCellCls}>
+                      <td className={lengthCellCls}>
                         <input
-                          className={qtyInput}
+                          className={emphasizeMeasure === 'weight' ? stockInput : qtyInput}
                           type="number"
                           min="0"
                           step="0.01"
@@ -314,9 +535,9 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
                           onChange={(e) => patch(row.localId, { length_m: e.target.value })}
                         />
                       </td>
-                      <td className={qtyCellCls}>
+                      <td className={weightCellCls}>
                         <input
-                          className={qtyInput}
+                          className={emphasizeMeasure === 'length' ? stockInput : qtyInput}
                           type="number"
                           min="0"
                           step="0.01"
@@ -369,6 +590,37 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
                       />
                     </td>
                   ))}
+                  {extraColumns.map((col) => {
+                    const value = extraValues?.[row.localId]?.[col.key] ?? '';
+                    const locked = disabled || row.locked;
+                    return (
+                      <td key={col.key} className={tdBase}>
+                        {col.input === 'select' ? (
+                          <SelectDropdown
+                            value={value}
+                            onChange={(next) => onExtraChange?.(row.localId, col.key, next)}
+                            options={col.options ?? []}
+                            placeholder="—"
+                            size="compact"
+                            shape="none"
+                            variant="cell"
+                            disabled={locked || !onExtraChange}
+                            className="w-full"
+                          />
+                        ) : (
+                          <input
+                            className={stockInput}
+                            type={col.input === 'number' ? 'number' : 'text'}
+                            step={col.input === 'number' ? '0.01' : undefined}
+                            value={value}
+                            placeholder={col.placeholder}
+                            disabled={locked || !onExtraChange}
+                            onChange={(e) => onExtraChange?.(row.localId, col.key, e.target.value)}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                   {showStatus ? (
                     <td className={`${tdBase} text-center`}>
                       <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${millRollWorkStatusClass(workStatus)}`}>
@@ -402,14 +654,14 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
         </div>
       )}
       {showRollCountLabel && rows.length > 0 ? (
-        <p className={`text-[11px] text-slate-400 ${framed ? 'px-4' : 'px-6'} py-2`}>
+        <p className={`text-[11px] text-slate-400 ${flush || framed ? 'px-4' : 'px-6'} py-2`}>
           Showing {visibleRows.length} {visibleRows.length === 1 ? 'roll' : 'rolls'}
         </p>
       ) : null}
       {showFooter && entryMode === 'generate' && (
         <>
           <div className="h-8 bg-white" />
-          <div className={`flex flex-wrap items-center justify-between gap-3 py-3 border-t border-slate-200 bg-slate-50 ${framed ? 'px-4' : 'px-6'}`}>
+          <div className={`flex flex-wrap items-center justify-between gap-3 py-3 border-t border-slate-200 bg-slate-50 ${flush || framed ? 'px-4' : 'px-6'}`}>
             <DesktopWriteGate>
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <label htmlFor="mm-roll-count" className="text-[11px] font-medium text-slate-600">
@@ -461,7 +713,7 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
       )}
       {showFooter && entryMode === 'none' && footerActions ? (
         <div
-          className={`flex flex-wrap items-center justify-end gap-2 py-3 border-t border-slate-100 bg-white ${framed ? 'px-4' : 'px-6'}`}
+          className={`flex flex-wrap items-center justify-end gap-2 py-3 border-t border-slate-100 bg-white ${flush || framed ? 'px-4' : 'px-6'}`}
         >
           {footerActions}
         </div>

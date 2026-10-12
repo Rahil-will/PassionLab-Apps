@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { Plus } from 'lucide-react';
 import { Card } from '../../../../components/ui';
 import { ColorQtyWorkspace } from '../../../../components/production/ColorQtyWorkspace';
 import { sizeOrderQty, sizeAdjQty, sumSizeOrderQty, sumSizeAdjQty } from '../../../../lib/colorwaySizesUtils';
@@ -15,7 +14,6 @@ interface ColorwayWorkspaceSectionProps {
   hasSizeContext: boolean;
   headerState: HeaderState;
   buyerExtraPct: number;
-  onOpenColorPage: (opts: { addNew?: boolean; colorId?: string }) => void;
 }
 
 export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> = ({
@@ -26,7 +24,6 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
   hasSizeContext,
   headerState,
   buyerExtraPct,
-  onOpenColorPage,
 }) => {
   const { showNotification } = useNotificationStore();
 
@@ -53,7 +50,15 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
       showNotification('Select a size group first', 'error');
       return;
     }
-    onOpenColorPage({ addNew: true });
+    colorwayDispatch({
+      type: 'addColor',
+      payload: {
+        name: '',
+        sizes: displaySizes.map((size) => ({ size, order_qty: 0, adj_qty: 0 })),
+      },
+      displaySizes,
+      totalAllowancePct,
+    });
   };
 
   return (
@@ -63,21 +68,12 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
         subtitle={[
           headerState.cuttingAllowance > 0 ? `Cut ${headerState.cuttingAllowance}%` : '',
           headerState.applyExtraAllowance && buyerExtraPct > 0 ? `Buyer ${buyerExtraPct}%` : '',
-          totalAllowancePct > 0 ? `Total ${totalAllowancePct.toFixed(1)}% allowance` : 'Click a color to edit sizes and materials',
+          totalAllowancePct > 0
+            ? `Total ${totalAllowancePct.toFixed(1)}% allowance`
+            : 'Add a colour row, then enter name and size quantities',
         ]
           .filter(Boolean)
           .join(' · ')}
-        action={
-          <button
-            type="button"
-            onClick={handleAddColor}
-            disabled={!hasSizeContext}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <Plus size={12} />
-            Add Color
-          </button>
-        }
         className="shadow-sm border-slate-200 w-full overflow-visible"
         noPadding
       >
@@ -92,9 +88,8 @@ export const ColorwayWorkspaceSection: React.FC<ColorwayWorkspaceSectionProps> =
           buyerExtraPct={buyerExtraPct}
           selectedBuyer={headerState.selectedBuyer}
           onSelectColor={(id) => colorwayDispatch({ type: 'selectColor', id })}
-          onOpenColorPage={(id) => onOpenColorPage({ colorId: id })}
-          readOnly
-          onAddColor={() => handleAddColor()}
+          readOnly={false}
+          onAddColor={handleAddColor}
           onClearColorSelection={() => colorwayDispatch({ type: 'selectColor', id: null })}
           onNameChange={(id, name) => colorwayDispatch({ type: 'renameColor', id, name })}
           onOrderChange={(id, size, qty) =>

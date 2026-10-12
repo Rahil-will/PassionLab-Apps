@@ -17,10 +17,15 @@ export interface ModuleNavSection {
   items: ModuleNavItem[];
 }
 
+/** Sub-switch that must be on for a Material route to show. `fabric` = warehouse or mill. */
+export type MmRouteFeature = 'fabric_warehouse' | 'fabric_mill' | 'trims' | 'fabric';
+
 export interface ModuleRouteDef {
   path: string;
   /** Permission key checked for mm_* / module routes (non-admin). */
   permission?: string;
+  /** Material sub-switch. Absent on non-material routes. */
+  feature?: MmRouteFeature;
   /** Lazy page component loader. */
   component: () => Promise<{ default: ComponentType }>;
 }

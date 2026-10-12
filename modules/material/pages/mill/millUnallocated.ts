@@ -92,6 +92,6 @@ export function millTestCaptureFields(fields: MmTestField[]): MmTestField[] {
 export type MillQualityMode = 'testing' | 'inspection';
 
 export function millQualityMode(mode?: string): MillQualityMode | null {
-  if (mode === 'testing' || mode === 'inspection') return mode;
+  if (mode === 'testing' || mode === 'inspection') return 'testing';
   return null;
 }

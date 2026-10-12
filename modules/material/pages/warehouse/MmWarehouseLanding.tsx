@@ -124,6 +124,7 @@ const HUB_GROUPS = {
   inward: { shell: 'bg-blue-50 border-blue-100', label: 'text-blue-700' },
   inventory: { shell: 'bg-emerald-50 border-emerald-100', label: 'text-emerald-700' },
   planning: { shell: 'bg-amber-50 border-amber-100', label: 'text-amber-800' },
+  processing: { shell: 'bg-violet-50 border-violet-100', label: 'text-violet-700' },
   issue: { shell: 'bg-orange-50 border-orange-100', label: 'text-orange-800' },
   quality: { shell: 'bg-rose-50 border-rose-100', label: 'text-rose-700' },
 } as const;
@@ -338,9 +339,11 @@ export default function MmWarehouseLanding() {
                         <td className={`${tdCls} truncate`}>{row.fabric_name || row.fabric_type || '—'}</td>
                         <td className={`${tdCls} truncate`}>{inboundFabricCategory(row)}</td>
                         <td className={tdRollsCls}>
-                          <span className="block text-[9px] font-semibold text-yellow-900 tabular-nums">{row.roll_count}</span>
+                          <span className="block text-[9px] font-semibold text-yellow-900 tabular-nums">
+                            {row.roll_count}
+                          </span>
                         </td>
-                        <td className={tdCls}>
+                        <td className={`${tdCls} text-center`}>
                           <span className="inline-flex items-center gap-1.5">
                             <span className={`w-1.5 h-1.5 rounded-full ${inboundStatusDot(row.status)}`} />
                             <span className={`text-[9px] font-bold ${inboundStatusText(row.status)}`}>
@@ -360,8 +363,8 @@ export default function MmWarehouseLanding() {
           </div>
         </div>
 
-        <aside className="self-stretch min-h-[26rem] lg:min-h-0">
-          <div className="h-full rounded-2xl border border-slate-200 bg-slate-100/80 p-3 shadow-sm flex flex-col min-h-0 overflow-y-auto">
+        <aside className="w-full min-h-[26rem] lg:min-h-0 lg:sticky lg:top-0 lg:self-start lg:z-10 lg:h-[calc(100dvh-7.25rem)] lg:max-h-[calc(100dvh-7.25rem)]">
+          <div className="h-full rounded-2xl border border-slate-200 bg-slate-100/80 p-3 shadow-sm flex flex-col min-h-[26rem] lg:min-h-0 lg:max-h-full overflow-hidden">
             <p className="text-[11px] font-semibold text-slate-800 shrink-0 px-0.5">Quick access</p>
             <div className="mt-2.5 flex-1 min-h-0 flex flex-col gap-2 overflow-y-auto">
               <HubGroup label="Inward" tone="inward">
@@ -384,11 +387,6 @@ export default function MmWarehouseLanding() {
                   title="Supplier returns"
                   subtitle="Red label sent back"
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_RETURNS)}
-                />
-                <HubLink
-                  title="Send to processing"
-                  subtitle="Create process challan"
-                  onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND)}
                 />
               </HubGroup>
               <HubGroup label="Inventory" tone="inventory">
@@ -420,6 +418,18 @@ export default function MmWarehouseLanding() {
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLES)}
                 />
               </HubGroup>
+              <HubGroup label="Processing" tone="processing">
+                <HubLink
+                  title="Send to processing"
+                  subtitle="Create process challan"
+                  onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND)}
+                />
+                <HubLink
+                  title="Process history"
+                  subtitle="Open and returned process challans"
+                  onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS)}
+                />
+              </HubGroup>
               <HubGroup label="Issue" tone="issue">
                 <HubLink
                   title="Dispatch"
@@ -430,11 +440,6 @@ export default function MmWarehouseLanding() {
                   title="History"
                   subtitle="Cutting challans"
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STORE)}
-                />
-                <HubLink
-                  title="Process history"
-                  subtitle="Open and returned process challans"
-                  onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS)}
                 />
               </HubGroup>
               <HubGroup label="Quality" tone="quality">

@@ -11,11 +11,11 @@ import {
 } from '../lib/mmRollDraft';
 
 const thFirstCls =
-  'pl-4 pr-2.5 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-left';
+  'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-left overflow-hidden';
 const thCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center';
-const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-left';
-const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center overflow-hidden';
+const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-left max-w-0 overflow-hidden';
+const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center max-w-0 overflow-hidden';
 
 interface MmMillRollsTableProps {
   rolls: MmMillLineRoll[];
@@ -106,7 +106,7 @@ export function MmMillRollsTable({
           ))}
           <col style={even ? undefined : { width: '6.75rem' }} />
         </colgroup>
-        <thead>
+        <thead className="sticky top-0 z-10">
           <tr>
             {selectable && (
               <th className={thFor('check')} style={{ width: '2.5rem' }}>

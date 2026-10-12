@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fieldsForType,
+  measureOutOfSpec,
   withLengthField,
   fieldRole,
   millRollFieldText,
@@ -29,6 +30,22 @@ describe('withLengthField', () => {
       { id: 'g', key: 'gsm', label: 'GSM', data_type: 'number', options: null },
     ]);
     expect(cols.map((field) => field.key)).toEqual(['length_m', 'shade', 'gsm']);
+  });
+
+  it('keeps a catalog shade column when shade is not injected', () => {
+    const cols = withLengthField([
+      { id: 'q', key: 'length_m', label: 'Qty', data_type: 'decimal', options: null },
+      { id: 's', key: 'shade', label: 'Shade', data_type: 'select', options: ['A'] },
+    ], undefined, { injectShade: false });
+    expect(cols.map((field) => field.key)).toEqual(['length_m', 'shade']);
+  });
+});
+
+describe('measureOutOfSpec', () => {
+  it('flags a width outside ±2.5% and ignores an empty actual', () => {
+    expect(measureOutOfSpec('60', '62', '2.5')).toBe(true);
+    expect(measureOutOfSpec('60', '61', '2.5')).toBe(false);
+    expect(measureOutOfSpec('60', '', '2.5')).toBe(false);
   });
 });
 
@@ -234,6 +251,11 @@ describe('growMillBatchRolls', () => {
       ...partial,
     };
   }
+
+  it('numbers a new batch ROL-001 onward', () => {
+    const next = growMillBatchRolls([], 3, fields);
+    expect(next.map((item) => item.roll_no)).toEqual(['ROL-001', 'ROL-002', 'ROL-003']);
+  });
 
   it('keeps sent rolls at the bottom and inserts extra rolls as new', () => {
     const rows = [

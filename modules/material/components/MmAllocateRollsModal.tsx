@@ -6,6 +6,7 @@ import { useOrdersList } from '../../../hooks/useOrdersList';
 import { useNavigationStore, useNotificationStore } from '../../../stores';
 import type { MmWarehouseFabricCell, MmWarehouseStockRow } from '../lib/mmRpc';
 import { mmAllocateMillRollsToStyle, mmAllocateRollsToStyle } from '../lib/mmRpc';
+import { differentFabric, fabricMismatchMessage, mismatchHitsRoll } from '../lib/fabricStock';
 import { useMmWarehouseBoard } from '../lib/useMmOps';
 
 function normColor(value: string | null | undefined): string {
@@ -31,6 +32,7 @@ export function MmAllocateRollsModal({
   const factoryId = useNavigationStore((s) => s.factoryId);
   const { showNotification } = useNotificationStore();
   const [busy, setBusy] = useState(false);
+  const [mismatch, setMismatch] = useState<string | null>(null);
   const [orderSearch, setOrderSearch] = useState('');
   const [orderId, setOrderId] = useState('');
   const [colorwayId, setColorwayId] = useState('');
@@ -74,6 +76,7 @@ export function MmAllocateRollsModal({
       setColorwayId('');
       setFabricLineId('');
       setBusy(false);
+      setMismatch(null);
     }
   }, [open]);
 
@@ -94,7 +97,13 @@ export function MmAllocateRollsModal({
             colorwayId,
             fabricLineId,
           );
-      if (res.ok === false) throw new Error(res.message);
+      if (res.ok === false) {
+        const text = fabricMismatchMessage(res);
+        if (text) setMismatch(text);
+        else showNotification(res.message, 'error');
+        return;
+      }
+      setMismatch(null);
       onDone(Boolean(res.data.over_allocated), { orderId, colorwayId, fabricLineId });
     } catch (e) {
       showNotification(e instanceof Error ? e.message : 'Allocate failed', 'error');
@@ -115,15 +124,38 @@ export function MmAllocateRollsModal({
             ? ' Pick a style PO, then that color\'s material. Rolls stay at the mill until you dispatch.'
             : ' Coverage follows the unit, not the inbound challan.'}
         </p>
-        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 space-y-1 max-h-24 overflow-y-auto">
-          {rolls.map((row) => (
-            <div key={row.id}>
-              {row.unit_code}
-              {row.color_ref ? ` · ${row.color_ref}` : ''}
-              {row.shade ? ` · shade ${row.shade}` : ''}
-              {row.lot_no ? ` · lot ${row.lot_no}` : ''}
-            </div>
-          ))}
+        <div className="mt-3 rounded-lg border border-slate-100 overflow-hidden max-h-28 overflow-y-auto">
+          <table className="w-full border-collapse text-[11px] text-slate-600">
+            <thead>
+              <tr className="bg-slate-50 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-2 py-1 text-left">Roll</th>
+                <th className="px-2 py-1 text-left w-20">Fabric</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rolls.map((row) => {
+                const other = differentFabric(selectedCell?.fabric_id, row.fabric_id);
+                const hit = mismatch ? mismatchHitsRoll(mismatch, row.unit_code) : false;
+                return (
+                  <tr
+                    key={row.id}
+                    title={other ? 'Different fabric' : undefined}
+                    className={other ? 'opacity-40' : hit ? 'text-red-700 bg-red-50' : undefined}
+                  >
+                    <td className="px-2 py-1 border-t border-slate-100">
+                      {row.unit_code}
+                      {row.color_ref ? ` · ${row.color_ref}` : ''}
+                      {row.shade ? ` · shade ${row.shade}` : ''}
+                      {row.lot_no ? ` · lot ${row.lot_no}` : ''}
+                    </td>
+                    <td className="px-2 py-1 border-t border-slate-100 font-mono text-[10px] text-slate-700">
+                      {row.fabric_code || '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
         <div className="mt-4">
           <label className="block text-[11px] font-semibold text-slate-600 mb-1">Style / PO</label>
@@ -190,6 +222,11 @@ export function MmAllocateRollsModal({
             />
           </div>
         </div>
+        {mismatch ? (
+          <p className="mt-3 text-[11px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            Fabric mismatch — {mismatch}
+          </p>
+        ) : null}
         {colorMismatch ? (
           <p className="mt-3 text-[11px] text-amber-700">
             Color ref on a selected roll does not match this colorway. You can still allocate.

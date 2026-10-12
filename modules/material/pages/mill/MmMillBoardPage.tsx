@@ -1,187 +1,145 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Filter, Search } from 'lucide-react';
 import { Card, SelectDropdown } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { Pagination } from '../../../../components/Pagination';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { useDebouncedValue } from '../../../../hooks/useDebouncedValue';
-import { useOrdersList, type OrderListRow } from '../../../../hooks/useOrdersList';
+import { queryKeys } from '../../../../lib/queryKeys';
 import { useBuyersCatalog } from '../../../../lib/queries/settingsSlices';
 import { useNavigationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
-import type { MmMillFabricCell } from '../../lib/mmRpc';
-import { useMmMillBoard } from '../../lib/useMmOps';
-import { millBoardRowStatus, millBoardStatusRank, millWordDot, millWordText } from './millStatus';
-import { fabricTypeCategoryLine } from '../../components/MmFabricSummaryCard';
+import { fmtUomQty } from '../../lib/fabricStock';
+import { useMmFabrics } from '../../lib/useMmFabrics';
+import {
+  mmStyleFabricPosition,
+  type MmStyleFabricPositionRow,
+} from '../../lib/mmV4Rpc';
 
 const PAGE_SIZE = 20;
 
-type MillFilter = '' | 'Pending' | 'Completed' | 'Closed';
+type StatusFilter = '' | 'not_started' | 'partial' | 'covered' | 'closed';
 
-function fabricBoardStatus(cell: MmMillFabricCell) {
-  return millBoardRowStatus(cell.required_m, Number(cell.qty_dispatched_m), Boolean(cell.mill_short_closed));
+function formLine(rolls: number, laps: number, units = 0): string {
+  const parts: string[] = [];
+  if (rolls > 0) parts.push(`${rolls} ${rolls === 1 ? 'roll' : 'rolls'}`);
+  if (laps > 0) parts.push(`${laps} ${laps === 1 ? 'lap' : 'laps'}`);
+  if (units > 0) parts.push(`${units} ${units === 1 ? 'unit' : 'units'}`);
+  return parts.join(' · ');
 }
 
-function fabricTypeKey(cell: MmMillFabricCell): string {
-  return (cell.fabric_type || cell.fabric_name || '').trim();
+function QtyForms({ className, qty, forms, hint }: { className: string; qty: string; forms: string; hint?: string }) {
+  return (
+    <td className={className}>
+      <span className="block text-[11px] font-semibold tabular-nums truncate">{qty}</span>
+      {forms ? <span className="block text-[10px] font-medium tabular-nums truncate">{forms}</span> : null}
+      {hint ? <span className="block text-[10px] truncate">{hint}</span> : null}
+    </td>
+  );
 }
 
-function fabricMatches(cell: MmMillFabricCell, status: MillFilter, fabricType: string): boolean {
-  if (status && fabricBoardStatus(cell).key !== status) return false;
-  if (fabricType && fabricTypeKey(cell) !== fabricType) return false;
-  return true;
-}
-
-function fmtQty(value: number | null | undefined): string {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
-}
-
-function fmtRolls(count: number): string {
-  return String(Number(count) || 0);
-}
-
-function fabricUom(cell: MmMillFabricCell): string {
-  return (cell.uom ?? '').trim();
+function statusMark(status: string): { label: string; dot: string; text: string } {
+  if (status === 'partial') return { label: 'Partial', dot: 'bg-amber-500', text: 'text-amber-700' };
+  if (status === 'covered') return { label: 'Covered', dot: 'bg-emerald-500', text: 'text-emerald-700' };
+  if (status === 'closed') return { label: 'Closed', dot: 'bg-slate-400', text: 'text-slate-500' };
+  if (status === 'not_started') return { label: 'Not started', dot: 'bg-slate-300', text: 'text-slate-500' };
+  return { label: status || '—', dot: 'bg-slate-300', text: 'text-slate-500' };
 }
 
 const thCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const thFirstCls =
   'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
-const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
+const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
 const thCenterCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
 const thReqCls =
-  'px-2 py-2 text-[10px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 text-center whitespace-nowrap';
+  'px-2.5 py-2 text-[10px] font-semibold text-blue-800 uppercase tracking-wide border-b border-blue-100 bg-blue-50 text-center whitespace-nowrap overflow-hidden';
 const thProdCls =
-  'px-2 py-2 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 text-center whitespace-nowrap';
+  'px-2.5 py-2 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-yellow-100 bg-yellow-100 text-center whitespace-nowrap overflow-hidden';
+const thProcCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-blue-800 uppercase tracking-wide border-b border-blue-100 bg-blue-100 text-center whitespace-nowrap overflow-hidden';
 const thDispCls =
-  'px-2 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
-const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
-const tdReqCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-blue-50/60';
-const tdProdCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
-const tdDispCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-green-50';
-
-interface FabricRow {
-  order: OrderListRow;
-  cell: MmMillFabricCell;
-}
+  'px-2.5 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-green-100 bg-green-100 text-center whitespace-nowrap overflow-hidden';
+const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
+const tdReqCls = 'px-2.5 py-2.5 text-center border-b border-blue-50 bg-blue-50/70 max-w-0 overflow-hidden';
+const tdProdCls = 'px-2.5 py-2.5 text-center border-b border-yellow-50 bg-yellow-50 max-w-0 overflow-hidden';
+const tdProcCls = 'px-2.5 py-2.5 text-center border-b border-blue-50 bg-blue-50 max-w-0 overflow-hidden';
+const tdDispCls = 'px-2.5 py-2.5 text-center border-b border-green-50 bg-green-50 max-w-0 overflow-hidden';
 
 export default function MmMillBoardPage() {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
+  const onlyShort = useNavigationStore((s) => s.routeParams.only_short);
   const { buyers } = useBuyersCatalog(factoryId, 'core');
+  const { rows: fabrics } = useMmFabrics({});
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterFabric, setFilterFabric] = useState('');
   const [filterBuyer, setFilterBuyer] = useState('');
-  const [filterStatus, setFilterStatus] = useState<MillFilter>('');
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('');
   const [page, setPage] = useState(1);
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
-
-  const buyerIdFilter = useMemo(
-    () => buyers.find((b) => b.name === filterBuyer)?.id ?? '',
-    [buyers, filterBuyer],
-  );
+  const shortOnly = onlyShort === '1' || onlyShort === 'true';
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, filterBuyer, filterFabric, filterStatus]);
+  }, [debouncedSearch, filterBuyer, filterFabric, filterStatus, shortOnly]);
 
-  const listQuery = useOrdersList(
-    factoryId,
-    page,
-    PAGE_SIZE,
-    {
-      search: debouncedSearch || undefined,
-      buyerId: buyerIdFilter || undefined,
-      excludeCompleted: true,
+  const boardQuery = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'styleBoard', debouncedSearch, filterBuyer, filterFabric, filterStatus, shortOnly] as const,
+    queryFn: async () => {
+      const res = await mmStyleFabricPosition({
+        search: debouncedSearch || null,
+        buyer: filterBuyer || null,
+        fabric_id: filterFabric || null,
+        status: filterStatus || null,
+        only_short: shortOnly,
+      });
+      if (res.ok === false) throw new Error(res.message);
+      return res.data.rows ?? [];
     },
-    Boolean(factoryId),
-  );
+    enabled: Boolean(factoryId),
+  });
 
-  const pageOrderIds = useMemo(
-    () => (listQuery.data?.rows ?? []).map((row) => row.id),
-    [listQuery.data?.rows],
-  );
-
-  const boardQuery = useMmMillBoard(pageOrderIds, pageOrderIds.length > 0);
-  const fabricsByOrder = useMemo(() => {
-    const map = new Map<string, MmMillFabricCell[]>();
-    for (const row of boardQuery.data ?? []) {
-      map.set(row.order_id, row.fabrics ?? []);
-    }
-    return map;
-  }, [boardQuery.data]);
-
-  const totalOrders = listQuery.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(totalOrders / PAGE_SIZE));
+  const rows = boardQuery.data ?? [];
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
+  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   const pagination = {
     page: safePage,
     setPage,
     pageCount,
-    total: totalOrders,
-    start: totalOrders === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1,
-    end: Math.min(safePage * PAGE_SIZE, totalOrders),
+    total: rows.length,
+    start: rows.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1,
+    end: Math.min(safePage * PAGE_SIZE, rows.length),
   };
 
-  const fabricTypeOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const cells of fabricsByOrder.values()) {
-      for (const cell of cells) {
-        const key = fabricTypeKey(cell);
-        if (key) names.add(key);
-      }
-    }
-    return [...names].sort((a, b) => a.localeCompare(b));
-  }, [fabricsByOrder]);
-
-  const fabricRows = useMemo((): FabricRow[] => {
-    const orders = listQuery.data?.rows ?? [];
-    const rows: FabricRow[] = [];
-    for (const order of orders) {
-      const fabrics = fabricsByOrder.get(order.id) ?? [];
-      const visible = fabrics.filter((cell) => fabricMatches(cell, filterStatus, filterFabric));
-      for (const cell of visible) {
-        rows.push({ order, cell });
-      }
-    }
-    return rows.sort((a, b) => {
-      const rank = millBoardStatusRank(fabricBoardStatus(a.cell).key) - millBoardStatusRank(fabricBoardStatus(b.cell).key);
-      if (rank !== 0) return rank;
-      const style = a.order.style_name.localeCompare(b.order.style_name);
-      if (style !== 0) return style;
-      const color = a.cell.color_name.localeCompare(b.cell.color_name);
-      if (color !== 0) return color;
-      return a.cell.fabric_name.localeCompare(b.cell.fabric_name);
-    });
-  }, [listQuery.data?.rows, fabricsByOrder, filterFabric, filterStatus]);
+  const fabricOptions = useMemo(
+    () => fabrics.map((fabric) => ({ value: fabric.id, label: `${fabric.code} · ${fabric.name}` })),
+    [fabrics],
+  );
 
   usePageHeader({
-    subtitle: 'One row per style, color, and fabric. Open a row for fabric details.',
+    subtitle: 'One row per style, colour, and fabric. Open a row for the line.',
   });
 
-  const pageReady = !listQuery.isLoading && (pageOrderIds.length === 0 || !boardQuery.isLoading);
-
-  const openLine = (orderId: string, cell: MmMillFabricCell) => {
+  const openLine = (row: MmStyleFabricPositionRow) => {
+    if (!row.order_id || !row.colorway_id || !row.colorway_material_id) return;
     requestNavigate(RoutePath.MATERIAL_MILL_LINE, {
-      orderId,
-      colorwayId: cell.colorway_id,
-      fabricLineId: cell.fabric_line_id,
+      orderId: row.order_id,
+      colorwayId: row.colorway_id,
+      fabricLineId: row.colorway_material_id,
+      ...(row.style_material_id ? { styleMaterialId: row.style_material_id } : {}),
     });
   };
 
   return (
     <PageShell
-      loading={!pageReady}
-      error={listQuery.error ?? boardQuery.error}
-      onRetry={() => {
-        void listQuery.refetch();
-        void boardQuery.refetch();
-      }}
+      loading={boardQuery.isLoading}
+      error={boardQuery.error}
+      onRetry={() => { void boardQuery.refetch(); }}
       skeleton="table"
       className="w-full pb-20"
     >
@@ -196,25 +154,23 @@ export default function MmMillBoardPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:ml-auto">
             <SelectDropdown
               value={filterFabric}
               onChange={setFilterFabric}
-              options={[
-                { value: '', label: 'All fabrics' },
-                ...fabricTypeOptions.map((name) => ({ value: name, label: name })),
-              ]}
+              options={[{ value: '', label: 'All fabrics' }, ...fabricOptions]}
               icon={Filter}
-              className="w-36"
+              className="w-44"
             />
             <SelectDropdown
               value={filterStatus}
-              onChange={(v) => setFilterStatus(v as MillFilter)}
+              onChange={(v) => setFilterStatus(v as StatusFilter)}
               options={[
                 { value: '', label: 'All statuses' },
-                { value: 'Pending', label: 'Pending' },
-                { value: 'Completed', label: 'Completed' },
-                { value: 'Closed', label: 'Closed' },
+                { value: 'not_started', label: 'Not started' },
+                { value: 'partial', label: 'Partial' },
+                { value: 'covered', label: 'Covered' },
+                { value: 'closed', label: 'Closed' },
               ]}
               icon={Filter}
               className="w-36"
@@ -231,107 +187,79 @@ export default function MmMillBoardPage() {
             />
           </div>
         </div>
-        {(totalOrders > PAGE_SIZE || filterStatus || filterFabric) && (
-          <div className="px-4 py-1.5 border-b border-slate-100 bg-white text-[10px] text-slate-500">
-            Page {pagination.page} of {pagination.pageCount} ({pagination.start}-{pagination.end} of {totalOrders} orders)
-            {filterStatus ? ` · ${filterStatus} on this page` : ''}
-            {filterFabric ? ` · ${filterFabric}` : ''}
-            {!filterStatus && !filterFabric ? ' · completed orders hidden' : ''}
-          </div>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] table-fixed border-collapse">
-            <colgroup>
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '4.75rem' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '9%' }} />
-            </colgroup>
-            <thead>
+        <div className="px-4 py-1.5 border-b border-slate-100 bg-white text-[10px] text-slate-500">
+          Page {pagination.page} of {pagination.pageCount} ({pagination.start}-{pagination.end} of {rows.length})
+          {shortOnly ? ' · only short' : ''}
+        </div>
+        <div className="overflow-auto">
+          <table className="w-full table-fixed border-collapse">
+            <thead className="sticky top-0 z-10">
               <tr>
                 <th className={thFirstCls}>Style</th>
                 <th className={thCls}>Buyer / PO</th>
-                <th className={thCls}>Color</th>
+                <th className={thCls}>Colour</th>
                 <th className={thCls}>Fabric</th>
                 <th className={thCenterCls}>UOM</th>
                 <th className={thReqCls}>Required</th>
-                <th className={thProdCls}>Produced</th>
-                <th className={thProdCls}>Produced rolls</th>
-                <th className={thDispCls}>Dispatched</th>
-                <th className={thDispCls}>Dispatched rolls</th>
+                <th className={thProdCls}>At mill</th>
+                <th className={thProcCls}>Processing</th>
+                <th className={thDispCls}>Warehouse</th>
+                <th className={thCenterCls}>Issued</th>
+                <th className={thCenterCls}>Short</th>
                 <th className={thCenterCls}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {fabricRows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
-                    No fabrics match this page.
+                  <td colSpan={12} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    No style fabrics match.
                   </td>
                 </tr>
               )}
-              {fabricRows.map(({ order, cell }) => {
-                const producedQty = Number(cell.qty_at_mill_m) + Number(cell.qty_dispatched_m);
-                const producedRolls = Number(cell.rolls_at_mill) + Number(cell.rolls_dispatched);
-                const requiredWord = fabricBoardStatus(cell);
-                const typeCategory = fabricTypeCategoryLine(cell.fabric_type, cell.fabric_category);
+              {pageRows.map((row) => {
+                const uom = row.uom === 'kg' ? 'kg' : 'm';
+                const mark = statusMark(row.status);
                 return (
-                <tr
-                  key={`${order.id}-${cell.colorway_id}-${cell.fabric_line_id}`}
-                  className="hover:bg-slate-50/80 cursor-pointer"
-                  onClick={() => openLine(order.id, cell)}
-                >
-                  <td className={`${tdFirstCls} font-semibold text-slate-800`}>
-                    <span className="block truncate">{order.style_name}</span>
-                    {order.style_ref ? (
-                      <span className="block text-[10px] font-medium text-slate-400 truncate">{order.style_ref}</span>
-                    ) : null}
-                  </td>
-                  <td className={tdCls}>
-                    <span className="block truncate">{order.buyer_name || '—'}</span>
-                    <span className="block text-[10px] text-slate-400 truncate">{order.po_number || '—'}</span>
-                  </td>
-                  <td className={`${tdCls} truncate`}>{cell.color_name}</td>
-                  <td className={`${tdCls} truncate`}>
-                    <span className="block font-medium text-slate-800 truncate">{cell.fabric_name}</span>
-                    {typeCategory !== '—' && (
-                      <span className="block text-[10px] text-slate-400 truncate">
-                        {typeCategory}
+                  <tr
+                    key={`${row.order_id}-${row.colorway_id}-${row.colorway_material_id ?? row.style_material_id}`}
+                    className="hover:bg-slate-50/80 cursor-pointer"
+                    onClick={() => openLine(row)}
+                  >
+                    <td className={`${tdFirstCls} font-semibold text-slate-800`}>
+                      <span className="block truncate">{row.style_name || '—'}</span>
+                      {row.style_ref ? <span className="block text-[10px] font-medium text-slate-400 truncate">{row.style_ref}</span> : null}
+                    </td>
+                    <td className={tdCls}>
+                      <span className="block truncate">{row.buyer_name || '—'}</span>
+                      <span className="block text-[10px] text-slate-400 truncate">{row.po_number || '—'}</span>
+                    </td>
+                    <td className={`${tdCls} truncate`}>{row.colour || row.colorway_name || '—'}</td>
+                    <td className={tdCls}>
+                      <span className="block truncate font-medium text-slate-800">{row.fabric?.name || row.line_name || '—'}</span>
+                      <span className="block truncate text-[10px] text-slate-400">{row.fabric?.code || '—'}</span>
+                    </td>
+                    <td className={`${tdCls} text-center uppercase`}>{uom}</td>
+                    <QtyForms className={`${tdReqCls} text-blue-800`} qty={fmtUomQty(row.required, uom)} forms="" />
+                    <QtyForms className={`${tdProdCls} text-yellow-900`} qty={fmtUomQty(row.at_mill.qty, uom)} forms={formLine(row.at_mill.rolls, row.at_mill.laps)} />
+                    <QtyForms className={`${tdProcCls} text-blue-900`} qty={fmtUomQty(row.at_processing.qty, uom)} forms={formLine(row.at_processing.rolls, row.at_processing.laps)} />
+                    <QtyForms
+                      className={`${tdDispCls} text-green-900`}
+                      qty={fmtUomQty(row.in_warehouse.qty, uom)}
+                      forms={formLine(row.in_warehouse.rolls, row.in_warehouse.laps)}
+                      hint={row.in_warehouse.ready_to_cut > 0 ? `${fmtUomQty(row.in_warehouse.ready_to_cut, uom)} ready to cut` : undefined}
+                    />
+                    <QtyForms className={`${tdCls} text-center`} qty={fmtUomQty(row.issued.qty, uom)} forms={formLine(0, 0, row.issued.units)} />
+                    <td className={`${tdCls} text-center tabular-nums ${row.short > 0 ? 'font-semibold text-red-600' : ''}`}>
+                      {row.short > 0 ? fmtUomQty(row.short, uom) : '—'}
+                    </td>
+                    <td className={tdCls}>
+                      <span className="inline-flex items-center justify-center gap-1.5 w-full">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${mark.dot}`} />
+                        <span className={`text-[10px] font-bold truncate ${mark.text}`}>{mark.label}</span>
                       </span>
-                    )}
-                  </td>
-                  <td className={`${tdCls} text-center tabular-nums`}>{fabricUom(cell) || '—'}</td>
-                  <td className={tdReqCls}>
-                    <span className="block text-[11px] font-semibold text-blue-800 tabular-nums">{fmtQty(cell.required_m)}</span>
-                  </td>
-                  <td className={tdProdCls}>
-                    <span className="block text-[11px] font-semibold text-yellow-900 tabular-nums">{fmtQty(producedQty)}</span>
-                  </td>
-                  <td className={tdProdCls}>
-                    <span className="block text-[11px] font-semibold text-yellow-900 tabular-nums">{fmtRolls(producedRolls)}</span>
-                  </td>
-                  <td className={tdDispCls}>
-                    <span className="block text-[11px] font-semibold text-green-900 tabular-nums">{fmtQty(cell.qty_dispatched_m)}</span>
-                  </td>
-                  <td className={tdDispCls}>
-                    <span className="block text-[11px] font-semibold text-green-900 tabular-nums">{fmtRolls(cell.rolls_dispatched)}</span>
-                  </td>
-                  <td className={`${tdCls} text-center`}>
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(requiredWord.key)}`} />
-                      <span className={`text-[10px] font-bold ${millWordText(requiredWord.key)}`}>
-                        {requiredWord.label}
-                      </span>
-                    </span>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>

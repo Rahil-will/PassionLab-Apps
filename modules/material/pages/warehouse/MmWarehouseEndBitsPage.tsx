@@ -9,6 +9,8 @@ import { formatQtyM, formatWhen } from '../../lib/mmRollDraft';
 
 const thCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
+const thCenterCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap';
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
 
 export default function MmWarehouseEndBitsPage() {
@@ -46,7 +48,7 @@ export default function MmWarehouseEndBitsPage() {
                 <th className={thCls}>Mill shade</th>
                 <th className={thCls}>Tested shade</th>
                 <th className={thCls}>Location</th>
-                <th className={thCls}>Status</th>
+                <th className={thCenterCls}>Status</th>
                 <th className={thCls}>When</th>
               </tr>
             </thead>
@@ -71,7 +73,7 @@ export default function MmWarehouseEndBitsPage() {
                   <td className={tdCls}>{row.mill_shade || '—'}</td>
                   <td className={tdCls}>{row.tested_shade || '—'}</td>
                   <td className={tdCls}>{row.location_name || '—'}</td>
-                  <td className={tdCls}>{row.status ? row.status.replace(/_/g, ' ') : '—'}</td>
+                  <td className={`${tdCls} text-center`}>{row.status ? row.status.replace(/_/g, ' ') : '—'}</td>
                   <td className={tdCls}>{formatWhen(row.returned_at)}</td>
                 </tr>
               ))}

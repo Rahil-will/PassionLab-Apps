@@ -17,11 +17,13 @@ import {
   withLengthField,
   type MmDraftRoll,
 } from '../../lib/mmRollDraft';
-import { mmSaveUnallocatedVendorGrn } from '../../lib/mmRpc';
-import { mmWhSaveVendorGrnV4 } from '../../lib/mmV4Rpc';
+import { mmWhSaveVendorGrnV5 } from '../../lib/mmV4Rpc';
+import { FabricPicker } from '../../components/FabricPicker';
+import { fabricMismatchMessage } from '../../lib/fabricStock';
+import type { MmFabric } from '../../lib/mmFabricRpc';
 import { useInvalidateMmOps } from '../../lib/useMmOps';
 import { useMmConfigBundle } from '../../lib/useMmConfigBundle';
-import { useFabricV4Enabled, useMmV4Config } from '../../lib/useMmV4Config';
+import { useMmPartners, useMmV4Config } from '../../lib/useMmV4Config';
 import { unitFormLabel, unitFormOptionLabel } from '../../lib/mmUnitForm';
 
 function countFieldLabel(form: string): string {
@@ -33,8 +35,7 @@ export default function MmWarehouseReceiveUnallocatedPage() {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const { showNotification } = useNotificationStore();
   const invalidate = useInvalidateMmOps();
-  const fabricV4 = useFabricV4Enabled();
-  const { data: v4 } = useMmV4Config(fabricV4);
+  const { data: v4 } = useMmV4Config();
   const { data: config, isLoading, error, refetch } = useMmConfigBundle();
   const types = useMemo(
     () =>
@@ -45,16 +46,8 @@ export default function MmWarehouseReceiveUnallocatedPage() {
         .sort((a, b) => a.name.localeCompare(b.name)),
     [config?.types],
   );
-  const vendors = useMemo(
-    () =>
-      (v4?.facilities ?? []).filter(
-        (f) =>
-          f.is_active !== false &&
-          f.ownership === 'external' &&
-          (f.kind === 'vendor' || f.kind === 'mill'),
-      ),
-    [v4?.facilities],
-  );
+  const fabricVendorsQ = useMmPartners('fabric_vendor', false);
+  const vendors = fabricVendorsQ.data ?? [];
   const stages = v4?.stages ?? [];
   const unitForms = v4?.unit_forms ?? ['roll', 'lap'];
   const widthForms = v4?.width_forms ?? ['tubular', 'open'];
@@ -64,9 +57,11 @@ export default function MmWarehouseReceiveUnallocatedPage() {
     stages[stages.length - 1]?.code ||
     'FINISHED';
 
-  const [supplier, setSupplier] = useState('');
   const [vendorFacilityId, setVendorFacilityId] = useState('');
+  const [fabricId, setFabricId] = useState('');
+  const [fabricLabel, setFabricLabel] = useState('');
   const [fabricTypeId, setFabricTypeId] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [uom, setUom] = useState('m');
   const [colorRef, setColorRef] = useState('');
   const [lotNo, setLotNo] = useState('');
@@ -101,71 +96,60 @@ export default function MmWarehouseReceiveUnallocatedPage() {
       showNotification(parsed.error, 'error');
       return;
     }
-    if (!fabricTypeId) {
-      showNotification('Fabric type is required', 'error');
+    if (!fabricId) {
+      showNotification('Fabric is required', 'error');
       return;
     }
-    if (fabricV4) {
-      if (!vendorFacilityId) {
-        showNotification('Select a vendor', 'error');
-        return;
-      }
-    } else if (!supplier.trim()) {
-      showNotification('Supplier name is required', 'error');
+    if (!vendorFacilityId) {
+      showNotification('Select a fabric vendor', 'error');
       return;
     }
     setBusy(true);
     try {
-      if (fabricV4) {
-        const res = await mmWhSaveVendorGrnV4({
-          vendor_facility_id: vendorFacilityId,
-          style: null,
-          fabric_type_id: fabricTypeId,
-          uom: uom.trim() || 'm',
-          color_ref: colorRef.trim() || null,
-          lot: lotNo.trim() || null,
-          stage_code: stageCode || defaultStage || null,
-          unit_form: unitForm || null,
-          width_form: widthForm || null,
-          rolls: parsed.rolls.map((roll) => ({
-            length: roll.length_m,
-            weight_kg: roll.weight_kg ?? null,
-            shade: roll.shade ?? null,
-            lot_no: roll.lot_no ?? null,
-            color_ref: roll.color_ref ?? null,
-            roll_no: String(roll.unit_code ?? ''),
-          })),
-        });
-        if (res.ok === false) throw new Error(res.message);
-        const challanNo = String(
-          (res.data as { challan_no?: string }).challan_no ??
-            (res.data as { grn_no?: string }).grn_no ??
-            'GRN',
-        );
-        const challanId = String((res.data as { id?: string }).id ?? '');
-        showNotification(`Received ${challanNo}`, 'success');
-        await invalidate();
-        if (challanId) {
-          requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id: challanId });
-        } else {
-          requestNavigate(RoutePath.MATERIAL_WAREHOUSE_EXTERNAL);
-        }
+      const res = await mmWhSaveVendorGrnV5({
+        vendor_facility_id: vendorFacilityId,
+        style: null,
+        fabric_id: fabricId,
+        fabric_type_id: fabricTypeId,
+        uom: uom.trim() || 'm',
+        color_ref: colorRef.trim() || null,
+        lot: lotNo.trim() || null,
+        stage_code: stageCode || defaultStage || null,
+        unit_form: unitForm || null,
+        width_form: widthForm || null,
+        rolls: parsed.rolls.map((roll) => ({
+          length: roll.length_m,
+          weight_kg: roll.weight_kg ?? null,
+          shade: roll.shade ?? null,
+          lot_no: roll.lot_no ?? null,
+          color_ref: roll.color_ref ?? null,
+          roll_no: String(roll.unit_code ?? ''),
+        })),
+      });
+      if (res.ok === false) {
+        const mismatch = fabricMismatchMessage(res);
+        if (mismatch) setFormError(`Fabric mismatch — ${mismatch}`);
+        else showNotification(res.message, 'error');
+        return;
+      }
+      const challanNo = String(
+        (res.data as { challan_no?: string }).challan_no ??
+          (res.data as { grn_no?: string }).grn_no ??
+          'GRN',
+      );
+      const challanId = String((res.data as { id?: string }).id ?? '');
+      showNotification(`Received ${challanNo} · ${fabricLabel}`, 'success');
+      await invalidate();
+      if (challanId) {
+        requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id: challanId });
       } else {
-        const res = await mmSaveUnallocatedVendorGrn(
-          fabricTypeId,
-          supplier.trim(),
-          uom.trim() || 'm',
-          colorRef.trim(),
-          lotNo.trim(),
-          parsed.rolls,
-        );
-        if (res.ok === false) throw new Error(res.message);
-        showNotification(`Received ${res.data.challan_no} · ${res.data.roll_count} rolls`, 'success');
-        await invalidate();
-        requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id: res.data.id });
+        requestNavigate(RoutePath.MATERIAL_WAREHOUSE_EXTERNAL);
       }
     } catch (e) {
-      showNotification(e instanceof Error ? e.message : 'Receive failed', 'error');
+      const message = e instanceof Error ? e.message : 'Receive failed';
+      const mismatch = fabricMismatchMessage({ ok: false, message });
+      if (mismatch) setFormError(`Fabric mismatch — ${mismatch}`);
+      else showNotification(message, 'error');
     } finally {
       setBusy(false);
     }
@@ -180,38 +164,45 @@ export default function MmWarehouseReceiveUnallocatedPage() {
             Vendor GRN
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {fabricV4 ? (
+            {vendors.length === 0 && !fabricVendorsQ.isLoading ? (
+              <p className="text-[11px] text-slate-500">
+                No fabric vendors yet — add them in Settings › Material › Fabric vendors.
+              </p>
+            ) : (
               <SelectDropdown
-                label="Vendor *"
+                label="Fabric vendor *"
                 value={vendorFacilityId}
                 onChange={setVendorFacilityId}
                 options={[
-                  { value: '', label: 'Select vendor' },
-                  ...vendors.map((v) => ({ value: v.id, label: v.name || v.code })),
+                  { value: '', label: 'Select fabric vendor' },
+                  ...vendors.map((v) => ({ value: v.id, label: v.name })),
                 ]}
                 className="w-full"
-              />
-            ) : (
-              <Input
-                id="mm-unalloc-supplier"
-                label="Supplier *"
-                value={supplier}
-                disabled={busy}
-                onChange={(e) => setSupplier(e.target.value)}
-                className="bg-white"
               />
             )}
             <div>
-              <span className="block font-medium text-slate-700 mb-1.5 text-[13px]">Fabric type *</span>
-              <SelectDropdown
-                value={fabricTypeId}
-                onChange={setFabricTypeId}
-                options={[
-                  { value: '', label: 'Select fabric type' },
-                  ...types.map((t) => ({ value: t.id, label: t.name })),
-                ]}
-                className="w-full"
+              <FabricPicker
+                label="Fabric *"
+                value={fabricId || null}
+                disabled={busy}
+                onChange={(fabric: MmFabric) => {
+                  setFabricId(fabric.id);
+                  setFabricLabel(`${fabric.code} · ${fabric.name}`);
+                  setFabricTypeId(fabric.fabric_type_id);
+                  setUom(fabric.uom);
+                  setFormError(null);
+                }}
+                onClear={() => {
+                  setFabricId('');
+                  setFabricLabel('');
+                  setFabricTypeId('');
+                }}
               />
+              {fabricTypeId ? (
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Type locked: {types.find((t) => t.id === fabricTypeId)?.name ?? 'fabric type'}
+                </p>
+              ) : null}
             </div>
             <Input
               id="mm-unalloc-uom"
@@ -239,34 +230,30 @@ export default function MmWarehouseReceiveUnallocatedPage() {
               onChange={(e) => setLotNo(e.target.value)}
               className="bg-white"
             />
-            {fabricV4 ? (
-              <>
-                <SelectDropdown
-                  label="Stage"
-                  value={stageCode || defaultStage}
-                  onChange={setStageCode}
-                  options={stages.map((s) => ({ value: s.code, label: s.label || s.code }))}
-                  className="w-full"
-                />
-                <SelectDropdown
-                  label="Form"
-                  value={unitForm}
-                  onChange={setUnitForm}
-                  options={unitForms.map((f) => ({ value: f, label: unitFormOptionLabel(f) }))}
-                  className="w-full"
-                />
-                <SelectDropdown
-                  label="Width form"
-                  value={widthForm}
-                  onChange={setWidthForm}
-                  options={widthForms.map((f) => ({
-                    value: f,
-                    label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
-                  }))}
-                  className="w-full"
-                />
-              </>
-            ) : null}
+            <SelectDropdown
+              label="Stage"
+              value={stageCode || defaultStage}
+              onChange={setStageCode}
+              options={stages.map((s) => ({ value: s.code, label: s.label || s.code }))}
+              className="w-full"
+            />
+            <SelectDropdown
+              label="Form"
+              value={unitForm}
+              onChange={setUnitForm}
+              options={unitForms.map((f) => ({ value: f, label: unitFormOptionLabel(f) }))}
+              className="w-full"
+            />
+            <SelectDropdown
+              label="Width form"
+              value={widthForm}
+              onChange={setWidthForm}
+              options={widthForms.map((f) => ({
+                value: f,
+                label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
+              }))}
+              className="w-full"
+            />
             <div>
               <Input
                 id="mm-unalloc-count"
@@ -293,6 +280,9 @@ export default function MmWarehouseReceiveUnallocatedPage() {
               />
             </div>
           </div>
+          {formError ? (
+            <p className="mt-3 text-[12px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{formError}</p>
+          ) : null}
           <div className="mt-4 flex items-center gap-2">
             <DesktopWriteGate>
               <Button type="button" size="sm" disabled={busy} onClick={generate}>
@@ -338,8 +328,8 @@ export default function MmWarehouseReceiveUnallocatedPage() {
                   disabled={
                     busy ||
                     rows.length === 0 ||
-                    !fabricTypeId ||
-                    (fabricV4 ? !vendorFacilityId : !supplier.trim())
+                    !fabricId ||
+                    !vendorFacilityId
                   }
                   onClick={() => void save()}
                 >

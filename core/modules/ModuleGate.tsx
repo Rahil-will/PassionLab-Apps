@@ -2,6 +2,17 @@ import React from 'react';
 import type { ModuleKey } from './types';
 import { useModuleEnabled } from './useModuleEnabled';
 
+export function ModuleNotEnabled({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[50vh] text-slate-500 gap-2">
+      <p className="font-medium text-slate-700 text-sm">Module not enabled</p>
+      <p className="text-xs text-slate-400">
+        Ask an administrator to enable the {label} module for this factory.
+      </p>
+    </div>
+  );
+}
+
 interface ModuleGateProps {
   moduleKey: ModuleKey;
   children: React.ReactNode;
@@ -23,12 +34,7 @@ export const ModuleGate: React.FC<ModuleGateProps> = ({
     return (
       <>
         {fallback ?? (
-          <div className="flex flex-col items-center justify-center h-[50vh] text-slate-500 gap-2">
-            <p className="font-medium text-slate-700 text-sm">Module not enabled</p>
-            <p className="text-xs text-slate-400">
-              Ask an administrator to enable the {moduleKey} module for this factory.
-            </p>
-          </div>
+          <ModuleNotEnabled label={moduleKey} />
         )}
       </>
     );

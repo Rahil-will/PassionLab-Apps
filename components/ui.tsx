@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { LucideIcon, X, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react';
+import { LucideIcon, X, CheckCircle2, AlertCircle, ChevronDown, Search } from 'lucide-react';
 import { tokens } from '../lib/designTokens';
 import { computeDropdownBelowPosition } from '../lib/popoverPosition';
 
@@ -234,6 +234,8 @@ interface SelectDropdownBaseProps {
   variant?: 'default' | 'cell';
   /** When true, menu grows to fit all options (no max-height scroll). */
   menuExpand?: boolean;
+  /** Search field at the top of the open menu. Filters options by label. */
+  searchable?: boolean;
   /** @deprecated Menus always render in a portal; prop is ignored. */
   menuFixed?: boolean;
 }
@@ -264,6 +266,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
     shape = 'pill',
     variant = 'default',
     menuExpand = false,
+    searchable = false,
   } = props;
   const isMulti = props.multiple === true;
   const selectedValues = isMulti ? props.value : (props.value ? [props.value] : []);
@@ -276,6 +279,14 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [menuQuery, setMenuQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  const menuQueryNorm = menuQuery.trim().toLowerCase();
+  const visibleOptions = searchable && menuQueryNorm
+    ? options
+        .map((opt, idx) => ({ opt, idx }))
+        .filter(({ opt }) => opt.label.toLowerCase().includes(menuQueryNorm))
+    : options.map((opt, idx) => ({ opt, idx }));
 
   useLayoutEffect(() => {
     if (!isOpen || !buttonRef.current || !menuRef.current) return;
@@ -293,7 +304,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
       window.removeEventListener('scroll', update, true);
       window.removeEventListener('resize', update);
     };
-  }, [isOpen, options.length, props.value]);
+  }, [isOpen, options.length, props.value, searchable, menuQuery]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -301,9 +312,19 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
       if (dropdownRef.current?.contains(t) || menuRef.current?.contains(t)) return;
       setIsOpen(false);
     };
-    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside, true);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) setMenuQuery('');
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !searchable) return;
+    const id = window.setTimeout(() => searchRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [isOpen, searchable]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -316,8 +337,8 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
   }, [isOpen]);
 
   useEffect(() => {
-    setHighlightedIndex((i) => (options.length ? Math.min(i, options.length - 1) : 0));
-  }, [options.length]);
+    setHighlightedIndex((i) => (visibleOptions.length ? Math.min(i, visibleOptions.length - 1) : 0));
+  }, [visibleOptions.length]);
 
   const selectedLabel = (() => {
     if (isMulti) {
@@ -363,9 +384,32 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
     setIsOpen(false);
   };
 
+  const selectVisible = (visibleIdx: number) => {
+    const entry = visibleOptions[visibleIdx];
+    if (!entry) return;
+    selectOption(entry.idx);
+  };
+
+  const handleMenuKey = (e: React.KeyboardEvent) => {
+    const max = visibleOptions.length - 1;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (max >= 0) setHighlightedIndex((i) => (i >= max ? 0 : i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (max >= 0) setHighlightedIndex((i) => (i <= 0 ? max : i - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isOpen) selectVisible(highlightedIndex);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsOpen(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
-    const max = options.length - 1;
+    const max = visibleOptions.length - 1;
     if (max < 0) return;
 
     if (!isOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')) {
@@ -392,7 +436,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
       setHighlightedIndex(max);
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (isOpen) selectOption(highlightedIndex);
+      if (isOpen) selectVisible(highlightedIndex);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setIsOpen(false);
@@ -401,7 +445,9 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
     }
   };
 
-  const activeDescendant = isOpen && options[highlightedIndex] ? `${listboxId}-opt-${highlightedIndex}` : undefined;
+  const activeDescendant = isOpen && visibleOptions[highlightedIndex]
+    ? `${listboxId}-opt-${visibleOptions[highlightedIndex].idx}`
+    : undefined;
 
   const labelCls =
     labelVariant === 'tab'
@@ -414,10 +460,33 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
       id={listboxId}
       role="listbox"
       aria-multiselectable={isMulti || undefined}
-      className={`${dropdownMenuBaseCls}${menuExpand ? '' : ` ${dropdownMenuScrollCls}`} p-1.5`}
+      className={`${dropdownMenuBaseCls} p-1.5`}
       style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width, minWidth: 120 }}
     >
-      {options.map((opt, idx) => {
+      {searchable ? (
+        <div className="px-1 pb-1.5">
+          <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2">
+            <Search size={12} className="shrink-0 text-slate-400" />
+            <input
+              ref={searchRef}
+              value={menuQuery}
+              onChange={(e) => {
+                setMenuQuery(e.target.value);
+                setHighlightedIndex(0);
+              }}
+              onKeyDown={handleMenuKey}
+              onMouseDown={(e) => e.stopPropagation()}
+              placeholder="Search"
+              className="w-full bg-transparent py-1.5 text-xs text-slate-800 placeholder:text-slate-400 outline-none"
+              aria-label="Search"
+            />
+          </div>
+        </div>
+      ) : null}
+      <div className={menuExpand ? '' : dropdownMenuScrollCls}>
+      {visibleOptions.length === 0 ? (
+        searchable ? <p className="px-3 py-2 text-[11px] text-slate-400">No matches</p> : null
+      ) : visibleOptions.map(({ opt, idx }, visibleIdx) => {
         const selected = isOptionSelected(opt.value);
         return (
           <div
@@ -426,9 +495,11 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
             role="option"
             aria-selected={selected}
             onClick={() => selectOption(idx)}
-            onMouseEnter={() => setHighlightedIndex(idx)}
-            className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
-              idx === highlightedIndex
+            onMouseEnter={() => setHighlightedIndex(visibleIdx)}
+            className={`flex items-center justify-between rounded-lg cursor-pointer transition-colors ${
+              size === 'compact' ? 'px-2 py-1 text-[11px]' : 'px-3 py-2 text-xs'
+            } ${
+              visibleIdx === highlightedIndex
                 ? 'bg-blue-100 text-blue-800'
                 : selected
                   ? 'bg-blue-50 text-blue-700 font-medium'
@@ -440,6 +511,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
           </div>
         );
       })}
+      </div>
     </div>
   ) : null;
 

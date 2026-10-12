@@ -177,8 +177,6 @@ export function MmFourPointInspectPanel({
     }
   };
 
-  if (rows.length === 0) return null;
-
   return (
     <Card className="shadow-sm border-slate-200 overflow-hidden mt-4" noPadding>
       <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-start justify-between gap-3">

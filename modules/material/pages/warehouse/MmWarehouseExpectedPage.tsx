@@ -10,6 +10,7 @@ import { RoutePath } from '../../../../types';
 import { fabricTypeCategoryLine } from '../../components/MmFabricSummaryCard';
 import type { MmExpectedStatus } from '../../lib/mmRpc';
 import { useMmExpectedBoard } from '../../lib/useMmOps';
+import { unitFormCountText } from '../../lib/mmUnitForm';
 import { millWordDot, millWordText } from '../mill/millStatus';
 
 const PAGE_SIZE = 20;
@@ -20,6 +21,12 @@ function fmtQty(value: number | null | undefined): string {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return '—';
   return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function unitsText(count: number | null | undefined, form: string | null | undefined): string {
+  const n = Number(count);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  return unitFormCountText({ [form || 'roll']: n });
 }
 
 function statusLabel(status: MmExpectedStatus): string {
@@ -38,10 +45,13 @@ const thInCls =
   'px-2 py-2 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 text-center whitespace-nowrap';
 const thRecvCls =
   'px-2 py-2 text-[10px] font-semibold text-emerald-800 uppercase tracking-wide border-b border-slate-200 bg-emerald-100 text-center whitespace-nowrap';
+const thPassCls =
+  'px-2 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
 const tdReqCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-blue-50/60';
 const tdInCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
 const tdRecvCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-emerald-50';
+const tdPassCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-green-50';
 const tdCenterCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
 
 export default function MmWarehouseExpectedPage() {
@@ -69,7 +79,8 @@ export default function MmWarehouseExpectedPage() {
   };
 
   usePageHeader({
-    subtitle: 'Required versus incoming and received, one fabric line per row. Open = still needed or already incoming.',
+    subtitle:
+      'Required vs incoming and received. Still needed = required minus received. Passed is QC-passed stock.',
   });
 
   return (
@@ -110,19 +121,21 @@ export default function MmWarehouseExpectedPage() {
           </div>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] table-fixed border-collapse">
+          <table className="w-full min-w-[1240px] table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: '14%' }} />
               <col style={{ width: '12%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '5%' }} />
+              <col style={{ width: '11%' }} />
               <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '8%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '4%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '7%' }} />
               <col style={{ width: '8%' }} />
               <col style={{ width: '7%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '6%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -134,15 +147,17 @@ export default function MmWarehouseExpectedPage() {
                 <th className={thReqCls}>Required</th>
                 <th className={thInCls}>Incoming</th>
                 <th className={thRecvCls}>Received</th>
+                <th className={thRecvCls}>Rolls / laps</th>
+                <th className={thPassCls}>Passed</th>
+                <th className={thPassCls}>Passed units</th>
                 <th className={thCenterCls}>Still needed</th>
-                <th className={thCenterCls}>Uncovered</th>
                 <th className={thCenterCls}>Status</th>
               </tr>
             </thead>
             <tbody>
               {(query.data?.rows ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                  <td colSpan={13} className="px-4 py-10 text-center text-[11px] text-slate-400">
                     No fabrics match this filter.
                   </td>
                 </tr>
@@ -185,8 +200,22 @@ export default function MmWarehouseExpectedPage() {
                     <td className={tdRecvCls}>
                       <span className="block text-[11px] font-semibold text-emerald-900 tabular-nums">{fmtQty(row.qty_received_m)}</span>
                     </td>
+                    <td className={tdRecvCls}>
+                      <span className="block text-[10px] font-semibold text-emerald-900 tabular-nums">
+                        {unitsText(row.rolls_received, row.unit_form_received)}
+                      </span>
+                    </td>
+                    <td className={tdPassCls}>
+                      <span className="block text-[11px] font-semibold text-green-900 tabular-nums">
+                        {fmtQty(row.qty_passed_m)}
+                      </span>
+                    </td>
+                    <td className={tdPassCls}>
+                      <span className="block text-[10px] font-semibold text-green-900 tabular-nums">
+                        {unitsText(row.rolls_passed, row.unit_form_passed)}
+                      </span>
+                    </td>
                     <td className={`${tdCenterCls} tabular-nums font-semibold`}>{fmtQty(row.qty_still_due_m)}</td>
-                    <td className={`${tdCenterCls} tabular-nums font-semibold`}>{fmtQty(row.qty_uncovered_m)}</td>
                     <td className={tdCenterCls}>
                       <span className="inline-flex items-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(word === 'Open' ? 'Due' : word)}`} />

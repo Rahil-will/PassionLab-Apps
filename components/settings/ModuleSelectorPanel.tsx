@@ -3,10 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Factory, Package, Truck, type LucideIcon } from 'lucide-react';
 import { useNotificationStore, useNavigationStore } from '../../stores';
 import { useFactoryModules } from '../../core/modules/useModuleEnabled';
-import { mmEnableModule, mmSetFactoryFeature } from '../../modules/material/lib/mmRpc';
-import { mmSetFabricV4 } from '../../modules/material/lib/mmV4Rpc';
-import { useMmFactoryFeatures } from '../../modules/material/lib/useMmFactoryFeatures';
-import { useFabricV4Enabled, useRefreshMmV4Config } from '../../modules/material/lib/useMmV4Config';
+import { mmEnableModule, mmSetMaterialFeature, type MmMaterialFeatureKey } from '../../modules/material/lib/mmRpc';
+import { useMmMaterialFeatures } from '../../modules/material/lib/useMmFeature';
 import { supabase } from '../../lib/supabase';
 import { queryKeys } from '../../lib/queryKeys';
 import type { ModuleKey } from '../../core/modules/types';
@@ -50,7 +48,29 @@ const MODULES: {
     label: 'Material',
     hint: 'Sidebar → Material Management',
     icon: Package,
-    features: [{ key: 'in_house_mill', label: 'In-house mill' }],
+    features: [],
+  },
+];
+
+const MATERIAL_SWITCHES: {
+  key: MmMaterialFeatureKey;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: 'fabric_warehouse',
+    label: 'Fabric warehouse',
+    hint: 'Fabric Master, receiving, stock, QC, allocate, and store challan to cutting.',
+  },
+  {
+    key: 'fabric_mill',
+    label: 'Fabric mill',
+    hint: 'Production orders, batches, mill stock, processing, mill QC, and dispatch to warehouse.',
+  },
+  {
+    key: 'trims',
+    label: 'Trims warehouse',
+    hint: 'Trims master, receiving, stock, allocate, and issue.',
   },
 ];
 
@@ -67,24 +87,31 @@ function FeatureRow({ label }: { label: string }) {
 
 function FeatureSwitch({
   label,
+  hint,
   on,
   busy,
+  disabled,
   onToggle,
 }: {
   label: string;
+  hint: string;
   on: boolean;
   busy: boolean;
+  disabled?: boolean;
   onToggle: () => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] text-slate-600 truncate">{label}</span>
+      <div className="min-w-0">
+        <span className="text-[11px] text-slate-600 block truncate">{label}</span>
+        <span className="text-[10px] text-slate-400 block leading-snug">{hint}</span>
+      </div>
       <DesktopWriteGate>
         <button
           type="button"
           role="switch"
           aria-checked={on}
-          disabled={busy}
+          disabled={busy || disabled}
           onClick={onToggle}
           className={`relative shrink-0 w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${
             on ? 'bg-blue-600' : 'bg-slate-300'
@@ -105,26 +132,25 @@ export const ModuleSelectorPanel: React.FC = () => {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const { data: modules, isLoading } = useFactoryModules();
   const materialOn = Boolean(modules?.find((m) => m.module_key === 'material')?.enabled);
-  const millFeatures = useMmFactoryFeatures(materialOn);
-  const fabricV4On = useFabricV4Enabled(materialOn);
-  const refreshV4 = useRefreshMmV4Config();
+  const materialFeatures = useMmMaterialFeatures(materialOn);
   const qc = useQueryClient();
   const { showNotification } = useNotificationStore();
   const [busyKey, setBusyKey] = useState<ModuleKey | null>(null);
-  const [busyMill, setBusyMill] = useState(false);
-  const [busyFabricV4, setBusyFabricV4] = useState(false);
-  const [fabricV4Confirm, setFabricV4Confirm] = useState<boolean | null>(null);
+  const [busyFeature, setBusyFeature] = useState<MmMaterialFeatureKey | null>(null);
+  const [confirmOff, setConfirmOff] = useState<MmMaterialFeatureKey | null>(null);
 
   const isOn = (key: ModuleKey) => Boolean(modules?.find((m) => m.module_key === key)?.enabled);
-  const millOn = millFeatures.data?.in_house_mill !== false;
+  const warehouseOn = materialFeatures.data?.fabric_warehouse === true;
+  const featureOn = (key: MmMaterialFeatureKey) => materialFeatures.data?.[key] === true;
 
   const invalidate = async () => {
     if (!factoryId) return;
     await qc.invalidateQueries({ queryKey: queryKeys.factoryModules(factoryId) });
     await qc.invalidateQueries({ queryKey: queryKeys.mmConfigBundle(factoryId) });
+    await qc.invalidateQueries({ queryKey: queryKeys.mmMaterialFeatures(factoryId) });
     await qc.invalidateQueries({ queryKey: queryKeys.mmFactoryFeatures(factoryId) });
     await qc.invalidateQueries({ queryKey: queryKeys.mmOps(factoryId) });
-    await refreshV4();
+    await qc.invalidateQueries({ queryKey: queryKeys.mmV4Config(factoryId) });
   };
 
   const setModule = async (key: ModuleKey, enabled: boolean) => {
@@ -151,33 +177,28 @@ export const ModuleSelectorPanel: React.FC = () => {
     }
   };
 
-  const setMill = async (enabled: boolean) => {
-    setBusyMill(true);
+  const applyFeature = async (key: MmMaterialFeatureKey, enabled: boolean) => {
+    setBusyFeature(key);
     try {
-      const res = await mmSetFactoryFeature('in_house_mill', enabled);
+      const res = await mmSetMaterialFeature(key, enabled);
       if (res.ok === false) throw new Error(res.message);
-      showNotification(enabled ? 'In-house mill on' : 'In-house mill off', 'success');
+      const label = MATERIAL_SWITCHES.find((row) => row.key === key)?.label ?? key;
+      showNotification(`${label} ${enabled ? 'on' : 'off'}`, 'success');
+      setConfirmOff(null);
       await invalidate();
     } catch (e) {
       showNotification(e instanceof Error ? e.message : 'Update failed', 'error');
     } finally {
-      setBusyMill(false);
+      setBusyFeature(null);
     }
   };
 
-  const applyFabricV4 = async (enabled: boolean) => {
-    setBusyFabricV4(true);
-    try {
-      const res = await mmSetFabricV4(enabled);
-      if (res.ok === false) throw new Error(res.message);
-      showNotification(enabled ? 'Fabric v4 on' : 'Fabric v4 off', 'success');
-      setFabricV4Confirm(null);
-      await invalidate();
-    } catch (e) {
-      showNotification(e instanceof Error ? e.message : 'Update failed', 'error');
-    } finally {
-      setBusyFabricV4(false);
+  const requestFeatureToggle = (key: MmMaterialFeatureKey) => {
+    if (featureOn(key)) {
+      setConfirmOff(key);
+      return;
     }
+    void applyFeature(key, true);
   };
 
   if (isLoading) {
@@ -188,6 +209,8 @@ export const ModuleSelectorPanel: React.FC = () => {
       </div>
     );
   }
+
+  const confirmLabel = MATERIAL_SWITCHES.find((row) => row.key === confirmOff)?.label ?? 'this switch';
 
   return (
     <div>
@@ -241,33 +264,21 @@ export const ModuleSelectorPanel: React.FC = () => {
 
               <div className="space-y-1.5 border-t border-slate-200/80 pt-2">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Features</p>
-                {m.key === 'material' && (
-                  <p className="text-[10px] text-slate-500 leading-snug">
-                    Mill on: Fabric Mill sends tested rolls to the warehouse. Mill off: warehouse receives vendor GRNs and tests. Warehouse and store challans stay on either path.
-                  </p>
-                )}
                 {m.key === 'material' ? (
-                  on ? (
-                    <>
+                  MATERIAL_SWITCHES.map((feature) => {
+                    const millLocked = feature.key === 'fabric_mill' && !warehouseOn;
+                    return (
                       <FeatureSwitch
-                        label="In-house mill"
-                        on={millOn}
-                        busy={busyMill}
-                        onToggle={() => void setMill(!millOn)}
+                        key={feature.key}
+                        label={feature.label}
+                        hint={millLocked ? 'Needs Fabric warehouse' : feature.hint}
+                        on={featureOn(feature.key)}
+                        busy={busyFeature === feature.key || materialFeatures.isLoading}
+                        disabled={!on || millLocked}
+                        onToggle={() => requestFeatureToggle(feature.key)}
                       />
-                      <FeatureSwitch
-                        label="Fabric v4 (new quality gate)"
-                        on={fabricV4On}
-                        busy={busyFabricV4}
-                        onToggle={() => setFabricV4Confirm(!fabricV4On)}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <FeatureRow label="In-house mill" />
-                      <FeatureRow label="Fabric v4 (new quality gate)" />
-                    </>
-                  )
+                    );
+                  })
                 ) : (
                   m.features.map((feature) => (
                     <FeatureRow key={feature.key} label={feature.label} />
@@ -280,34 +291,32 @@ export const ModuleSelectorPanel: React.FC = () => {
       </div>
 
       <Modal
-        isOpen={fabricV4Confirm !== null}
-        onClose={() => setFabricV4Confirm(null)}
+        isOpen={confirmOff !== null}
+        onClose={() => setConfirmOff(null)}
         className="max-w-md"
       >
         <div className="p-5 flex flex-col gap-3">
           <h4 className="text-[14px] font-semibold text-slate-900">
-            {fabricV4Confirm ? 'Turn on Fabric v4?' : 'Turn off Fabric v4?'}
+            Turn off {confirmLabel}?
           </h4>
           <p className="text-[12px] text-slate-600 leading-relaxed">
-            {fabricV4Confirm
-              ? 'Receiving no longer waits for QC. Cutting requires a valid test and inspection for each roll\'s stage.'
-              : 'The factory returns to the previous Material flow. New v4 pages stay hidden until Fabric v4 is on again.'}
+            Hides the pages. Data stays.
           </p>
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" size="sm" variant="secondary" onClick={() => setFabricV4Confirm(null)}>
+            <Button type="button" size="sm" variant="secondary" onClick={() => setConfirmOff(null)}>
               Cancel
             </Button>
             <DesktopWriteGate>
               <Button
                 type="button"
                 size="sm"
-                disabled={busyFabricV4 || fabricV4Confirm === null}
+                disabled={busyFeature !== null || confirmOff === null}
                 onClick={() => {
-                  if (fabricV4Confirm === null) return;
-                  void applyFabricV4(fabricV4Confirm);
+                  if (confirmOff === null) return;
+                  void applyFeature(confirmOff, false);
                 }}
               >
-                {busyFabricV4 ? 'Saving…' : fabricV4Confirm ? 'Turn on' : 'Turn off'}
+                {busyFeature ? 'Saving…' : 'Turn off'}
               </Button>
             </DesktopWriteGate>
           </div>

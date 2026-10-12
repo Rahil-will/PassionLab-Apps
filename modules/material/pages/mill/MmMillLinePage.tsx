@@ -45,20 +45,19 @@ function MillWhenCell({ iso }: { iso: string | null | undefined }) {
 }
 
 const thFirstCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center';
+  'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const thCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center';
-const thQtyCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 whitespace-nowrap text-center';
-const thAtQtyCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 whitespace-nowrap text-center';
-const thDispQtyCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 whitespace-nowrap text-center';
-const tdFirstCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
-const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
-const tdQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 bg-blue-50/40';
-const tdAtQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
-const tdDispQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 bg-green-50';
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
+const thCenterCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
+const thQtyCls = thCenterCls;
+const thAtQtyCls = thCenterCls;
+const thDispQtyCls = thCenterCls;
+const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-left max-w-0 overflow-hidden';
+const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-left max-w-0 overflow-hidden';
+const tdQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 max-w-0 overflow-hidden';
+const tdAtQtyCls = tdQtyCls;
+const tdDispQtyCls = tdQtyCls;
 
 export default function MmMillLinePage() {
   const params = useNavigationStore((s) => s.routeParams);
@@ -143,7 +142,10 @@ export default function MmMillLinePage() {
   };
 
   const openBatch = (id: string) => {
-    requestNavigate(RoutePath.MATERIAL_MILL_ASSIGN, { ...lineParams, batchId: id });
+    requestNavigate(RoutePath.MATERIAL_MILL_ASSIGN, {
+      ...lineParams,
+      batchId: id,
+    });
   };
 
   const confirmShortClose = async (reason?: string) => {
@@ -191,40 +193,6 @@ export default function MmMillLinePage() {
                     onClick={() => requestNavigate(RoutePath.MATERIAL_MILL_ASSIGN, lineParams)}
                   >
                     Allocate rolls
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={shortClosed || atMill === 0}
-                    onClick={() => {
-                      const batch = (data?.batches ?? []).find((row) => row.at_mill_count > 0);
-                      if (!batch) return;
-                      requestNavigate(RoutePath.MATERIAL_MILL_ASSIGN, {
-                        ...lineParams,
-                        batchId: batch.id,
-                        mode: 'testing',
-                      });
-                    }}
-                  >
-                    Test
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={shortClosed || atMill === 0}
-                    onClick={() => {
-                      const batch = (data?.batches ?? []).find((row) => row.at_mill_count > 0);
-                      if (!batch) return;
-                      requestNavigate(RoutePath.MATERIAL_MILL_ASSIGN, {
-                        ...lineParams,
-                        batchId: batch.id,
-                        mode: 'inspection',
-                      });
-                    }}
-                  >
-                    4-point
                   </Button>
                   {shortClosed ? null : (
                     <Button
@@ -293,29 +261,27 @@ export default function MmMillLinePage() {
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
           <h4 className="text-[11px] font-semibold text-slate-800">Mill batches</h4>
           <p className="text-[10px] text-slate-400 mt-0.5">
-            {shortClosed ? 'Short closed. Cancel short close to add more rolls.' : 'Open a batch to add rolls. Test and 4-point are separate, on this mill batch.'}
+            {shortClosed ? 'Short closed. Cancel short close to add more rolls.' : 'Open a batch to add rolls. Test and inspect on the challan.'}
           </p>
         </div>
-        <div className="overflow-x-auto" style={{ minHeight: `${2.6 + (batches.length + 1) * 2.5}rem` }}>
+        <div className="overflow-auto">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: '4.5%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '9%' }} />
               <col style={{ width: '12%' }} />
             </colgroup>
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
-                <th className={thFirstCls}>S.No</th>
-                <th className={thCls}>Batch</th>
+                <th className={thFirstCls}>Batch</th>
                 <th className={thCls}>Ref</th>
                 <th className={thCls}>Date</th>
                 <th className={thQtyCls}>Qty</th>
@@ -324,12 +290,12 @@ export default function MmMillLinePage() {
                 <th className={thAtQtyCls}>At mill</th>
                 <th className={thDispQtyCls}>Disp. qty</th>
                 <th className={thDispQtyCls}>Disp. rolls</th>
-                <th className={thCls}>Status</th>
+                <th className={thCenterCls}>Status</th>
                 <th className={thCls}>Remarks</th>
               </tr>
             </thead>
             <tbody>
-              {batches.map((batch, idx) => {
+              {batches.map((batch) => {
                 const split = batchQtySplit(batch.id);
                 const batchStatus = millBatchRowStatus(batch.at_mill_count, batch.dispatched_count, batch.roll_count);
                 return (
@@ -338,10 +304,9 @@ export default function MmMillLinePage() {
                   className={shortClosed ? '' : 'hover:bg-slate-50/80 cursor-pointer'}
                   onClick={shortClosed ? undefined : () => openBatch(batch.id)}
                 >
-                  <td className={`${tdFirstCls} text-slate-400 font-semibold tabular-nums`}>{idx + 1}</td>
-                  <td className={`${tdCls} font-semibold text-slate-800 truncate`}>{batch.batch_no}</td>
+                  <td className={`${tdFirstCls} font-semibold text-slate-800 truncate`}>{batch.batch_no}</td>
                   <td className={`${tdCls} truncate`}>{batch.mill_ref || '—'}</td>
-                  <td className={`${tdCls} truncate`}>{millDateLabel(batch.production_date)}</td>
+                  <td className={`${tdCls} whitespace-nowrap`}>{millDateLabel(batch.production_date)}</td>
                   <td className={tdQtyCls}>
                     <span className="block text-[11px] font-semibold text-blue-800 tabular-nums">
                       {formatQtyM(batch.qty_m, uom)}
@@ -372,7 +337,7 @@ export default function MmMillLinePage() {
                       {batch.dispatched_count}
                     </span>
                   </td>
-                  <td className={`${tdCls} text-center`}>
+                  <td className="px-2.5 py-2 text-center border-b border-slate-100">
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(batchStatus.key)}`} />
                       <span className={`text-[10px] font-bold ${millWordText(batchStatus.key)}`}>
@@ -386,20 +351,15 @@ export default function MmMillLinePage() {
               })}
               {batches.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="border-b border-slate-100">
-                    <span className="block text-center text-[11px] text-slate-400 italic py-3">No mill batches yet.</span>
+                  <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    No mill batches yet.
                   </td>
                 </tr>
               ) : (
                 <tr aria-hidden>
-                  <td colSpan={12} className="h-14 border-0 p-0" />
+                  <td colSpan={11} className="h-10 border-0 p-0" />
                 </tr>
               )}
-              {batches.length === 0 ? (
-                <tr aria-hidden>
-                  <td colSpan={12} className="h-14 border-0 p-0" />
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>
@@ -410,34 +370,32 @@ export default function MmMillLinePage() {
           <h4 className="text-[11px] font-semibold text-slate-800">Dispatched</h4>
           <p className="text-[10px] text-slate-400 mt-0.5">Open a challan to see the rolls sent. This list is read-only.</p>
         </div>
-        <div className="overflow-x-auto" style={{ minHeight: `${2.6 + (dispatchedChallans.length + 1) * 2.5}rem` }}>
+        <div className="overflow-auto">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: '4.5%' }} />
-              <col style={{ width: '11.917%' }} />
-              <col style={{ width: '11.917%' }} />
-              <col style={{ width: '11.917%' }} />
-              <col style={{ width: '11.917%' }} />
-              <col style={{ width: '11.917%' }} />
-              <col style={{ width: '11.917%' }} />
+              <col style={{ width: '14%' }} />
               <col style={{ width: '12%' }} />
               <col style={{ width: '12%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '14%' }} />
             </colgroup>
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
-                <th className={thFirstCls}>S.No</th>
-                <th className={thCls}>Dispatched</th>
+                <th className={thFirstCls}>Dispatched</th>
                 <th className={thCls}>Challan</th>
                 <th className={thCls}>Ref</th>
                 <th className={thCls}>To</th>
                 <th className={thDispQtyCls}>Rolls</th>
                 <th className={thDispQtyCls}>Qty</th>
-                <th className={thCls}>Status</th>
+                <th className={thCenterCls}>Status</th>
                 <th className={thCls}>Received</th>
               </tr>
             </thead>
             <tbody>
-              {dispatchedChallans.map((challan, idx) => {
+              {dispatchedChallans.map((challan) => {
                 const open = challan.id === openChallanId;
                 return (
                   <tr
@@ -445,8 +403,7 @@ export default function MmMillLinePage() {
                     className={`hover:bg-slate-50/80 cursor-pointer ${open ? 'bg-blue-50/70' : ''}`}
                     onClick={() => setOpenChallanId(open ? null : challan.id)}
                   >
-                    <td className={`${tdFirstCls} text-slate-400 font-semibold tabular-nums`}>{idx + 1}</td>
-                    <td className={`${tdCls} whitespace-nowrap`}><MillWhenCell iso={challan.sent_at} /></td>
+                    <td className={`${tdFirstCls} whitespace-nowrap`}><MillWhenCell iso={challan.sent_at} /></td>
                     <td className={`${tdCls} font-semibold text-slate-800 truncate`}>{challan.challan_no}</td>
                     <td className={`${tdCls} truncate`}>{challan.reference_no || '—'}</td>
                     <td className={`${tdCls} truncate`}>{challan.to_location || 'Warehouse'}</td>
@@ -460,7 +417,7 @@ export default function MmMillLinePage() {
                         {formatQtyM(challan.qty_m, uom)}
                       </span>
                     </td>
-                    <td className={`${tdCls} text-center`}>
+                    <td className="px-2.5 py-2 text-center border-b border-slate-100">
                       <span className="inline-flex items-center justify-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${inboundStatusDot(challan.status)}`} />
                         <span className={`text-[10px] font-bold ${inboundStatusText(challan.status)}`}>
@@ -474,20 +431,15 @@ export default function MmMillLinePage() {
               })}
               {dispatchedChallans.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="border-b border-slate-100">
-                    <span className="block text-center text-[11px] text-slate-400 italic py-3">No mill challans yet.</span>
+                  <td colSpan={8} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    No mill challans yet.
                   </td>
                 </tr>
               ) : (
                 <tr aria-hidden>
-                  <td colSpan={9} className="h-14 border-0 p-0" />
+                  <td colSpan={8} className="h-10 border-0 p-0" />
                 </tr>
               )}
-              {dispatchedChallans.length === 0 ? (
-                <tr aria-hidden>
-                  <td colSpan={9} className="h-14 border-0 p-0" />
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>

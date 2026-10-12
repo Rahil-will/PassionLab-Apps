@@ -10,11 +10,10 @@ import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { mmDispositionRejected, mmHoldRolls, mmReleaseRolls, type MmStockMovementRow, type MmWarehouseStockRow } from '../../lib/mmRpc';
-import { MmSendToProcessModal } from '../../components/MmSendToProcessModal';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
 import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
+import { FabricStockPanel } from '../../components/FabricStockPanel';
 import { useMmStockMovements, useMmWarehouseStock } from '../../lib/useMmOps';
-import { useFabricV4Enabled } from '../../lib/useMmV4Config';
 import { mmWhListReadiness, type MmV4RollRow } from '../../lib/mmV4Rpc';
 import { formatQtyM, formatWhen } from '../../lib/mmRollDraft';
 import {
@@ -258,7 +257,6 @@ function MovementDetailModal({
 export default function MmWarehouseStockPage({ view }: { view: StockView }) {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const factoryId = useNavigationStore((s) => s.factoryId);
-  const fabricV4 = useFabricV4Enabled();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLocation, setFilterLocation] = useState<LocationFilter>('');
   const [filterBuyer, setFilterBuyer] = useState('');
@@ -291,7 +289,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     filterLocation,
     filterBuyer,
     1,
-    view === 'stock',
+    false,
     STOCK_FETCH_SIZE,
   );
   const moveQuery = useMmStockMovements(debouncedSearch, filterKind, page, view === 'movements');
@@ -303,7 +301,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
-    enabled: Boolean(factoryId && fabricV4 && view === 'stock'),
+    enabled: false,
   });
 
   const readinessByUnit = useMemo(() => {
@@ -361,7 +359,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     {
       subtitle:
         view === 'stock'
-          ? 'One row per style, color, and fabric. Open a row for units (rolls or laps), invoice, location, and test values.'
+          ? 'One row per fabric. Open a colour or a number for the rolls in that warehouse bucket.'
           : 'Each row is a batch of units moved at the same time. Open a row for the units, or the challan when there is one.',
     },
     [view],
@@ -447,6 +445,14 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     }
   };
 
+  if (view === 'stock') {
+    return (
+      <PageShell className="w-full h-[calc(100dvh-7.25rem)] min-h-0 flex flex-col">
+        <FabricStockPanel warehouseOnly />
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       loading={activeQuery.isLoading}
@@ -462,162 +468,34 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
               <Search size={14} className="text-slate-400 shrink-0" />
               <input
                 className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-                placeholder={
-                  view === 'stock'
-                    ? 'Search style, fabric, PO, rack, challan…'
-                    : 'Search roll, style, action, document…'
-                }
+                placeholder="Search roll, style, action, document…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            {view === 'stock' ? (
-              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
-                <SelectDropdown
-                  value={filterLocation}
-                  onChange={(v) => setFilterLocation(v as LocationFilter)}
-                  options={[
-                    { value: '', label: 'All warehouse' },
-                    { value: 'pending_test', label: 'Pending test' },
-                    { value: 'receiving', label: 'Waiting putaway' },
-                    { value: 'rack', label: 'On rack' },
-                    { value: 'red_label', label: 'Red label' },
-                    { value: 'unallocated', label: 'Unallocated' },
-                    { value: 'cutting', label: 'Cutting store' },
-                  ]}
-                  icon={Filter}
-                  className="w-44"
-                />
-                <SelectDropdown
-                  value={filterBuyer}
-                  onChange={setFilterBuyer}
-                  options={[
-                    { value: '', label: 'All Buyers' },
-                    ...buyers.map((name) => ({ value: name, label: name })),
-                  ]}
-                  icon={Filter}
-                  className="w-full sm:w-36"
-                />
-              </div>
-            ) : (
-              <SelectDropdown
-                value={filterKind}
-                onChange={(v) => setFilterKind(v as KindFilter)}
-                options={[
-                  { value: '', label: 'All' },
-                  { value: 'received', label: 'Received' },
-                  { value: 'qc', label: '4-point' },
-                  { value: 'putaway', label: 'Putaway' },
-                  { value: 'dispatch', label: 'Dispatch' },
-                  { value: 'allocation', label: 'Allocate' },
-                  { value: 'other', label: 'Other' },
-                ]}
-                icon={Filter}
-                className="w-36 sm:ml-auto"
-              />
-            )}
+            <SelectDropdown
+              value={filterKind}
+              onChange={(v) => setFilterKind(v as KindFilter)}
+              options={[
+                { value: '', label: 'All' },
+                { value: 'received', label: 'Received' },
+                { value: 'qc', label: '4-point' },
+                { value: 'putaway', label: 'Putaway' },
+                { value: 'dispatch', label: 'Dispatch' },
+                { value: 'allocation', label: 'Allocate' },
+                { value: 'other', label: 'Other' },
+              ]}
+              icon={Filter}
+              className="w-36 sm:ml-auto"
+            />
           </div>
         </div>
-        {(pagination.total > (view === 'stock' ? GROUP_PAGE_SIZE : PAGE_SIZE)
-          || debouncedSearch
-          || filterLocation
-          || filterBuyer
-          || filterKind) && (
+        {(pagination.total > PAGE_SIZE || debouncedSearch || filterKind) && (
           <div className="px-4 py-1.5 border-b border-slate-100 bg-white text-[10px] text-slate-500">
             Page {pagination.page} of {pagination.pageCount} ({pagination.start}-{pagination.end} of {pagination.total}{' '}
-            {view === 'stock' ? 'fabrics' : 'ledger rows'})
-            {view === 'stock' && (stockQuery.data?.total ?? 0) > STOCK_FETCH_SIZE
-              ? ` · showing first ${STOCK_FETCH_SIZE} rolls`
-              : ''}
+            ledger rows)
           </div>
         )}
-        {view === 'stock' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] table-fixed border-collapse">
-              <colgroup>
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '13%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '15%' }} />
-                <col style={{ width: '12%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th className={thCls}>Style</th>
-                  <th className={thCls}>Buyer / PO</th>
-                  <th className={thCls}>Color</th>
-                  <th className={thCls}>Fabric</th>
-                  <th className={thCenterCls}>Rolls / laps</th>
-                  <th className={thCenterCls}>Qty</th>
-                  <th className={thCls}>Where</th>
-                  <th className={thCenterCls}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageStockGroups.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-[11px] text-slate-400">
-                      No fabrics match this filter.
-                    </td>
-                  </tr>
-                )}
-                {pageStockGroups.map((group) => (
-                  <tr
-                    key={group.key}
-                    className="hover:bg-slate-50/80 cursor-pointer"
-                    onClick={() => {
-                      setPicked([]);
-                      setOpenStockGroup(group);
-                    }}
-                  >
-                    <td className={`${tdCls} font-semibold text-slate-800`}>
-                      <span className="block truncate">{group.styleName}</span>
-                      {group.styleRef ? (
-                        <span className="block text-[10px] text-slate-400 truncate">{group.styleRef}</span>
-                      ) : null}
-                    </td>
-                    <td className={tdCls}>
-                      <span className="block truncate">{group.buyerName || '—'}</span>
-                      {group.poNumber ? (
-                        <span className="block text-[10px] text-slate-400 truncate">{group.poNumber}</span>
-                      ) : null}
-                    </td>
-                    <td className={`${tdCls} truncate`}>{group.colorName}</td>
-                    <td className={tdCls}>
-                      <span className="block truncate">{group.fabricName}</span>
-                      {group.fabricType ? (
-                        <span className="block text-[10px] text-slate-400 truncate">{group.fabricType}</span>
-                      ) : null}
-                    </td>
-                    <td className={`${tdCenterCls} tabular-nums font-semibold text-[10px]`}>
-                      {unitFormCountText(group.formCounts)}
-                    </td>
-                    <td className={`${tdCenterCls} tabular-nums font-semibold`}>
-                      {formatQtyM(group.qty, group.uom)}
-                    </td>
-                    <td className={tdCls}>
-                      {group.locations.length === 0
-                        ? '—'
-                        : group.locations.length === 1
-                          ? group.locations[0]
-                          : `${group.locations.length} locations`}
-                    </td>
-                    <td className={tdCenterCls}>
-                      <span className="text-[10px] font-semibold text-slate-600">
-                        {group.statusLabels.length <= 2
-                          ? group.statusLabels.join(' · ')
-                          : `${group.statusLabels.length} statuses`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] table-fixed border-collapse">
               <colgroup>
@@ -671,7 +549,6 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
               </tbody>
             </table>
           </div>
-        )}
         <Pagination {...pagination} />
       </Card>
       <Modal isOpen={dispositionOpen} onClose={() => setDispositionOpen(false)} className="max-w-md">
@@ -729,33 +606,18 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
           </div>
         </div>
       </Modal>
-      {fabricV4 ? (
-        <MmProcSendModalV4
-          open={processOpen}
-          side="warehouse"
-          preselectedRollIds={picked}
-          onClose={() => setProcessOpen(false)}
-          onSent={(challanId) => {
-            setProcessOpen(false);
-            setPicked([]);
-            requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: challanId });
-          }}
-        />
-      ) : (
-        <MmSendToProcessModal
-          open={processOpen}
-          origin="warehouse"
-          unitIds={picked}
-          onClose={() => setProcessOpen(false)}
-          onSent={(challanId) => {
-            setProcessOpen(false);
-            setPicked([]);
-            requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: challanId });
-          }}
-        />
-      )}
-      {fabricV4 ? (
-        <MmQcTestModalV4
+      <MmProcSendModalV4
+        open={processOpen}
+        side="warehouse"
+        preselectedRollIds={picked}
+        onClose={() => setProcessOpen(false)}
+        onSent={(challanId) => {
+          setProcessOpen(false);
+          setPicked([]);
+          requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: challanId });
+        }}
+      />
+      <MmQcTestModalV4
           open={testOpen}
           scopeKind="rolls"
           rollIds={picked}
@@ -768,7 +630,6 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
             void readinessQ.refetch();
           }}
         />
-      ) : null}
       <Modal
         isOpen={Boolean(openStockGroup)}
         onClose={() => {
@@ -800,11 +661,9 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                   </Button>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2">
-                    {fabricV4 ? (
-                      <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
-                        Test
-                      </Button>
-                    ) : null}
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
+                      Test
+                    </Button>
                     <Button type="button" size="sm" variant="secondary" disabled={holdBusy} onClick={() => void submitRelease()}>
                       Release
                     </Button>
@@ -847,12 +706,8 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                     <th className={thCls}>Shade</th>
                     <th className={thCls}>Tested shade</th>
                     <th className={thCenterCls}>Pts / 100</th>
-                    {fabricV4 ? (
-                      <>
-                        <th className={thCenterCls}>Test</th>
-                        <th className={thCenterCls}>Cut-ready</th>
-                      </>
-                    ) : null}
+                    <th className={thCenterCls}>Test</th>
+                    <th className={thCenterCls}>Cut-ready</th>
                     <th className={thCenterCls}>Status</th>
                   </tr>
                 </thead>
@@ -888,22 +743,18 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                         <td className={`${tdCenterCls} tabular-nums`}>
                           {row.points_per_100_sqyd == null ? '—' : Number(row.points_per_100_sqyd).toFixed(2)}
                         </td>
-                        {fabricV4 ? (
-                          <>
-                            <td className={tdCenterCls}>
-                              <Badge variant={statusBadgeVariant(gate?.test_status)}>
-                                {String(gate?.test_status ?? '—')}
-                              </Badge>
-                            </td>
-                            <td className={tdCenterCls}>
-                              {gate?.gate?.cut_ready ? (
-                                <Badge variant="success">Cut-ready</Badge>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </td>
-                          </>
-                        ) : null}
+                        <td className={tdCenterCls}>
+                          <Badge variant={statusBadgeVariant(gate?.test_status)}>
+                            {String(gate?.test_status ?? '—')}
+                          </Badge>
+                        </td>
+                        <td className={tdCenterCls}>
+                          {gate?.gate?.cut_ready ? (
+                            <Badge variant="success">Cut-ready</Badge>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
                         <td className={tdCenterCls}>
                           <span className="inline-flex items-center gap-1.5">
                             <span className={`w-1.5 h-1.5 rounded-full ${stockChip(row).dot}`} />

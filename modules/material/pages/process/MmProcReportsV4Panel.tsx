@@ -43,7 +43,7 @@ export function MmProcReportsV4Panel() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3 flex flex-col xl:flex-row xl:items-end gap-3">
         <MmSegmentControl<ReportTab>
           value={tab}
           onChange={setTab}
@@ -52,13 +52,14 @@ export function MmProcReportsV4Panel() {
             { value: 'quality', label: 'Quality by machine' },
           ]}
         />
-        <LabeledDatePicker label="From" value={from} onChange={setFrom} />
-        <LabeledDatePicker label="To" value={to} onChange={setTo} />
-        {tab === 'loss' ? (
+        <div className="flex flex-wrap items-end gap-2 xl:ml-auto">
+          <LabeledDatePicker label="From" value={from} onChange={setFrom} />
+          <LabeledDatePicker label="To" value={to} onChange={setTo} />
           <SelectDropdown
             label="Group by"
             value={groupBy}
             onChange={(v) => setGroupBy((v as GroupBy) || 'unit_process')}
+            disabled={tab !== 'loss'}
             options={[
               { value: 'unit', label: 'Unit' },
               { value: 'process', label: 'Process' },
@@ -66,7 +67,7 @@ export function MmProcReportsV4Panel() {
             ]}
             className="w-44"
           />
-        ) : null}
+        </div>
       </div>
 
       {tab === 'loss' ? (

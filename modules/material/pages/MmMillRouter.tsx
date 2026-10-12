@@ -1,8 +1,6 @@
-import React, { useEffect } from 'react';
-import { useModuleEnabled } from '../../../core/modules/useModuleEnabled';
+import React from 'react';
 import { useNavigationStore } from '../../../stores';
 import { RoutePath } from '../../../types';
-import { useInHouseMill } from '../lib/useMmFactoryFeatures';
 import MmMillBoardPage from './mill/MmMillBoardPage';
 import MmMillLanding from './mill/MmMillLanding';
 import MmMillLinePage from './mill/MmMillLinePage';
@@ -19,16 +17,10 @@ import MmMillBatchFormV4Page from './mill/MmMillBatchFormV4Page';
 import MmMillBatchDetailV4Page from './mill/MmMillBatchDetailV4Page';
 import MmQcQueuePage from './MmQcQueuePage';
 import MmWarehouseRollDetail from './warehouse/MmWarehouseRollDetail';
+import MmWarehouseProcessSendPage from './warehouse/MmWarehouseProcessSendPage';
 
 export default function MmMillRouter() {
-  const materialOn = useModuleEnabled('material');
-  const millOn = useInHouseMill(materialOn);
   const route = useNavigationStore((s) => s.currentRoute);
-  const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-
-  useEffect(() => {
-    if (materialOn && !millOn) requestNavigate(RoutePath.MATERIAL_WAREHOUSE);
-  }, [materialOn, millOn, requestNavigate]);
 
   if (route === RoutePath.MATERIAL_MILL_ASSIGN) return <MmMillAssignPage />;
   if (route === RoutePath.MATERIAL_MILL_DISPATCH) return <MmMillDispatchPage />;
@@ -41,6 +33,7 @@ export default function MmMillRouter() {
   if (route === RoutePath.MATERIAL_MILL_UNALLOCATED) return <MmMillUnallocatedPage />;
   if (route === RoutePath.MATERIAL_MILL_HISTORY) return <MmMillDispatchHistoryPage />;
   if (route === RoutePath.MATERIAL_MILL_STOCK) return <MmMillStockPage />;
+  if (route === RoutePath.MATERIAL_MILL_PROCESS_SEND) return <MmWarehouseProcessSendPage side="mill" />;
   if (route === RoutePath.MATERIAL_MILL_STYLES) return <MmMillBoardPage />;
   if (route === RoutePath.MATERIAL_MILL_BATCH_NEW) return <MmMillBatchFormV4Page />;
   if (route === RoutePath.MATERIAL_MILL_BATCH_DETAIL) return <MmMillBatchDetailV4Page />;

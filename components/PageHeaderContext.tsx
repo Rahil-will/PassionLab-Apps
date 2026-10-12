@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { useNavigationStore } from '../stores/navigationStore';
 
 interface PageHeaderMeta {
   title?: string | null;
   subtitle?: string | null;
+  /** Route that set this meta — ignored after navigation so subtitle tracks the title. */
+  route?: string | null;
 }
 
 interface PageHeaderContextType {
@@ -28,23 +31,24 @@ export const usePageHeader = (
   revision?: unknown,
 ) => {
   const { actionsRef, metaRef, bump } = useContext(PageHeaderContext);
+  const currentRoute = useNavigationStore((s) => s.currentRoute);
   const revisionKey =
     revision === undefined ? '' : typeof revision === 'object' ? JSON.stringify(revision) : String(revision);
   (actionsRef as React.MutableRefObject<React.ReactNode>).current = meta.actions ?? null;
   (metaRef as React.MutableRefObject<PageHeaderMeta>).current = {
     title: meta.title,
     subtitle: meta.subtitle,
+    route: currentRoute,
   };
   React.useLayoutEffect(() => {
     bump();
-  }, [revisionKey, bump, meta.title, meta.subtitle]);
+  }, [revisionKey, bump, meta.title, meta.subtitle, currentRoute]);
   React.useEffect(() => {
     return () => {
       (actionsRef as React.MutableRefObject<React.ReactNode>).current = null;
-      (metaRef as React.MutableRefObject<PageHeaderMeta>).current = {};
-      bump();
+      // Keep subtitle/title until the next page writes — avoids lag behind the route title.
     };
-  }, [actionsRef, metaRef, bump]);
+  }, [actionsRef]);
 };
 
 export const PageHeaderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

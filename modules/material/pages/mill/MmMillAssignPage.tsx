@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ClipboardList, Info, Package } from 'lucide-react';
+import { ClipboardList, Info, Package, Search } from 'lucide-react';
 import { Button, Card, Input } from '../../../../components/ui';
 import { LabeledDatePicker } from '../../../../components/SingleDatePicker';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
-import { tokens } from '../../../../lib/designTokens';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { MmFabricSummaryCard, MmSummaryMetric } from '../../components/MmFabricSummaryCard';
@@ -25,9 +24,10 @@ import {
   type MmDraftRoll,
 } from '../../lib/mmRollDraft';
 import { mmAllocateMillRollsToStyle, mmSaveMillBatch, mmUpdateMillBatch } from '../../lib/mmRpc';
-import { useInvalidateMmOps, useMmMillLine } from '../../lib/useMmOps';
+import { fabricMismatchMessage } from '../../lib/fabricStock';
+import { useInvalidateMmOps, useMmMillLine, useMmUnallocatedMill } from '../../lib/useMmOps';
 import { millTestCaptureFields, millQualityMode } from './millUnallocated';
-import { MmMillAssignFromStock, MmMillAssignSourceToggle } from './MmMillAssignFromStock';
+import { MmMillAssignFromStock } from './MmMillAssignFromStock';
 
 function todayIso(): string {
   const now = new Date();
@@ -97,8 +97,10 @@ export default function MmMillAssignPage() {
   const [countError, setCountError] = useState<string | null>(null);
   const [rows, setRows] = useState<MmDraftRoll[]>([]);
   const [busy, setBusy] = useState(false);
+  const [mismatch, setMismatch] = useState<string | null>(null);
   const [baseline, setBaseline] = useState<string | null>(null);
-  const [source, setSource] = useState<'new' | 'stock'>('new');
+  const [stockBatchIds, setStockBatchIds] = useState<string[]>([]);
+  const [stockSearch, setStockSearch] = useState('');
   const hydratedFor = useRef('');
   const creating = !editing && !qualityLocked;
 
@@ -125,7 +127,8 @@ export default function MmMillAssignPage() {
     setRows([]);
     setRollCount('');
     setCountError(null);
-    setSource('new');
+    setStockBatchIds([]);
+    setStockSearch('');
     setBaseline(assignFormSnapshot({
       batchNo: '',
       millRef: '',
@@ -172,6 +175,25 @@ export default function MmMillAssignPage() {
   }, [editing, batchId, data, fields, orderId, colorwayId, fabricLineId, requestNavigate, showNotification]);
 
   const uom = data?.uom ?? '';
+  const stockQuery = useMmUnallocatedMill(creating);
+  const fromStock = creating;
+  const unallocatedBatches = useMemo(() => {
+    return (stockQuery.data?.batches ?? []).filter((batch) => {
+      if (data?.fabric_type_id && batch.fabric_type_id !== data.fabric_type_id) return false;
+      return (batch.at_mill_count ?? 0) > 0;
+    });
+  }, [data?.fabric_type_id, stockQuery.data?.batches]);
+  const visibleStockBatches = useMemo(() => {
+    const needle = stockSearch.trim().toLowerCase();
+    if (!needle) return unallocatedBatches;
+    return unallocatedBatches.filter((batch) =>
+      [batch.batch_no, batch.mill_ref]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [stockSearch, unallocatedBatches]);
   const batchQty = draftQtySum(rows);
   const otherRolls = useMemo(
     () => (data?.rolls ?? []).filter((row) => !editing || row.mill_batch_id !== batchId),
@@ -192,9 +214,9 @@ export default function MmMillAssignPage() {
   );
   const dirty = baseline !== null && snapshot !== baseline;
   useEffect(() => {
-    setUnsaved(inspectOnly || (creating && source === 'stock') ? false : dirty);
+    setUnsaved(inspectOnly || creating ? false : dirty);
     return () => setUnsaved(false);
-  }, [creating, dirty, inspectOnly, setUnsaved, source]);
+  }, [creating, dirty, inspectOnly, setUnsaved]);
   const canSave = useMemo(
     () => Boolean(
       dirty
@@ -250,7 +272,13 @@ export default function MmMillAssignPage() {
       const res = editing
         ? await mmUpdateMillBatch(batchId, header, parsed.rolls, batchVersion, testOnly)
         : await mmSaveMillBatch(orderId, colorwayId, fabricLineId, header, parsed.rolls);
-      if (res.ok === false) throw new Error(res.message);
+      if (res.ok === false) {
+        const text = fabricMismatchMessage(res);
+        if (text) setMismatch(text);
+        else showNotification(res.message, 'error');
+        return;
+      }
+      setMismatch(null);
       showNotification(
         testOnly ? `Saved mill tests on ${res.data.batch_no}` : editing ? `Updated mill batch ${res.data.batch_no}` : `Saved mill batch ${res.data.batch_no}`,
         'success',
@@ -276,7 +304,13 @@ export default function MmMillAssignPage() {
     setBusy(true);
     try {
       const res = await mmAllocateMillRollsToStyle(unitIds, orderId, colorwayId, fabricLineId);
-      if (res.ok === false) throw new Error(res.message);
+      if (res.ok === false) {
+        const text = fabricMismatchMessage(res);
+        if (text) setMismatch(text);
+        else showNotification(res.message, 'error');
+        return;
+      }
+      setMismatch(null);
       showNotification(
         res.data.over_allocated
           ? `Assigned ${res.data.count} rolls. This fabric is now over required qty.`
@@ -303,7 +337,7 @@ export default function MmMillAssignPage() {
     ? 'Actual length, actual width, cuttable width, and 4-point on this mill batch.'
     : testOnly
       ? 'Test parameters and shade sorting on this mill batch. Batch details stay as they are.'
-      : creating && source === 'stock'
+      : creating
         ? 'Pick unallocated mill batches still at the mill and assign those rolls to this fabric.'
         : 'Generate mill rolls for this allocated fabric. They stay at the mill until dispatch.';
 
@@ -330,23 +364,11 @@ export default function MmMillAssignPage() {
 
   return (
     <PageShell loading={isLoading} error={error} onRetry={() => void refetch()} skeleton="card">
-      {creating && (
-        <div className="mb-3">
-          <MmMillAssignSourceToggle value={source} onChange={setSource} />
-        </div>
-      )}
-      {creating && source === 'stock' ? (
-        <MmMillAssignFromStock
-          summary={fabricSummary}
-          fabricTypeId={data?.fabric_type_id}
-          fabricTypeName={data?.fabric_type ?? data?.fabric_name}
-          colorName={data?.color_name}
-          uom={uom}
-          busy={busy}
-          onAssign={assignFromStock}
-        />
-      ) : (
-      <>
+      {mismatch ? (
+        <p className="mb-3 text-[12px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+          Fabric mismatch — {mismatch}
+        </p>
+      ) : null}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-stretch">
         {fabricSummary}
 
@@ -356,23 +378,104 @@ export default function MmMillAssignPage() {
               <ClipboardList size={16} className="text-primary-600" />
               {inspectOnly ? '4-point inspection' : testOnly ? 'Test mill rolls' : editing ? 'Edit mill batch' : 'Mill batch details'}
             </h4>
+            {fromStock ? null : (
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2.5">
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">Produced</p>
-                <p className="text-[13px] font-bold text-slate-900 mt-1 tabular-nums">{formatQtyM(producedCardM, uom)}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {producedCardRolls} {producedCardRolls === 1 ? 'roll' : 'rolls'}
+                <p className="text-[13px] font-bold text-slate-900 mt-0.5 tabular-nums">
+                  {formatQtyM(producedCardM, uom)}
+                  <span className="mx-1.5 font-normal text-slate-400">|</span>
+                  <span className="font-semibold">
+                    {producedCardRolls} {producedCardRolls === 1 ? 'roll' : 'rolls'}
+                  </span>
                 </p>
               </div>
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2.5">
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">This batch</p>
-                <p className="text-[13px] font-bold text-slate-900 mt-1 tabular-nums">{formatQtyM(batchQty, uom)}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {rows.length} {rows.length === 1 ? 'roll' : 'rolls'}
+                <p className="text-[13px] font-bold text-slate-900 mt-0.5 tabular-nums">
+                  {formatQtyM(batchQty, uom)}
+                  <span className="mx-1.5 font-normal text-slate-400">|</span>
+                  <span className="font-semibold">
+                    {rows.length} {rows.length === 1 ? 'roll' : 'rolls'}
+                  </span>
                 </p>
               </div>
             </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {fromStock ? (
+                <div className="md:col-span-3">
+                  <p className="text-[11px] font-medium text-slate-600 mb-1.5">Unallocated mill batches</p>
+                  {!data?.fabric_type_id ? (
+                    <p className="text-[11px] text-amber-700">
+                      This fabric line has no fabric type on the order. Set it before assigning rolls.
+                    </p>
+                  ) : stockQuery.isLoading ? (
+                    <p className="text-[11px] text-slate-400">Loading mill stock…</p>
+                  ) : unallocatedBatches.length === 0 ? (
+                    <p className="text-[11px] text-slate-400">
+                      No unallocated rolls of this fabric at the mill.{' '}
+                      <button
+                        type="button"
+                        className="font-semibold text-blue-700 hover:text-blue-800"
+                        onClick={() => requestNavigate(RoutePath.MATERIAL_MILL_BATCH_NEW)}
+                      >
+                        New mill batch
+                      </button>
+                    </p>
+                  ) : (
+                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                      <div className="flex items-center gap-1.5 px-2 py-1 border-b border-slate-100">
+                        <Search size={12} className="text-slate-400 shrink-0" />
+                        <input
+                          className="text-[11px] bg-transparent focus:outline-none py-0.5 flex-1 min-w-0"
+                          placeholder="Batch no or ref"
+                          value={stockSearch}
+                          disabled={busy}
+                          onChange={(e) => setStockSearch(e.target.value)}
+                        />
+                      </div>
+                      <div className="max-h-[7.5rem] overflow-y-auto">
+                        {visibleStockBatches.length === 0 ? (
+                          <p className="px-2 py-2 text-[11px] text-slate-400">No batches match this search.</p>
+                        ) : visibleStockBatches.map((batch) => {
+                          const checked = stockBatchIds.includes(batch.id);
+                          const rolls = batch.at_mill_count;
+                          return (
+                            <label
+                              key={batch.id}
+                              className="flex items-center gap-2 px-2 py-1 border-b border-slate-100 last:border-b-0 cursor-pointer hover:bg-slate-50"
+                            >
+                              <input
+                                type="checkbox"
+                                className="shrink-0"
+                                checked={checked}
+                                disabled={busy}
+                                onChange={() => {
+                                  setStockBatchIds((current) => (
+                                    current.includes(batch.id)
+                                      ? current.filter((id) => id !== batch.id)
+                                      : [...current, batch.id]
+                                  ));
+                                }}
+                              />
+                              <span className="text-[11px] font-semibold text-slate-800 shrink-0">{batch.batch_no}</span>
+                              <span className="text-[10px] text-slate-500 truncate">
+                                {[
+                                  batch.mill_ref ? `Ref ${batch.mill_ref}` : null,
+                                  `${rolls} ${rolls === 1 ? 'roll' : 'rolls'}`,
+                                  formatQtyM(batch.qty_m, uom),
+                                ].filter(Boolean).join(' · ')}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
               <Input
                 id="mm-batch-no"
                 label="Mill batch number *"
@@ -417,8 +520,6 @@ export default function MmMillAssignPage() {
                 className="bg-white"
               />
               {qualityLocked ? null : (
-              <>
-              <div>
                 <Input
                   id="mm-batch-roll-count"
                   label="Rolls in this batch *"
@@ -442,31 +543,32 @@ export default function MmMillAssignPage() {
                   error={countError ?? undefined}
                   className="bg-white"
                 />
-              </div>
-              <div>
-                <span className="block font-medium text-slate-700 mb-1.5 invisible" style={{ fontSize: tokens.fontSize.body }}>
-                  Generate
-                </span>
-                <DesktopWriteGate>
-                  <Button type="button" size="sm" disabled={busy} onClick={generate} className="w-full">
-                    Generate rolls
-                  </Button>
-                </DesktopWriteGate>
-              </div>
-              </>
+              )}
+                </>
               )}
             </div>
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
-              <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-blue-800 leading-snug">
-                {inspectOnly
-                  ? '4-point is one table: mill rolls plus actual length, actual width, cuttable width, and points.'
-                  : testOnly
-                    ? 'Enter mill test values and shade. Roll numbers and quantity stay as saved.'
-                    : 'Quantity totals as you enter roll values, using this fabric UOM. Sent rolls stay locked on mill values. Extra rolls on this batch stay New / Not sent until you dispatch them.'}
-              </p>
+            <div className="mt-4 flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0 max-w-xl flex-1 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+                <Info size={14} className="text-blue-600 shrink-0" />
+                <p className="text-[11px] text-blue-800 leading-snug">
+                  {inspectOnly
+                    ? '4-point on this batch: actual length, width, and points.'
+                    : testOnly
+                      ? 'Enter test values and shade. Roll numbers and qty stay as saved.'
+                      : fromStock
+                        ? 'These batches already exist. Select one or more, then assign their rolls below.'
+                        : 'Qty uses this fabric UOM. Sent rolls stay locked. Extra rolls stay New until dispatch.'}
+                </p>
+              </div>
+              {!qualityLocked && !fromStock ? (
+                <DesktopWriteGate>
+                  <Button type="button" size="sm" disabled={busy} onClick={generate} className="shrink-0">
+                    Generate
+                  </Button>
+                </DesktopWriteGate>
+              ) : null}
             </div>
-            {!data?.fabric_type_id && (
+            {!fromStock && !data?.fabric_type_id && (
               <p className="text-[11px] text-amber-700 mt-3">
                 This fabric line has no fabric type on the order. Set it before assigning rolls.
               </p>
@@ -475,7 +577,24 @@ export default function MmMillAssignPage() {
         </Card>
       </div>
 
-      {inspectOnly ? (
+      {fromStock ? (
+        <div className="mt-4">
+          <MmMillAssignFromStock
+            pickerOnly
+            hideFinder
+            selectedBatchIds={stockBatchIds}
+            fields={displayFields}
+            fabricTypeId={data?.fabric_type_id}
+            fabricTypeName={data?.fabric_type ?? data?.fabric_name}
+            lineFabricId={data?.fabric_id}
+            colorName={data?.color_name}
+            uom={uom}
+            busy={busy}
+            mismatch={mismatch}
+            onAssign={assignFromStock}
+          />
+        </div>
+      ) : inspectOnly ? (
         <MmFourPointInspectPanel
           scopeKind="mill_batch"
           scopeId={batchId}
@@ -517,6 +636,7 @@ export default function MmMillAssignPage() {
           showShade={testOnly}
           allowShadeEdit={testOnly}
           showRemove={!testOnly}
+          excel
           uom={uom}
           footerActions={dirty ? (
             <>
@@ -543,8 +663,6 @@ export default function MmMillAssignPage() {
           ) : null}
         />
       </Card>
-      )}
-      </>
       )}
     </PageShell>
   );

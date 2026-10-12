@@ -1,4 +1,6 @@
 import { RoutePath } from '../types';
+import type { MmRouteFeature } from '../core/modules/types';
+import { materialManifest } from '../modules/material/manifest';
 
 export interface RouteMapEntry {
   path: string;
@@ -200,36 +202,36 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     displayName: 'Mill batches',
     parent: RoutePath.MATERIAL_MILL,
     section: 'Material',
-    subtitle: 'Style and general mill batches with rolls, custody, and stage mix.',
+    subtitle: 'Date, fabric, stage, colour, and where the rolls are.',
   },
   [RoutePath.MATERIAL_MILL_BATCH_NEW]: {
     path: RoutePath.MATERIAL_MILL_BATCH_NEW,
     displayName: 'New mill batch',
     parent: RoutePath.MATERIAL_MILL_BATCHES,
     section: 'Material',
-    subtitle: 'Create a style or general mill batch and enter rolls.',
+    subtitle: 'Create a mill batch and enter rolls. Link it to a style later with Allocate rolls.',
   },
   [RoutePath.MATERIAL_MILL_BATCH_DETAIL]: {
     path: RoutePath.MATERIAL_MILL_BATCH_DETAIL,
-    displayName: 'Mill batch',
+    displayName: 'Batch details',
     parent: RoutePath.MATERIAL_MILL_BATCHES,
     section: 'Material',
     isParameterized: true,
-    subtitle: 'Batch rolls, custody, tests, and process challans.',
+    subtitle: 'Fabric, batch, and the rolls.',
   },
   [RoutePath.MATERIAL_MILL_QC]: {
     path: RoutePath.MATERIAL_MILL_QC,
     displayName: 'Mill QC queue',
     parent: RoutePath.MATERIAL_MILL,
     section: 'Material',
-    subtitle: 'Rolls at the mill that still need test or inspection.',
+    subtitle: 'Rolls at the mill that still need a test.',
   },
   [RoutePath.MATERIAL_MILL]: {
     path: RoutePath.MATERIAL_MILL,
     displayName: 'Fabric Mill',
     parent: RoutePath.DASHBOARD,
     section: 'Material',
-    subtitle: 'Make mill batches, attach them to a style, or send them to the warehouse.',
+    subtitle: 'Produce greige, process, test and dispatch. Link to styles at any stage.',
   },
   [RoutePath.MATERIAL_MILL_STYLES]: {
     path: RoutePath.MATERIAL_MILL_STYLES,
@@ -250,14 +252,14 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     displayName: 'Process history',
     parent: RoutePath.MATERIAL_WAREHOUSE,
     section: 'Material',
-    subtitle: 'Process challans already sent. Open a row for returns and loss.',
+    subtitle: 'Process challans already sent. Open a row for returns, lots, and loss.',
   },
   [RoutePath.MATERIAL_PROCESS_DETAIL]: {
     path: RoutePath.MATERIAL_PROCESS_DETAIL,
     displayName: 'Process challan',
     parent: RoutePath.MATERIAL_PROCESS,
     section: 'Material',
-    subtitle: 'Rolls sent out, rolls that came back, and optional 4-point after return',
+    subtitle: 'Rolls sent out and rolls that came back.',
     isParameterized: true,
   },
   [RoutePath.MATERIAL_MILL_STOCK]: {
@@ -266,6 +268,13 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     parent: RoutePath.MATERIAL_MILL,
     section: 'Material',
     subtitle: 'Fabric and rolls still at the mill, allocated or not. Read-only.',
+  },
+  [RoutePath.MATERIAL_MILL_PROCESS_SEND]: {
+    path: RoutePath.MATERIAL_MILL_PROCESS_SEND,
+    displayName: 'Send to processing',
+    parent: RoutePath.MATERIAL_MILL,
+    section: 'Material',
+    subtitle: 'Pick mill rolls and create a process challan.',
   },
   [RoutePath.MATERIAL_MILL_LINE]: {
     path: RoutePath.MATERIAL_MILL_LINE,
@@ -280,7 +289,7 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     displayName: 'Allocate rolls',
     parent: RoutePath.MATERIAL_MILL_LINE,
     section: 'Material',
-    subtitle: 'Generate mill rolls, or assign unallocated mill stock to this fabric.',
+    subtitle: 'Assign unallocated mill batches to this fabric. New batches are made on New mill batch.',
     isParameterized: true,
   },
   [RoutePath.MATERIAL_MILL_DISPATCH]: {
@@ -336,6 +345,28 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     subtitle: 'Add or edit rolls on this General PO mill batch.',
     isParameterized: true,
   },
+  [RoutePath.MATERIAL_FABRICS]: {
+    path: RoutePath.MATERIAL_FABRICS,
+    displayName: 'Fabric Master',
+    parent: RoutePath.DASHBOARD,
+    section: 'Material',
+    subtitle: 'Every fabric quality (SKU) used on orders',
+  },
+  [RoutePath.MATERIAL_FABRICS_SETUP]: {
+    path: RoutePath.MATERIAL_FABRICS_SETUP,
+    displayName: 'Fabric form setup',
+    parent: RoutePath.MATERIAL_FABRICS,
+    section: 'Material',
+    subtitle: 'Groups and fields shown when creating a fabric',
+  },
+  [RoutePath.MATERIAL_FABRIC_DETAIL]: {
+    path: RoutePath.MATERIAL_FABRIC_DETAIL,
+    displayName: 'Fabric',
+    parent: RoutePath.MATERIAL_FABRICS,
+    section: 'Material',
+    subtitle: 'Fabric quality',
+    isParameterized: true,
+  },
   [RoutePath.MATERIAL_WAREHOUSE]: {
     path: RoutePath.MATERIAL_WAREHOUSE,
     displayName: 'Fabric Warehouse',
@@ -348,7 +379,7 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     displayName: 'Expected receipts',
     parent: RoutePath.MATERIAL_WAREHOUSE,
     section: 'Material',
-    subtitle: 'Fabric still due or already incoming against style requirement',
+    subtitle: 'Required vs incoming and received. Still needed = required minus received. Passed is QC-passed stock.',
   },
   [RoutePath.MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED]: {
     path: RoutePath.MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED,
@@ -572,4 +603,14 @@ export function buildBreadcrumbTrail(
   }
 
   return trail;
+}
+
+/** Material sub-switch for a route. Trims has no page yet; the prefix is reserved. */
+export function mmFeatureForRoute(route: string): MmRouteFeature | null {
+  if (route === '#/material/trims' || route.startsWith('#/material/trims/')) return 'trims';
+  const matches = materialManifest.routes.filter(
+    (def) => def.feature && (route === def.path || route.startsWith(`${def.path}/`)),
+  );
+  matches.sort((a, b) => b.path.length - a.path.length);
+  return matches[0]?.feature ?? null;
 }

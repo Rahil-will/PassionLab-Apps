@@ -11,6 +11,7 @@ import { materialRequiredQty } from '../../lib/colorwayMaterialsDb';
 import { swatchStyleFromColorName } from '../../lib/colorNameSwatch';
 import { collectSizeKeysFromColorways, parseSizeLabels } from '../../lib/orderSizeGroupSelection';
 import { markOrderDraftDiscarded } from '../../lib/orderDraftStorage';
+import { ensureStyleFabricLines } from '../../lib/styleFabricLines';
 import { useDataStore, useNavigationStore, useNotificationStore } from '../../stores';
 import { RoutePath, type Colorway, type Material, type StyleOrder } from '../../types';
 import {
@@ -112,7 +113,7 @@ export const CreateOrderColor: React.FC = () => {
 
   const addColorway = () => {
     const newColor = createEmptyColorway(sizes);
-    patchColorways((colorways) => [...colorways, newColor]);
+    patchColorways((colorways) => ensureStyleFabricLines([...colorways, newColor]));
     setActiveColorId(newColor.id);
   };
 
@@ -130,10 +131,17 @@ export const CreateOrderColor: React.FC = () => {
       materials: (source.materials ?? []).map((m) => ({
         ...m,
         id: crypto.randomUUID(),
+        // Preserve style-line linkage fields; fabricColor only when non-null.
+        lineKey: m.lineKey,
+        fabricId: m.fabricId,
+        fabricColor: m.fabricColor != null && String(m.fabricColor).trim() !== '' ? m.fabricColor : null,
+        fabricColorRef: m.fabricColorRef,
+        consOverridden: m.consOverridden,
+        fabric: m.fabric,
         paramValues: m.paramValues ? { ...m.paramValues } : undefined,
       })),
     };
-    patchColorways((colorways) => [...colorways, copy]);
+    patchColorways((colorways) => ensureStyleFabricLines([...colorways, copy]));
     setActiveColorId(copy.id);
     showNotification('Colorway duplicated', 'success');
   };
@@ -183,7 +191,7 @@ export const CreateOrderColor: React.FC = () => {
     );
   };
 
-  const updateMaterial = (matId: string, field: keyof Material, value: string | number | null) => {
+  const updateMaterial = (matId: string, field: keyof Material, value: string | number | boolean | null) => {
     if (!activeColorId) return;
     patchColorways((colorways) =>
       colorways.map((c) => {
@@ -535,10 +543,15 @@ export const CreateOrderColor: React.FC = () => {
                     colorway={activeColorway}
                     adjustedQty={currentAdjustedQty}
                     showCaption={false}
+                    allColorways={draft.colorways}
                     onAddMaterial={addMaterial}
                     onUpdateMaterial={updateMaterial}
                     onUpdateParam={updateMaterialParam}
                     onRemoveMaterial={removeMaterial}
+                    onOpenStyleFabrics={() => {
+                      if (!commitDraft()) return;
+                      navigate(RoutePath.CREATE_ORDER, masterParams);
+                    }}
                   />
                 </Card>
               ) : null}

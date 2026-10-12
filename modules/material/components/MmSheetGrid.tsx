@@ -27,6 +27,10 @@ type Props = {
   onChange: (row: number, key: string, value: string) => void;
   isRowLocked?: (row: number) => boolean;
   emptyText?: string;
+  rowAction?: (row: number) => React.ReactNode;
+  /** Stretch columns to the parent. Default keeps a minimum width so dense grids can scroll. */
+  fit?: boolean;
+  rowClassName?: (row: number) => string | undefined;
 };
 
 const thBase =
@@ -51,6 +55,9 @@ export function MmSheetGrid({
   onChange,
   isRowLocked,
   emptyText = 'No rows.',
+  rowAction,
+  fit = false,
+  rowClassName,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState({ row: 0, col: 0 });
@@ -230,7 +237,7 @@ export function MmSheetGrid({
       onKeyDown={onKeyDown}
       style={{ minHeight: `${2.4 + Math.max(rowCount, 1) * 2 + 2.5}rem` }}
     >
-      <table className="w-full min-w-[880px] border-collapse bg-white table-fixed">
+      <table className={`${fit ? 'w-full' : 'w-full min-w-[880px]'} border-collapse bg-white table-fixed`}>
         <thead>
           <tr>
             {columns.map((column) => (
@@ -238,12 +245,13 @@ export function MmSheetGrid({
                 {column.label}
               </th>
             ))}
+            {rowAction ? <th className={`${thBase} w-10`} /> : null}
           </tr>
         </thead>
         <tbody>
           {rowCount === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-3 py-8 text-center text-[11px] text-slate-400 italic">
+              <td colSpan={columns.length + (rowAction ? 1 : 0)} className="px-3 py-8 text-center text-[11px] text-slate-400 italic">
                 {emptyText}
               </td>
             </tr>
@@ -258,11 +266,12 @@ export function MmSheetGrid({
                     const value = getValue(row, column.key);
                     const isSelect = column.kind === 'select';
                     const isEdit = editing && active && column.editable && !locked && !isSelect;
+                    const tone = rowClassName?.(row);
                     return (
                       <td
                         key={column.key}
-                        className={`${tdBase} ${column.cellClassName ?? ''} ${
-                          selected ? 'bg-blue-50' : 'bg-white'
+                        className={`${tdBase} ${tone ? '' : (column.cellClassName ?? '')} ${
+                          selected ? 'bg-blue-50' : tone || 'bg-white'
                         } ${active ? 'ring-2 ring-inset ring-blue-500 z-[1]' : ''}`}
                         onMouseDown={(e) => {
                           if (e.button !== 0) return;
@@ -340,10 +349,15 @@ export function MmSheetGrid({
                       </td>
                     );
                   })}
+                  {rowAction ? (
+                    <td className="border border-slate-200 p-0 text-center bg-white" onMouseDown={(e) => e.stopPropagation()}>
+                      {rowAction(row)}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               <tr aria-hidden>
-                <td colSpan={columns.length} className="h-10 border-0 p-0 bg-white" />
+                <td colSpan={columns.length + (rowAction ? 1 : 0)} className="h-10 border-0 p-0 bg-white" />
               </tr>
             </>
           )}

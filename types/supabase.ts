@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -11,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -552,12 +527,17 @@ export type Database = {
         Row: {
           category: string
           colorway_id: string
+          cons_overridden: boolean
           cons_per_pc: number | null
           created_at: string
           extras: Json
+          fabric_color: string | null
+          fabric_color_ref: string | null
+          fabric_id: string | null
           factory_id: string
           id: string
           kind: string
+          line_key: string | null
           mill_short_closed: boolean
           mill_short_closed_at: string | null
           mill_short_closed_by: string | null
@@ -576,12 +556,17 @@ export type Database = {
         Insert: {
           category: string
           colorway_id: string
+          cons_overridden?: boolean
           cons_per_pc?: number | null
           created_at?: string
           extras?: Json
+          fabric_color?: string | null
+          fabric_color_ref?: string | null
+          fabric_id?: string | null
           factory_id: string
           id?: string
           kind?: string
+          line_key?: string | null
           mill_short_closed?: boolean
           mill_short_closed_at?: string | null
           mill_short_closed_by?: string | null
@@ -600,12 +585,17 @@ export type Database = {
         Update: {
           category?: string
           colorway_id?: string
+          cons_overridden?: boolean
           cons_per_pc?: number | null
           created_at?: string
           extras?: Json
+          fabric_color?: string | null
+          fabric_color_ref?: string | null
+          fabric_id?: string | null
           factory_id?: string
           id?: string
           kind?: string
+          line_key?: string | null
           mill_short_closed?: boolean
           mill_short_closed_at?: string | null
           mill_short_closed_by?: string | null
@@ -627,6 +617,13 @@ export type Database = {
             columns: ["colorway_id"]
             isOneToOne: false
             referencedRelation: "colorways"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "colorway_materials_fabric_id_fkey"
+            columns: ["fabric_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabrics"
             referencedColumns: ["id"]
           },
           {
@@ -1108,6 +1105,7 @@ export type Database = {
           fabric_component_id: string | null
           fabric_type: string
           factory_id: string
+          flow_unlocked_through: number
           headcount_by_category: Json
           id: string
           line_allocation_id: string | null
@@ -1142,6 +1140,7 @@ export type Database = {
           fabric_component_id?: string | null
           fabric_type?: string
           factory_id: string
+          flow_unlocked_through?: number
           headcount_by_category?: Json
           id?: string
           line_allocation_id?: string | null
@@ -1176,6 +1175,7 @@ export type Database = {
           fabric_component_id?: string | null
           fabric_type?: string
           factory_id?: string
+          flow_unlocked_through?: number
           headcount_by_category?: Json
           id?: string
           line_allocation_id?: string | null
@@ -2585,6 +2585,284 @@ export type Database = {
           },
         ]
       }
+      mm_fabric_constructions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          fabric_type_id: string
+          factory_id: string
+          id: string
+          is_active: boolean
+          name: string
+          seq: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          fabric_type_id: string
+          factory_id: string
+          id?: string
+          is_active?: boolean
+          name: string
+          seq?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          fabric_type_id?: string
+          factory_id?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          seq?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_fabric_constructions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_constructions_fabric_type_id_fkey"
+            columns: ["fabric_type_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_constructions_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_constructions_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mm_fabric_form_fields: {
+        Row: {
+          col_span: number
+          column_name: string | null
+          created_at: string
+          created_by: string | null
+          fabric_type_id: string | null
+          factory_id: string
+          group_id: string
+          help: string | null
+          id: string
+          input_type: string
+          is_system: boolean
+          key: string
+          label: string
+          locked_when_used: boolean
+          options: Json
+          override_of: string | null
+          placeholder: string | null
+          required: boolean
+          required_when: Json | null
+          seq: number
+          spec_key: string | null
+          storage: string
+          updated_at: string
+          updated_by: string | null
+          visible: boolean
+          visible_when: Json | null
+        }
+        Insert: {
+          col_span?: number
+          column_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          fabric_type_id?: string | null
+          factory_id: string
+          group_id: string
+          help?: string | null
+          id?: string
+          input_type: string
+          is_system?: boolean
+          key: string
+          label: string
+          locked_when_used?: boolean
+          options?: Json
+          override_of?: string | null
+          placeholder?: string | null
+          required?: boolean
+          required_when?: Json | null
+          seq?: number
+          spec_key?: string | null
+          storage: string
+          updated_at?: string
+          updated_by?: string | null
+          visible?: boolean
+          visible_when?: Json | null
+        }
+        Update: {
+          col_span?: number
+          column_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          fabric_type_id?: string | null
+          factory_id?: string
+          group_id?: string
+          help?: string | null
+          id?: string
+          input_type?: string
+          is_system?: boolean
+          key?: string
+          label?: string
+          locked_when_used?: boolean
+          options?: Json
+          override_of?: string | null
+          placeholder?: string | null
+          required?: boolean
+          required_when?: Json | null
+          seq?: number
+          spec_key?: string | null
+          storage?: string
+          updated_at?: string
+          updated_by?: string | null
+          visible?: boolean
+          visible_when?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_fabric_form_fields_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_fields_fabric_type_id_fkey"
+            columns: ["fabric_type_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_fields_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_fields_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_form_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_fields_override_of_fkey"
+            columns: ["override_of"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_form_fields"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_fields_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mm_fabric_form_groups: {
+        Row: {
+          collapsible: boolean
+          created_at: string
+          created_by: string | null
+          default_open: boolean
+          fabric_type_id: string | null
+          factory_id: string
+          id: string
+          is_system: boolean
+          key: string
+          label: string
+          seq: number
+          updated_at: string
+          updated_by: string | null
+          visible: boolean
+        }
+        Insert: {
+          collapsible?: boolean
+          created_at?: string
+          created_by?: string | null
+          default_open?: boolean
+          fabric_type_id?: string | null
+          factory_id: string
+          id?: string
+          is_system?: boolean
+          key: string
+          label: string
+          seq?: number
+          updated_at?: string
+          updated_by?: string | null
+          visible?: boolean
+        }
+        Update: {
+          collapsible?: boolean
+          created_at?: string
+          created_by?: string | null
+          default_open?: boolean
+          fabric_type_id?: string | null
+          factory_id?: string
+          id?: string
+          is_system?: boolean
+          key?: string
+          label?: string
+          seq?: number
+          updated_at?: string
+          updated_by?: string | null
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_fabric_form_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_groups_fabric_type_id_fkey"
+            columns: ["fabric_type_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_groups_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabric_form_groups_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mm_fabric_stages: {
         Row: {
           can_cut: boolean
@@ -2692,6 +2970,145 @@ export type Database = {
           },
           {
             foreignKeyName: "mm_fabric_types_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mm_fabrics: {
+        Row: {
+          code: string
+          color_method: string
+          composition: Json
+          composition_text: string
+          construction_id: string
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          design_ref: string | null
+          fabric_type_id: string
+          factory_id: string
+          greige_gsm: number | null
+          greige_width_in: number | null
+          gsm: number
+          hsn_code: string | null
+          id: string
+          image_url: string | null
+          merged_into_id: string | null
+          name: string
+          remarks: string | null
+          row_version: number
+          spec_values: Json
+          status: string
+          supplier_article_no: string | null
+          uom: string
+          updated_at: string
+          updated_by: string | null
+          width_form: string
+          width_in: number
+        }
+        Insert: {
+          code: string
+          color_method: string
+          composition: Json
+          composition_text: string
+          construction_id: string
+          created_at?: string
+          created_by?: string | null
+          dedupe_key: string
+          design_ref?: string | null
+          fabric_type_id: string
+          factory_id: string
+          greige_gsm?: number | null
+          greige_width_in?: number | null
+          gsm: number
+          hsn_code?: string | null
+          id?: string
+          image_url?: string | null
+          merged_into_id?: string | null
+          name: string
+          remarks?: string | null
+          row_version?: number
+          spec_values?: Json
+          status?: string
+          supplier_article_no?: string | null
+          uom: string
+          updated_at?: string
+          updated_by?: string | null
+          width_form: string
+          width_in: number
+        }
+        Update: {
+          code?: string
+          color_method?: string
+          composition?: Json
+          composition_text?: string
+          construction_id?: string
+          created_at?: string
+          created_by?: string | null
+          dedupe_key?: string
+          design_ref?: string | null
+          fabric_type_id?: string
+          factory_id?: string
+          greige_gsm?: number | null
+          greige_width_in?: number | null
+          gsm?: number
+          hsn_code?: string | null
+          id?: string
+          image_url?: string | null
+          merged_into_id?: string | null
+          name?: string
+          remarks?: string | null
+          row_version?: number
+          spec_values?: Json
+          status?: string
+          supplier_article_no?: string | null
+          uom?: string
+          updated_at?: string
+          updated_by?: string | null
+          width_form?: string
+          width_in?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_fabrics_construction_id_fkey"
+            columns: ["construction_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_constructions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabrics_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabrics_fabric_type_id_fkey"
+            columns: ["fabric_type_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabrics_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabrics_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabrics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_fabrics_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -3455,6 +3872,7 @@ export type Database = {
           color_ref: string | null
           created_at: string
           created_by: string | null
+          fabric_id: string | null
           fabric_ref_name: string | null
           fabric_type_id: string
           facility_id: string | null
@@ -3477,6 +3895,7 @@ export type Database = {
           color_ref?: string | null
           created_at?: string
           created_by?: string | null
+          fabric_id?: string | null
           fabric_ref_name?: string | null
           fabric_type_id: string
           facility_id?: string | null
@@ -3499,6 +3918,7 @@ export type Database = {
           color_ref?: string | null
           created_at?: string
           created_by?: string | null
+          fabric_id?: string | null
           fabric_ref_name?: string | null
           fabric_type_id?: string
           facility_id?: string | null
@@ -3521,6 +3941,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_mill_batches_fabric_id_fkey"
+            columns: ["fabric_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabrics"
             referencedColumns: ["id"]
           },
           {
@@ -4921,6 +5348,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           dye_lot: string | null
+          fabric_id: string | null
           fabric_type_id: string | null
           factory_id: string
           grade: string | null
@@ -4945,6 +5373,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           dye_lot?: string | null
+          fabric_id?: string | null
           fabric_type_id?: string | null
           factory_id: string
           grade?: string | null
@@ -4969,6 +5398,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           dye_lot?: string | null
+          fabric_id?: string | null
           fabric_type_id?: string | null
           factory_id?: string
           grade?: string | null
@@ -4990,6 +5420,13 @@ export type Database = {
           width_form?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "mm_rolls_fabric_id_fkey"
+            columns: ["fabric_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabrics"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "mm_rolls_fabric_type_id_fkey"
             columns: ["fabric_type_id"]
@@ -5594,6 +6031,7 @@ export type Database = {
           colorway_material_id: string | null
           created_at: string
           created_by: string | null
+          fabric_id: string | null
           fabric_type_id: string
           factory_id: string
           id: string
@@ -5606,6 +6044,7 @@ export type Database = {
           colorway_material_id?: string | null
           created_at?: string
           created_by?: string | null
+          fabric_id?: string | null
           fabric_type_id: string
           factory_id: string
           id?: string
@@ -5618,6 +6057,7 @@ export type Database = {
           colorway_material_id?: string | null
           created_at?: string
           created_by?: string | null
+          fabric_id?: string | null
           fabric_type_id?: string
           factory_id?: string
           id?: string
@@ -5638,6 +6078,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_style_materials_fabric_id_fkey"
+            columns: ["fabric_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabrics"
             referencedColumns: ["id"]
           },
           {
@@ -7973,6 +8420,53 @@ export type Database = {
         Returns: string
       }
       _mm_err: { Args: { p_code: string; p_message: string }; Returns: Json }
+      _mm_fabric_check_spec: {
+        Args: { p_factory: string; p_spec: Json; p_type: string }
+        Returns: Json
+      }
+      _mm_fabric_code: { Args: { p_id: string }; Returns: string }
+      _mm_fabric_custom_fields: {
+        Args: { p_factory: string; p_type: string }
+        Returns: {
+          input_type: string
+          label: string
+          locked_when_used: boolean
+          options: Json
+          required: boolean
+          spec_key: string
+          visible: boolean
+        }[]
+      }
+      _mm_fabric_duplicate_of: {
+        Args: { p_dedupe: string; p_except: string; p_factory: string }
+        Returns: string
+      }
+      _mm_fabric_form_bump: { Args: { p_factory: string }; Returns: number }
+      _mm_fabric_form_json: {
+        Args: { p_factory: string; p_type: string }
+        Returns: Json
+      }
+      _mm_fabric_form_version: { Args: { p_factory: string }; Returns: number }
+      _mm_fabric_guard: { Args: { p_level: string }; Returns: string }
+      _mm_fabric_insert: {
+        Args: { p_factory: string; p_norm: Json; p_status: string }
+        Returns: string
+      }
+      _mm_fabric_json: { Args: { p_id: string }; Returns: Json }
+      _mm_fabric_locked: { Args: { p_id: string }; Returns: boolean }
+      _mm_fabric_normalize: {
+        Args: { p_factory: string; p_row: Json }
+        Returns: Json
+      }
+      _mm_fabric_normalize_full: {
+        Args: { p_factory: string; p_row: Json }
+        Returns: Json
+      }
+      _mm_fabric_reserved_keys: { Args: never; Returns: string[] }
+      _mm_fabric_spec_key_used: {
+        Args: { p_factory: string; p_key: string; p_type: string }
+        Returns: boolean
+      }
       _mm_fpt_score: {
         Args: {
           p_length: number
@@ -7984,6 +8478,20 @@ export type Database = {
         Returns: number
       }
       _mm_fpt_threshold: { Args: { p_unit_id: string }; Returns: number }
+      _mm_get_mill_line_base: {
+        Args: {
+          p_colorway_id: string
+          p_colorway_material_id: string
+          p_order_id: string
+        }
+        Returns: Json
+      }
+      _mm_get_unallocated_mill_base: { Args: never; Returns: Json }
+      _mm_get_warehouse_board_base: {
+        Args: { p_order_ids: string[] }
+        Returns: Json
+      }
+      _mm_guard_err: { Args: { p_sqlerrm: string }; Returns: Json }
       _mm_insert_mill_batch_rolls: {
         Args: {
           p_batch: string
@@ -8013,6 +8521,7 @@ export type Database = {
       }
       _mm_is_pickable_loc: { Args: { p_loc: string }; Returns: boolean }
       _mm_is_unassigned_loc: { Args: { p_loc: string }; Returns: boolean }
+      _mm_juuid: { Args: { p: string }; Returns: string }
       _mm_ledger: {
         Args: {
           p_factory: string
@@ -8028,6 +8537,16 @@ export type Database = {
           p_unit: string
         }
         Returns: undefined
+      }
+      _mm_list_warehouse_stock_base: {
+        Args: {
+          p_buyer?: string
+          p_location?: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: Json
       }
       _mm_loc: { Args: { p_code: string; p_factory: string }; Returns: string }
       _mm_loc_is_under: {
@@ -8058,6 +8577,10 @@ export type Database = {
         Args: { p_unit: Database["public"]["Tables"]["mm_stock_units"]["Row"] }
         Returns: number
       }
+      _mm_mill_list_batches_v4_base: {
+        Args: { p_filter?: Json }
+        Returns: Json
+      }
       _mm_mill_short_closed: {
         Args: { p_style_material_id: string }
         Returns: boolean
@@ -8066,12 +8589,18 @@ export type Database = {
         Args: { p_factory: string; p_on?: string; p_prefix: string }
         Returns: string
       }
+      _mm_next_fabric_code: { Args: { p_factory: string }; Returns: string }
       _mm_next_grn_no: {
         Args: { p_factory: string; p_on: string }
         Returns: string
       }
+      _mm_num: { Args: { p_text: string }; Returns: number }
       _mm_ok: { Args: { p_data?: Json }; Returns: Json }
       _mm_param_text: { Args: { p_bag: Json; p_key: string }; Returns: string }
+      _mm_payload_line_fabric: {
+        Args: { p_factory: string; p_payload: Json }
+        Returns: string
+      }
       _mm_process_refresh: { Args: { p_id: string }; Returns: undefined }
       _mm_qc_passport: { Args: { p_roll_id: string }; Returns: Json }
       _mm_qc_scope_rolls: {
@@ -8079,6 +8608,48 @@ export type Database = {
         Returns: string[]
       }
       _mm_qc_threshold: { Args: { p_roll_id: string }; Returns: number }
+      _mm_receipt_err: { Args: { p_msg: string }; Returns: Json }
+      _mm_receipt_fabric: {
+        Args: { p_fabric_id: string; p_factory: string }
+        Returns: {
+          code: string
+          color_method: string
+          composition: Json
+          composition_text: string
+          construction_id: string
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          design_ref: string | null
+          fabric_type_id: string
+          factory_id: string
+          greige_gsm: number | null
+          greige_width_in: number | null
+          gsm: number
+          hsn_code: string | null
+          id: string
+          image_url: string | null
+          merged_into_id: string | null
+          name: string
+          remarks: string | null
+          row_version: number
+          spec_values: Json
+          status: string
+          supplier_article_no: string | null
+          uom: string
+          updated_at: string
+          updated_by: string | null
+          width_form: string
+          width_in: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mm_fabrics"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _mm_receipt_fabric_guc: { Args: never; Returns: string }
       _mm_recv_loc: { Args: { p_factory: string }; Returns: string }
       _mm_refresh_in_challan_status: { Args: { p_id: string }; Returns: string }
       _mm_require_config: { Args: never; Returns: string }
@@ -8097,7 +8668,36 @@ export type Database = {
         Args: { p_roll_id: string; p_with_passport?: boolean }
         Returns: Json
       }
+      _mm_roll_stock: {
+        Args: { p_factory: string }
+        Returns: {
+          bucket: string
+          colour: string
+          fabric_id: string
+          fabric_type_id: string
+          mill_roll_id: string
+          out_line_id: string
+          qty: number
+          qty_kg: number
+          qty_m: number
+          roll_code: string
+          roll_id: string
+          side: string
+          stock_unit_id: string
+          style_material_id: string
+          uom: string
+        }[]
+      }
+      _mm_roll_style_material: { Args: { p_roll_id: string }; Returns: string }
       _mm_safe_numeric: { Args: { p_text: string }; Returns: number }
+      _mm_seed_fabric_constructions: {
+        Args: { p_factory: string; p_type_id: string }
+        Returns: number
+      }
+      _mm_seed_fabric_form_schema: {
+        Args: { p_factory: string }
+        Returns: undefined
+      }
       _mm_seed_ops_locations: {
         Args: { p_actor: string; p_factory: string }
         Returns: undefined
@@ -8130,6 +8730,7 @@ export type Database = {
         }
         Returns: string
       }
+      _mm_stock_totals: { Args: { p_rows: Json }; Returns: Json }
       _mm_store_line_missing: { Args: { p_unit_id: string }; Returns: boolean }
       _mm_style_label: { Args: { p_sm: string }; Returns: Json }
       _mm_unit_alloc_ok: {
@@ -8482,6 +9083,14 @@ export type Database = {
       }
       floor_capture_cutting_lay: { Args: { p_payload: Json }; Returns: string }
       floor_capture_cutting_lay_upsert: {
+        Args: { p_factory_id: string; p_payload: Json; p_user_id: string }
+        Returns: Json
+      }
+      floor_capture_cutting_session_flow_progress: {
+        Args: { p_factory_id: string; p_payload: Json; p_user_id: string }
+        Returns: Json
+      }
+      floor_capture_cutting_session_flow_resume: {
         Args: { p_factory_id: string; p_payload: Json; p_user_id: string }
         Returns: Json
       }
@@ -9315,6 +9924,7 @@ export type Database = {
         }
         Returns: Json
       }
+      mm_check_fabric_duplicate: { Args: { p_row: Json }; Returns: Json }
       mm_confirm_received_lengths: {
         Args: { p_challan_id: string; p_lengths: Json }
         Returns: Json
@@ -9358,6 +9968,8 @@ export type Database = {
       }
       mm_enable_module: { Args: { p_config: Json }; Returns: Json }
       mm_exclude_roll: { Args: { p_unit_id: string }; Returns: Json }
+      mm_fabric_stock_rolls: { Args: { p_filter?: Json }; Returns: Json }
+      mm_fabric_stock_summary: { Args: { p_filter?: Json }; Returns: Json }
       mm_floor_call: {
         Args: {
           p_args: Json
@@ -9376,6 +9988,11 @@ export type Database = {
           p_search?: string
           p_status?: string
         }
+        Returns: Json
+      }
+      mm_get_fabric: { Args: { p_id: string }; Returns: Json }
+      mm_get_fabric_form_schema: {
+        Args: { p_fabric_type_id?: string }
         Returns: Json
       }
       mm_get_fpt_summary: {
@@ -9430,6 +10047,11 @@ export type Database = {
         Returns: Json
       }
       mm_list_end_bit_returns: { Args: never; Returns: Json }
+      mm_list_fabric_constructions: {
+        Args: { p_fabric_type_id?: string; p_include_inactive?: boolean }
+        Returns: Json
+      }
+      mm_list_fabrics: { Args: { p_filter?: Json }; Returns: Json }
       mm_list_floor_grns: { Args: { p_source?: string }; Returns: Json }
       mm_list_in_challans: {
         Args: { p_source: string; p_status: string }
@@ -9479,6 +10101,10 @@ export type Database = {
         Returns: Json
       }
       mm_mark_rolls_consumed: { Args: { p_unit_ids: string[] }; Returns: Json }
+      mm_merge_fabric: {
+        Args: { p_from_id: string; p_into_id: string; p_reason: string }
+        Returns: Json
+      }
       mm_mill_add_rolls_v4: {
         Args: { p_batch_id: string; p_rolls: Json }
         Returns: Json
@@ -9486,6 +10112,7 @@ export type Database = {
       mm_mill_get_batch_v4: { Args: { p_batch_id: string }; Returns: Json }
       mm_mill_list_batches_v4: { Args: { p_filter?: Json }; Returns: Json }
       mm_mill_save_batch_v4: { Args: { p_payload: Json }; Returns: Json }
+      mm_mill_save_batch_v5: { Args: { p_payload: Json }; Returns: Json }
       mm_proc_get_challan: { Args: { p_id: string }; Returns: Json }
       mm_proc_list_challans: { Args: { p_filter?: Json }; Returns: Json }
       mm_proc_return: { Args: { p_payload: Json }; Returns: Json }
@@ -9535,6 +10162,7 @@ export type Database = {
         Args: { p_id: string; p_kind: string; p_reason: string }
         Returns: Json
       }
+      mm_quick_create_fabric: { Args: { p_row: Json }; Returns: Json }
       mm_receive_in_challan_lines: {
         Args: { p_challan_id: string; p_unit_ids: string[] }
         Returns: Json
@@ -9580,6 +10208,12 @@ export type Database = {
       }
       mm_rpt_quality_by_machine: {
         Args: { p_from?: string; p_to?: string }
+        Returns: Json
+      }
+      mm_save_fabric: { Args: { p_row: Json }; Returns: Json }
+      mm_save_fabric_construction: { Args: { p_row: Json }; Returns: Json }
+      mm_save_fabric_form_schema: {
+        Args: { p_fabric_type_id: string; p_groups: Json }
         Returns: Json
       }
       mm_save_fabric_stage: { Args: { p_row: Json }; Returns: Json }
@@ -9637,10 +10271,34 @@ export type Database = {
         }
         Returns: Json
       }
+      mm_save_unallocated_mill_batch_v2: {
+        Args: {
+          p_batch_no: string
+          p_color_ref: string
+          p_fabric_id: string
+          p_lot_no: string
+          p_mill_ref: string
+          p_production_date: string
+          p_remarks: string
+          p_rolls: Json
+        }
+        Returns: Json
+      }
       mm_save_unallocated_vendor_grn: {
         Args: {
           p_color_ref: string
           p_fabric_type_id: string
+          p_lot_no: string
+          p_rolls: Json
+          p_supplier_name: string
+          p_uom: string
+        }
+        Returns: Json
+      }
+      mm_save_unallocated_vendor_grn_v2: {
+        Args: {
+          p_color_ref: string
+          p_fabric_id: string
           p_lot_no: string
           p_rolls: Json
           p_supplier_name: string
@@ -9682,8 +10340,16 @@ export type Database = {
         }
         Returns: Json
       }
+      mm_set_batch_fabric: {
+        Args: { p_batch_id: string; p_fabric_id: string }
+        Returns: Json
+      }
       mm_set_batch_style_intents: {
         Args: { p_batch_id: string; p_style_material_ids: string[] }
+        Returns: Json
+      }
+      mm_set_fabric_status: {
+        Args: { p_id: string; p_status: string }
         Returns: Json
       }
       mm_set_fabric_v4: { Args: { p_enabled: boolean }; Returns: Json }
@@ -9703,6 +10369,10 @@ export type Database = {
       }
       mm_set_roll_tags: {
         Args: { p_roll_ids: string[]; p_tags: Json }
+        Returns: Json
+      }
+      mm_set_rolls_fabric: {
+        Args: { p_fabric_id: string; p_roll_ids: string[] }
         Returns: Json
       }
       mm_set_shade_bands: { Args: { p_assignments: Json }; Returns: Json }
@@ -9732,6 +10402,7 @@ export type Database = {
       }
       mm_wh_list_readiness: { Args: { p_filter?: Json }; Returns: Json }
       mm_wh_save_vendor_grn_v4: { Args: { p_payload: Json }; Returns: Json }
+      mm_wh_save_vendor_grn_v5: { Args: { p_payload: Json }; Returns: Json }
       module_config: {
         Args: { p_factory: string; p_key: string }
         Returns: Json
@@ -10539,9 +11210,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

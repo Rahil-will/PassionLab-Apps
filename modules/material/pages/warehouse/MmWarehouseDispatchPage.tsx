@@ -14,7 +14,6 @@ import { fieldsForType, formatQtyM, millChallanStatusLabel } from '../../lib/mmR
 import { mmCreateStoreChallan, type MmCutGateBlocked } from '../../lib/mmRpc';
 import { mmQcApproveCutAtRisk, mmWhListReadiness } from '../../lib/mmV4Rpc';
 import { useInvalidateMmOps, useMmStyleWarehouse, useMmWarehouseDispatchBoard } from '../../lib/useMmOps';
-import { useFabricV4Enabled } from '../../lib/useMmV4Config';
 
 function cutGateLabel(code: string, stage?: string | null): string {
   switch (code) {
@@ -68,7 +67,6 @@ export default function MmWarehouseDispatchPage() {
   const lineParams = { orderId, colorwayId, fabricLineId };
   const { showNotification } = useNotificationStore();
   const invalidate = useInvalidateMmOps();
-  const fabricV4 = useFabricV4Enabled();
   const { data, isLoading, error, refetch } = useMmWarehouseDispatchBoard(orderId || null);
   const styleWh = useMmStyleWarehouse(orderId || null);
   const [groupQuery, setGroupQuery] = useState('');
@@ -154,7 +152,7 @@ export default function MmWarehouseDispatchPage() {
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
-    enabled: Boolean(fabricV4 && factoryId && styleMaterialId && selectedIds.length > 0),
+    enabled: Boolean(factoryId && styleMaterialId && selectedIds.length > 0),
   });
 
   const readinessByUnit = useMemo(() => {
@@ -424,7 +422,7 @@ export default function MmWarehouseDispatchPage() {
           <div className="px-4 py-2 border-t border-slate-100 text-[10px] text-slate-400 shrink-0">
             Showing {centreRolls.length} rolls
           </div>
-          {fabricV4 && selectedIds.length > 0 ? (
+          {selectedIds.length > 0 ? (
             <div className="px-4 py-2 border-t border-slate-100 max-h-36 overflow-y-auto shrink-0 bg-slate-50/60">
               <p className="text-[10px] font-semibold text-slate-600 mb-1">Readiness (selected)</p>
               <ul className="space-y-1">

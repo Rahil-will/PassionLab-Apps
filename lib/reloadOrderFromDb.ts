@@ -1,7 +1,7 @@
 import type { StyleOrder } from '../types';
 import { supabase } from './supabase';
 import { mapStyleOrderFromDb } from './styleOrderDb';
-import { COLORWAY_WITH_MATERIALS_SELECT } from './colorwayMaterialsDb';
+import { attachFabricsToOrderColorways, COLORWAY_WITH_MATERIALS_SELECT } from './colorwayMaterialsDb';
 import {
   ORDER_ROUTING_STEP_SELECT_SLIM,
   mapRoutingRecordToRow,
@@ -45,12 +45,16 @@ export async function reloadOrderFromDb(
     return { ...row, order_id: orderId } as Record<string, unknown>;
   });
 
-  return mapStyleOrderFromDb({
+  const order = mapStyleOrderFromDb({
     ...(orderRes.data as Record<string, unknown>),
     colorways: colorwaysRes.data || [],
     delivery_targets: odtRes.data || [],
     routing_steps,
   });
+  return {
+    ...order,
+    colorways: await attachFabricsToOrderColorways(order.colorways),
+  };
 }
 
 /** Reload all line allocations for a factory (after line-plan save). */

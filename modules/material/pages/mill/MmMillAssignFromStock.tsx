@@ -1,14 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button, Card, Input } from '../../../../components/ui';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
-import { formatQtyM } from '../../lib/mmRollDraft';
-import type { MmUnallocatedMillBatch, MmUnallocatedMillRoll } from '../../lib/mmRpc';
+import { fieldRole, formatQtyM, withLengthField } from '../../lib/mmRollDraft';
+import type { MmTestField, MmUnallocatedMillBatch, MmUnallocatedMillRoll } from '../../lib/mmRpc';
 import { useMmUnallocatedMill } from '../../lib/useMmOps';
+import { differentFabric, mismatchHitsRoll } from '../../lib/fabricStock';
 
 const th =
-  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
-const td = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
+const td = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
 
 function haystack(batch: MmUnallocatedMillBatch, rolls: MmUnallocatedMillRoll[]): string {
   return [
@@ -17,62 +18,49 @@ function haystack(batch: MmUnallocatedMillBatch, rolls: MmUnallocatedMillRoll[])
     batch.fabric_ref_name,
     batch.color_ref,
     batch.fabric_type,
-    ...rolls.flatMap((row) => [row.unit_code, row.color_ref, row.lot_no, row.shade]),
+    batch.fabric_code,
+    ...rolls.flatMap((row) => [row.unit_code, row.fabric_code, row.color_ref, row.lot_no, row.shade]),
   ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
 }
 
-export function MmMillAssignSourceToggle({
-  value,
-  onChange,
-}: {
-  value: 'new' | 'stock';
-  onChange: (next: 'new' | 'stock') => void;
-}) {
-  return (
-    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-      {([
-        { id: 'new', label: 'New batch' },
-        { id: 'stock', label: 'From stock' },
-      ] as const).map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          onClick={() => onChange(option.id)}
-          className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
-            value === option.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function MmMillAssignFromStock({
   summary,
   fabricTypeId,
   fabricTypeName,
+  lineFabricId,
   colorName,
+  mismatch,
   uom,
   busy,
   onAssign,
+  fields = [],
+  pickerOnly = false,
+  hideFinder = false,
+  selectedBatchIds,
 }: {
-  summary: React.ReactNode;
+  summary?: React.ReactNode;
   fabricTypeId: string | null | undefined;
   fabricTypeName?: string | null;
+  lineFabricId?: string | null;
   colorName?: string | null;
   uom: string;
   busy: boolean;
+  mismatch?: string | null;
   onAssign: (unitIds: string[]) => Promise<void>;
+  fields?: MmTestField[];
+  pickerOnly?: boolean;
+  hideFinder?: boolean;
+  selectedBatchIds?: string[];
 }) {
   const millQuery = useMmUnallocatedMill(Boolean(fabricTypeId));
   const [query, setQuery] = useState('');
   const [addedIds, setAddedIds] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
+  const filledBatches = useRef<Set<string>>(new Set());
+  const batchIds = selectedBatchIds ?? addedIds;
 
   const atMill = useMemo(
     () => (millQuery.data?.rolls ?? []).filter((row) => row.at_mill),
@@ -85,24 +73,46 @@ export function MmMillAssignFromStock({
     return batches.filter((batch) => {
       if (fabricTypeId && batch.fabric_type_id !== fabricTypeId) return false;
       if ((batch.at_mill_count ?? 0) <= 0) return false;
-      if (addedIds.includes(batch.id)) return false;
+      if (batchIds.includes(batch.id)) return false;
       if (!needle) return true;
       const rolls = atMill.filter((row) => row.mill_batch_id === batch.id);
       return haystack(batch, rolls).includes(needle);
     });
-  }, [addedIds, atMill, batches, fabricTypeId, query]);
+  }, [atMill, batchIds, batches, fabricTypeId, query]);
 
   const added = useMemo(
-    () => addedIds
+    () => batchIds
       .map((id) => batches.find((batch) => batch.id === id))
       .filter((batch): batch is MmUnallocatedMillBatch => Boolean(batch)),
-    [addedIds, batches],
+    [batchIds, batches],
   );
 
   const visibleRolls = useMemo(
-    () => atMill.filter((row) => addedIds.includes(row.mill_batch_id)),
-    [addedIds, atMill],
+    () => atMill.filter((row) => batchIds.includes(row.mill_batch_id)),
+    [batchIds, atMill],
   );
+
+  const batchKey = batchIds.join(',');
+  useEffect(() => {
+    if (selectedBatchIds == null) return;
+    setPicked((current) => {
+      const keep = current.filter((id) => {
+        const roll = atMill.find((row) => row.id === id);
+        return Boolean(roll && batchIds.includes(roll.mill_batch_id));
+      });
+      const next = new Set(keep);
+      for (const batchId of batchIds) {
+        const ids = atMill.filter((row) => row.mill_batch_id === batchId).map((row) => row.id);
+        if (ids.length === 0 || filledBatches.current.has(batchId)) continue;
+        ids.forEach((id) => next.add(id));
+        filledBatches.current.add(batchId);
+      }
+      for (const id of [...filledBatches.current]) {
+        if (!batchIds.includes(id)) filledBatches.current.delete(id);
+      }
+      return [...next];
+    });
+  }, [atMill, batchIds, batchKey, selectedBatchIds]);
 
   const addBatch = (id: string) => {
     const ids = atMill.filter((row) => row.mill_batch_id === id).map((row) => row.id);
@@ -132,6 +142,24 @@ export function MmMillAssignFromStock({
     );
   };
 
+  const savedFields = useMemo(() => {
+    const known = withLengthField(fields, uom).filter((field) => fieldRole(field) !== 'length');
+    const skip = new Set(['shade', 'lot', 'lotno', 'color', 'colorref', 'colour', 'fabric', 'fabricref', 'fabricname', 'fabriccode']);
+    const keys = new Set<string>();
+    for (const row of visibleRolls) {
+      for (const [key, value] of Object.entries(row.attributes ?? {})) {
+        if (value == null || String(value).trim() === '') continue;
+        const token = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (skip.has(token)) continue;
+        keys.add(key);
+      }
+    }
+    return [...keys].map((key) => {
+      const match = known.find((field) => field.key === key);
+      return { key, label: match?.label || key };
+    });
+  }, [fields, uom, visibleRolls]);
+  const rollColSpan = 7 + savedFields.length;
   const selected = visibleRolls.filter((row) => picked.includes(row.id));
   const selectedQty = selected.reduce((sum, row) => sum + Number(row.length_m ?? 0), 0);
   const colorNeedle = (colorName ?? '').trim().toLowerCase();
@@ -140,11 +168,8 @@ export function MmMillAssignFromStock({
     return Boolean(colorNeedle && ref && ref !== colorNeedle);
   });
 
-  return (
-    <>
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-stretch">
-        {summary}
-      <Card className="shadow-sm border-slate-200 h-full" noPadding>
+  const finder = (
+      <Card className={`shadow-sm border-slate-200 ${pickerOnly ? '' : 'h-full'}`} noPadding>
         <div className="px-5 py-4 flex flex-col gap-3">
           <div>
             <p className="text-[13px] font-semibold text-slate-900">Unallocated mill batches</p>
@@ -196,7 +221,7 @@ export function MmMillAssignFromStock({
                   <p className="px-3 py-4 text-[11px] text-slate-400">
                     {batches.some((batch) => batch.fabric_type_id === fabricTypeId && (batch.at_mill_count ?? 0) > 0)
                       ? 'No matching batches. Try another search.'
-                      : 'No unallocated rolls of this fabric at the mill. Use New batch, or create a General PO first.'}
+                      : 'No unallocated rolls of this fabric at the mill. Make them on New mill batch.'}
                   </p>
                 ) : matching.map((batch) => (
                   <button
@@ -219,15 +244,24 @@ export function MmMillAssignFromStock({
           )}
         </div>
       </Card>
-      </div>
+  );
 
-      <Card className="shadow-sm border-slate-200 overflow-hidden mt-4" noPadding>
+  return (
+    <>
+      {hideFinder ? null : pickerOnly ? finder : (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-stretch">
+          {summary}
+          {finder}
+        </div>
+      )}
+
+      <Card className={`shadow-sm border-slate-200 overflow-hidden ${hideFinder ? '' : 'mt-4'}`} noPadding>
         <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
           <div>
             <p className="text-[13px] font-semibold text-slate-900">Rolls</p>
             <p className="text-[11px] text-slate-500">
               {visibleRolls.length === 0
-                ? 'Add a mill batch to see rolls.'
+                ? (selectedBatchIds != null ? 'Select one or more mill batches above.' : 'Add a mill batch to see rolls.')
                 : `${selected.length} of ${visibleRolls.length} selected · ${formatQtyM(selectedQty, uom)}`}
             </p>
           </div>
@@ -249,67 +283,88 @@ export function MmMillAssignFromStock({
             Some rolls have a color ref that does not match {colorName}. They can still be assigned.
           </p>
         )}
-        {visibleRolls.length === 0 ? (
-          <p className="px-5 py-10 text-center text-[11px] text-slate-400 italic">Add one or more mill batches above.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse">
-              <thead>
+        <div className="overflow-x-auto">
+          <table className="w-full table-fixed border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className={`${th} w-8`} />
+                <th className={th}>Batch</th>
+                <th className={th}>Roll</th>
+                <th className={th}>Color ref</th>
+                <th className={th}>Shade</th>
+                <th className={th}>Lot</th>
+                <th className={th}>Qty</th>
+                {savedFields.map((field) => (
+                  <th key={field.key} className={th}>{field.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRolls.length === 0 ? (
                 <tr>
-                  <th className={`${th} w-8`} />
-                  <th className={th}>Batch</th>
-                  <th className={th}>Roll</th>
-                  <th className={th}>Fabric ref</th>
-                  <th className={th}>Color ref</th>
-                  <th className={th}>Qty</th>
+                  <td colSpan={rollColSpan} className="px-5 py-10 text-center text-[11px] text-slate-400 italic">
+                    {selectedBatchIds != null ? 'Select one or more mill batches above.' : 'Add one or more mill batches above.'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {added.map((batch) => {
-                  const rolls = visibleRolls.filter((row) => row.mill_batch_id === batch.id);
-                  const ids = rolls.map((row) => row.id);
-                  const allOn = ids.length > 0 && ids.every((id) => picked.includes(id));
-                  return (
-                    <React.Fragment key={batch.id}>
-                      <tr className="bg-slate-50/80">
+              ) : added.map((batch) => {
+                const rolls = visibleRolls.filter((row) => row.mill_batch_id === batch.id);
+                const ids = rolls.map((row) => row.id);
+                const allOn = ids.length > 0 && ids.every((id) => picked.includes(id));
+                return (
+                  <React.Fragment key={batch.id}>
+                    <tr className="bg-slate-50/80">
+                      <td className={td}>
+                        <input
+                          type="checkbox"
+                          checked={allOn}
+                          disabled={busy}
+                          onChange={() => toggleBatchRolls(ids)}
+                        />
+                      </td>
+                      <td className={`${td} font-semibold text-slate-800`} colSpan={rollColSpan - 1}>
+                        {batch.batch_no}
+                        {batch.color_ref ? ` · ${batch.color_ref}` : ''}
+                      </td>
+                    </tr>
+                    {rolls.map((row) => {
+                      const other = differentFabric(lineFabricId, row.fabric_id);
+                      const hit = mismatch ? mismatchHitsRoll(mismatch, row.unit_code) : false;
+                      return (
+                      <tr
+                        key={row.id}
+                        title={other ? 'Different fabric' : undefined}
+                        className={other ? 'opacity-40' : hit ? 'bg-red-50' : 'hover:bg-slate-50'}
+                      >
                         <td className={td}>
                           <input
                             type="checkbox"
-                            checked={allOn}
-                            disabled={busy}
-                            onChange={() => toggleBatchRolls(ids)}
+                            checked={picked.includes(row.id)}
+                            disabled={busy || other}
+                            onChange={() => toggleRoll(row.id)}
                           />
                         </td>
-                        <td className={`${td} font-semibold text-slate-800`} colSpan={5}>
-                          {batch.batch_no}
-                          {batch.fabric_ref_name ? ` · ${batch.fabric_ref_name}` : ''}
-                          {batch.color_ref ? ` · ${batch.color_ref}` : ''}
-                        </td>
-                      </tr>
-                      {rolls.map((row) => (
-                        <tr key={row.id} className="hover:bg-slate-50">
-                          <td className={td}>
-                            <input
-                              type="checkbox"
-                              checked={picked.includes(row.id)}
-                              disabled={busy}
-                              onChange={() => toggleRoll(row.id)}
-                            />
+                        <td className={td}>{row.batch_no}</td>
+                        <td className={`${td} tabular-nums`}>{row.unit_code}</td>
+                        <td className={td}>{row.color_ref || batch.color_ref || '—'}</td>
+                        <td className={td}>{row.shade || '—'}</td>
+                        <td className={td}>{row.lot_no || '—'}</td>
+                        <td className={`${td} tabular-nums`}>{formatQtyM(row.length_m, uom)}</td>
+                        {savedFields.map((field) => (
+                          <td key={field.key} className={td}>
+                            {row.attributes?.[field.key] == null || String(row.attributes[field.key]).trim() === ''
+                              ? '—'
+                              : String(row.attributes[field.key])}
                           </td>
-                          <td className={td}>{row.batch_no}</td>
-                          <td className={`${td} tabular-nums`}>{row.unit_code}</td>
-                          <td className={td}>{batch.fabric_ref_name || '—'}</td>
-                          <td className={td}>{row.color_ref || batch.color_ref || '—'}</td>
-                          <td className={`${td} tabular-nums`}>{formatQtyM(row.length_m, uom)}</td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        ))}
+                      </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </>
   );

@@ -131,6 +131,8 @@ export const useDataStore = create<DataState>((set, get) => ({
     } catch (err) {
       console.error('addOrder failed', err);
       const message = err instanceof Error ? err.message : 'Failed to save order';
+      // Let Create Order map LINE_MISMATCH to a friendly toast + scroll target.
+      if (message.startsWith('LINE_MISMATCH:')) throw err;
       useNotificationStore.getState().showNotification(message, 'error');
       return false;
     }
@@ -171,6 +173,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     } catch (err) {
       console.error('updateOrder failed', err);
       const message = err instanceof Error ? err.message : 'Failed to update order';
+      if (message.startsWith('LINE_MISMATCH:')) throw err;
       useNotificationStore.getState().showNotification(message, 'error');
       return false;
     }

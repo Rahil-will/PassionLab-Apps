@@ -21,7 +21,10 @@ import {
   withLengthField,
   type MmDraftRoll,
 } from '../../lib/mmRollDraft';
-import { mmSaveUnallocatedMillBatch, mmUpdateMillBatch, type MmTestField } from '../../lib/mmRpc';
+import { mmSaveUnallocatedMillBatchV2, mmUpdateMillBatch, type MmTestField } from '../../lib/mmRpc';
+import { FabricPicker } from '../../components/FabricPicker';
+import { fabricMismatchMessage } from '../../lib/fabricStock';
+import type { MmFabric } from '../../lib/mmFabricRpc';
 import { useInvalidateMmOps, useMmUnallocatedMill } from '../../lib/useMmOps';
 import { useMmConfigBundle } from '../../lib/useMmConfigBundle';
 import { millSingleValue, millTestCaptureFields, millQualityMode, unallocatedToLineRoll } from './millUnallocated';
@@ -97,6 +100,9 @@ export default function MmMillUnallocatedAssignPage() {
   );
 
   const [fabricTypeId, setFabricTypeId] = useState('');
+  const [fabricId, setFabricId] = useState('');
+  const [fabricLabel, setFabricLabel] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [batchNo, setBatchNo] = useState('');
   const [millRef, setMillRef] = useState('');
   const [fabricRefName, setFabricRefName] = useState('');
@@ -285,7 +291,11 @@ export default function MmMillUnallocatedAssignPage() {
       showNotification(parsed.error, 'error');
       return;
     }
-    if (!fabricTypeId) {
+    if (!editing && !fabricId) {
+      showNotification('Fabric is required', 'error');
+      return;
+    }
+    if (editing && !fabricTypeId) {
       showNotification('Fabric type is required', 'error');
       return;
     }
@@ -314,10 +324,19 @@ export default function MmMillUnallocatedAssignPage() {
       const batchVersion = batches.find((row) => row.id === batchId)?.row_version;
       const res = editing
         ? await mmUpdateMillBatch(batchId, header, rolls, batchVersion, testOnly)
-        : await mmSaveUnallocatedMillBatch(fabricTypeId, header, colorRef.trim(), lotNo.trim(), rolls, fabricRefName.trim());
-      if (res.ok === false) throw new Error(res.message);
+        : await mmSaveUnallocatedMillBatchV2(fabricId, header, colorRef.trim(), lotNo.trim(), rolls);
+      if (res.ok === false) {
+        const mismatch = fabricMismatchMessage(res);
+        if (mismatch) setFormError(`Fabric mismatch — ${mismatch}`);
+        else showNotification(res.message, 'error');
+        return;
+      }
       showNotification(
-        testOnly ? `Saved mill tests on ${res.data.batch_no}` : editing ? `Updated mill batch ${res.data.batch_no}` : `Saved mill batch ${res.data.batch_no}`,
+        testOnly
+          ? `Saved mill tests on ${res.data.batch_no}`
+          : editing
+            ? `Updated mill batch ${res.data.batch_no}`
+            : `Saved mill batch ${res.data.batch_no} · ${fabricLabel}`,
         'success',
       );
       setUnsaved(false);
@@ -348,28 +367,65 @@ export default function MmMillUnallocatedAssignPage() {
               Fabric details
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <span className={`${fieldLabelClass} text-[13px]`}>Fabric type *</span>
-                <SelectDropdown
-                  value={fabricTypeId}
-                  onChange={setFabricTypeId}
-                  options={[
-                    { value: '', label: 'Select fabric type' },
-                    ...types.map((t) => ({ value: t.id, label: t.name })),
-                  ]}
-                  className="w-full"
-                  disabled={Boolean(editing) || busy || qualityLocked}
-                />
-              </div>
-              <Input
-                id="mm-free-fabric-ref"
-                label="Fabric reference name"
-                value={fabricRefName}
-                disabled={busy || qualityLocked}
-                placeholder="Optional"
-                onChange={(e) => setFabricRefName(e.target.value)}
-                className="bg-white"
-              />
+              {editing ? (
+                <>
+                  <div>
+                    <span className={`${fieldLabelClass} text-[13px]`}>Fabric type *</span>
+                    <SelectDropdown
+                      value={fabricTypeId}
+                      onChange={(v) => {
+                        setFabricTypeId(v);
+                        setFabricId('');
+                        setFabricLabel('');
+                      }}
+                      options={[
+                        { value: '', label: 'Select fabric type' },
+                        ...types.map((t) => ({ value: t.id, label: t.name })),
+                      ]}
+                      className="w-full"
+                      disabled={Boolean(editing) || busy || qualityLocked}
+                    />
+                  </div>
+                  <Input
+                    id="mm-free-fabric-ref"
+                    label="Fabric reference name"
+                    value={fabricRefName}
+                    disabled={busy || qualityLocked}
+                    placeholder="Optional"
+                    onChange={(e) => setFabricRefName(e.target.value)}
+                    className="bg-white"
+                  />
+                </>
+              ) : (
+                <div className="md:col-span-2">
+                  <FabricPicker
+                    label="Fabric *"
+                    value={fabricId || null}
+                    disabled={busy || qualityLocked}
+                    onChange={(fabric: MmFabric) => {
+                      setFabricId(fabric.id);
+                      setFabricLabel(`${fabric.code} · ${fabric.name}`);
+                      setFabricTypeId(fabric.fabric_type_id);
+                      setFabricRefName(`${fabric.code} · ${fabric.name}`);
+                      setFormError(null);
+                    }}
+                    onClear={() => {
+                      setFabricId('');
+                      setFabricLabel('');
+                      setFabricTypeId('');
+                      setFabricRefName('');
+                    }}
+                  />
+                  {fabricTypeId ? (
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      Type locked: {types.find((t) => t.id === fabricTypeId)?.name ?? 'fabric type'}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+              {formError ? (
+                <p className="md:col-span-2 text-[12px] text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{formError}</p>
+              ) : null}
               <Input
                 id="mm-free-color"
                 label="Color ref"
@@ -398,18 +454,24 @@ export default function MmMillUnallocatedAssignPage() {
               {inspectOnly ? '4-point inspection' : testOnly ? 'Test mill rolls' : editing ? 'Edit mill batch' : 'Mill batch details'}
             </h4>
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2.5">
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">Produced</p>
-                <p className="text-[13px] font-bold text-slate-900 mt-1 tabular-nums">{formatQtyM(qty, 'm')}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {rows.length} {rows.length === 1 ? 'roll' : 'rolls'}
+                <p className="text-[13px] font-bold text-slate-900 mt-0.5 tabular-nums">
+                  {formatQtyM(qty, 'm')}
+                  <span className="mx-1.5 font-normal text-slate-400">|</span>
+                  <span className="font-semibold">
+                    {rows.length} {rows.length === 1 ? 'roll' : 'rolls'}
+                  </span>
                 </p>
               </div>
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2.5">
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-yellow-700">This batch</p>
-                <p className="text-[13px] font-bold text-slate-900 mt-1 tabular-nums">{formatQtyM(qty, 'm')}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {rows.length} {rows.length === 1 ? 'roll' : 'rolls'}
+                <p className="text-[13px] font-bold text-slate-900 mt-0.5 tabular-nums">
+                  {formatQtyM(qty, 'm')}
+                  <span className="mx-1.5 font-normal text-slate-400">|</span>
+                  <span className="font-semibold">
+                    {rows.length} {rows.length === 1 ? 'roll' : 'rolls'}
+                  </span>
                 </p>
               </div>
             </div>
@@ -542,6 +604,7 @@ export default function MmMillUnallocatedAssignPage() {
             lockIdentity={testOnly}
             showShade={testOnly}
             allowShadeEdit={testOnly}
+            excel
             showRemove={!testOnly}
             uom="m"
             footerActions={(

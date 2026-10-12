@@ -442,7 +442,7 @@ const MmFabricStagesPage = forwardRef<
                   onClick={() => loadRow(row)}
                   selected={editingLocalId === row.localId}
                 >
-                  <CatalogTableCell className="w-8 px-1">
+                  <CatalogTableCell className="!w-8 !max-w-[2rem] !px-1 text-center">
                     <DesktopWriteGate>
                       <button
                         type="button"

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { Colorway } from '../../types';
 import { sizeOrderQty, sizeAdjQty } from '../../lib/colorwaySizesUtils';
 import { swatchStyleFromColorName } from '../../lib/colorNameSwatch';
@@ -37,11 +37,11 @@ interface ColorQtyWorkspaceProps {
   buyerExtraPct: number;
   selectedBuyer: string;
   onSelectColor: (id: string) => void;
-  /** Opens nested color details. Qty inputs do not trigger this. */
+  /** @deprecated Colour details page removed — kept optional for callers. */
   onOpenColorPage?: (id: string) => void;
-  /** Master list is display-only; click opens color details. */
+  /** When true, name/qty are display-only. */
   readOnly?: boolean;
-  onAddColor: (payload: { name: string; sizes: Colorway['sizes'] }) => void;
+  onAddColor: () => void;
   onClearColorSelection: () => void;
   onNameChange: (id: string, name: string) => void;
   onOrderChange: (id: string, size: string, qty: number) => void;
@@ -63,8 +63,8 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
   hasSizeContext,
   selectedColorId,
   onSelectColor,
-  onOpenColorPage,
   readOnly = false,
+  onAddColor,
   onNameChange,
   onOrderChange,
   onAdjChange,
@@ -77,8 +77,6 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
 }) => {
   const hasSizes = displaySizes.length > 0;
   const totalCols = 3 + (hasSizes ? displaySizes.length : 0) + 1 + 1;
-
-  const openDetails = (id: string) => (onOpenColorPage ?? onSelectColor)(id);
 
   return (
     <div className="p-4">
@@ -103,7 +101,7 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
           {colorways.length === 0 ? (
             <tr>
               <td colSpan={totalCols} className="text-center py-8 text-[11px] text-slate-400 italic border-b border-slate-200">
-                {hasSizeContext ? 'Click "Add Color" to open color details' : 'Select a size group to enter colors'}
+                {hasSizeContext ? 'Add a colour below to enter name and quantities' : 'Select a size group to enter colors'}
               </td>
             </tr>
           ) : (
@@ -115,8 +113,8 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
               return (
                 <React.Fragment key={cw.id}>
                   <tr
-                    className={`${isSelected ? 'bg-blue-50/40' : 'bg-white'} ${readOnly ? 'cursor-pointer hover:bg-blue-50/70' : ''}`}
-                    onClick={() => openDetails(cw.id)}
+                    className={isSelected ? 'bg-blue-50/40' : 'bg-white'}
+                    onClick={() => onSelectColor(cw.id)}
                   >
                     <td className="border-b border-slate-200 text-center text-[10px] font-semibold text-slate-400 tabular-nums align-middle" rowSpan={2}>
                       {idx + 1}
@@ -180,8 +178,8 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
                     </td>
                   </tr>
                   <tr
-                    className={`${isSelected ? 'bg-blue-100/50' : 'bg-blue-50'} ${readOnly ? 'cursor-pointer hover:bg-blue-100/80' : ''}`}
-                    onClick={() => openDetails(cw.id)}
+                    className={isSelected ? 'bg-blue-100/50' : 'bg-blue-50'}
+                    onClick={() => onSelectColor(cw.id)}
                   >
                     <td className={metaAdjCls}>Adj.</td>
                     {hasSizes && displaySizes.map((s) => (
@@ -243,6 +241,17 @@ export const ColorQtyWorkspace: React.FC<ColorQtyWorkspaceProps> = ({
         )}
       </table>
         </div>
+        {!readOnly ? (
+          <button
+            type="button"
+            disabled={!hasSizeContext}
+            onClick={onAddColor}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border-t border-slate-200 bg-slate-50 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Plus size={13} />
+            Add Color
+          </button>
+        ) : null}
       </div>
     </div>
   );

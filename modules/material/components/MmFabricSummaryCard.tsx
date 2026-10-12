@@ -11,6 +11,7 @@ export interface MmFabricSummary {
   po_number?: string | null;
   image_url?: string | null;
   fabric_name?: string | null;
+  fabric_code?: string | null;
   fabric_type?: string | null;
   fabric_category?: string | null;
   fabric_ref_name?: string | null;
@@ -179,7 +180,11 @@ export function MmFabricSummaryCard({
               <MmSummaryMetric
                 icon={Layers}
                 label="Fabric"
-                primary={data?.fabric_name || data?.fabric_ref_name || '—'}
+                primary={
+                  data?.fabric_code
+                    ? `${data.fabric_code}${data.fabric_name ? ` · ${data.fabric_name}` : ''}`
+                    : (data?.fabric_name || data?.fabric_ref_name || '—')
+                }
                 secondary={typeCategoryLine(data)}
               />
               {extraMetrics}

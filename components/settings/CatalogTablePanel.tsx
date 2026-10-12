@@ -86,35 +86,58 @@ export const CatalogTable: React.FC<CatalogTableProps> = ({
 }) => {
   void _leftColumns;
   const extraCenter = new Set(centerColumns);
-  const serialWidth = '3.5rem';
   const lastHeader = headers[headers.length - 1] ?? '';
-  const actionCol = lastHeader === '' || lastHeader === 'Action' ? 1 : 0;
-  const actionWidth = '3.75rem';
-  const dataCols = headers.length - actionCol;
-  const dataWidth =
-    dataCols > 0
-      ? `calc((100% - ${actionCol ? actionWidth : '0px'}) / ${dataCols})`
-      : 'auto';
+  const hasAction = lastHeader === '' || lastHeader === 'Action';
+  const roles = headers.map((h, i) => {
+    if (hasAction && i === headers.length - 1) return 'action' as const;
+    if (h === 'S.No' || h === '#') return 'serial' as const;
+    if (i === 0 && h === '' && headers.some((header) => header === 'S.No' || header === '#')) return 'grip' as const;
+    return 'data' as const;
+  });
+  const actionWidth = lastHeader === 'Action' ? '3.75rem' : '2.5rem';
+  const roleRem = (role: (typeof roles)[number]) => (
+    role === 'grip' ? 2 : role === 'serial' ? 3.5 : role === 'action' ? (lastHeader === 'Action' ? 3.75 : 2.5) : 0
+  );
+  let reservedRem = 0;
+  let reservedPct = 0;
+  let flexCount = 0;
+  roles.forEach((role, i) => {
+    const given = widths?.[i];
+    if (!given) {
+      if (role === 'data') flexCount += 1;
+      else reservedRem += roleRem(role);
+      return;
+    }
+    if (given.endsWith('%')) reservedPct += Number.parseFloat(given);
+    else if (given.endsWith('rem')) reservedRem += Number.parseFloat(given);
+    else if (given.endsWith('px')) reservedRem += Number.parseFloat(given) / 16;
+  });
+  const dataWidth = flexCount > 0
+    ? `calc((100% - ${reservedRem}rem${reservedPct > 0 ? ` - ${reservedPct}%` : ''}) / ${flexCount})`
+    : 'auto';
 
   return (
     <table className="w-full text-xs table-fixed border-collapse">
       <colgroup>
         {headers.map((h, i) => {
-          const isSerial = i === 0 && (h === '#' || h === 'S.No');
-          const isAction = actionCol > 0 && i === headers.length - 1;
+          const role = roles[i];
           const width = widths?.[i]
-            ?? (isSerial ? serialWidth : isAction ? actionWidth : dataWidth);
+            ?? (role === 'grip' ? '2rem'
+              : role === 'serial' ? '3.5rem'
+                : role === 'action' ? actionWidth
+                  : dataWidth);
           return <col key={`${h}-${i}`} style={{ width }} />;
         })}
       </colgroup>
       <thead className="text-[10px] uppercase text-slate-500 font-semibold border-b border-slate-200 sticky top-0 bg-white z-10">
         <tr>
           {headers.map((h, i) => {
-            const centered = centerAll || extraCenter.has(i);
+            const narrow = roles[i] === 'grip' || roles[i] === 'serial';
+            const centered = centerAll || extraCenter.has(i) || narrow;
             return (
               <th
                 key={`${h}-${i}`}
-                className={`px-3 py-2 ${centered ? 'text-center' : 'text-left'} ${thBorder}`}
+                className={`${narrow ? 'px-1' : 'px-3'} py-2 ${centered ? 'text-center' : 'text-left'} ${thBorder}`}
               >
                 {h}
               </th>
@@ -167,7 +190,7 @@ interface CatalogTableCellProps {
 }
 
 export const catalogSerialCellClass =
-  `text-left text-slate-500 tabular-nums w-14 min-w-[3.5rem] ${tdBorder}`;
+  `text-center text-slate-500 tabular-nums !px-1 w-14 max-w-[3.5rem] ${tdBorder}`;
 
 export const catalogNumericCellClass =
   `text-center text-slate-500 tabular-nums text-[10px] ${tdBorder}`;

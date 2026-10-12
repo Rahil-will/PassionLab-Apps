@@ -51,34 +51,8 @@ interface TestingDraft {
   testedShade: string;
   inspectedLength: string;
   inspectedWidth: string;
-  pts1: string;
-  pts2: string;
-  pts3: string;
-  pts4: string;
   widthUom: 'in' | 'cm';
   overrideReason: string;
-}
-
-function fptPoints(row: Pick<TestingDraft, 'pts1' | 'pts2' | 'pts3' | 'pts4'>): number {
-  const n = (value: string) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  };
-  return n(row.pts1) + 2 * n(row.pts2) + 3 * n(row.pts3) + 4 * n(row.pts4);
-}
-
-function fptScore(row: TestingDraft, lengthUom: string | null): number | null {
-  const length = Number(row.inspectedLength);
-  const width = Number(row.inspectedWidth);
-  if (!Number.isFinite(length) || !Number.isFinite(width) || length <= 0 || width <= 0) return null;
-  const yards = lengthUom === 'yd' ? length : length / 0.9144;
-  const inches = row.widthUom === 'cm' ? width / 2.54 : width;
-  if (!(yards > 0) || !(inches > 0)) return null;
-  return Math.round(((fptPoints(row) * 3600) / (yards * inches)) * 100) / 100;
-}
-
-function fptVerdict(score: number): 'pass' | 'fail' {
-  return score <= 40 ? 'pass' : 'fail';
 }
 
 function savedInspectionResult(roll: MmStockRoll): ResultValue {
@@ -113,10 +87,6 @@ function toDraft(roll: MmStockRoll, fields: MmTestField[]): TestingDraft {
     testedShade: (roll.tested_shade ?? '').trim(),
     inspectedLength: '',
     inspectedWidth: '',
-    pts1: '',
-    pts2: '',
-    pts3: '',
-    pts4: '',
     widthUom: 'in',
     overrideReason: '',
   };
@@ -191,10 +161,6 @@ function inspectionValues(row: TestingDraft, fields: MmTestField[]): Record<stri
     values.width_uom = row.widthUom;
     if (row.widthUom === 'in') put('inspected_width_in', row.inspectedWidth);
   }
-  put('pts_1', row.pts1);
-  put('pts_2', row.pts2);
-  put('pts_3', row.pts3);
-  put('pts_4', row.pts4);
   put('override_reason', row.overrideReason);
   return values;
 }
@@ -242,6 +208,22 @@ export default function MmWarehouseTestingDetail() {
   const pendingQty = rows.reduce((sum, row) => sum + (!row.result ? Number(row.length_m || 0) : 0), 0);
   const onChallanQty = Number(challan?.qty || 0) || rows.reduce((sum, row) => sum + Number(row.length_m || 0), 0);
 
+  const shadeOptions = useMemo(() => {
+    const set = new Set<string>();
+    const shadeField = fields.find((f) => f.key === 'shade' || /shade/i.test(f.label));
+    for (const opt of parseTestOptions(shadeField?.options)) {
+      if (opt.trim()) set.add(opt.trim());
+    }
+    for (const row of rows) {
+      if (row.millShade.trim()) set.add(row.millShade.trim());
+      if (row.testedShade.trim()) set.add(row.testedShade.trim());
+    }
+    return [
+      { value: '', label: '—' },
+      ...[...set].sort((a, b) => a.localeCompare(b)).map((s) => ({ value: s, label: s })),
+    ];
+  }, [rows, fields]);
+
   const sheetColumns = useMemo<SheetColumn[]>(() => [
     { key: 'sno', label: 'S.No', width: '3.25rem' },
     { key: 'roll', label: 'Roll no.', width: '8rem' },
@@ -270,6 +252,8 @@ export default function MmWarehouseTestingDetail() {
       key: 'tested_shade',
       label: 'Tested shade',
       editable: true,
+      kind: 'select' as const,
+      options: shadeOptions,
       width: '7rem',
       headerClassName: 'text-violet-800 bg-violet-50',
       cellClassName: 'bg-violet-50/40',
@@ -287,11 +271,6 @@ export default function MmWarehouseTestingDetail() {
       ],
       width: '5.5rem',
     },
-    { key: 'pts1', label: '1 pt', editable: true, width: '4rem' },
-    { key: 'pts2', label: '2 pt', editable: true, width: '4rem' },
-    { key: 'pts3', label: '3 pt', editable: true, width: '4rem' },
-    { key: 'pts4', label: '4 pt', editable: true, width: '4rem' },
-    { key: 'score', label: 'Per 100', width: '7rem' },
     { key: 'override', label: 'Override reason', editable: true, width: '9rem' },
     {
       key: 'result',
@@ -307,7 +286,7 @@ export default function MmWarehouseTestingDetail() {
       cellClassName: 'bg-emerald-50/40',
       width: '7.5rem',
     },
-  ], [warehouseCols]);
+  ], [warehouseCols, shadeOptions]);
 
   const sheetValue = (rowIndex: number, key: string): string => {
     const row = visible[rowIndex];
@@ -320,14 +299,6 @@ export default function MmWarehouseTestingDetail() {
     if (key === 'insp_len') return row.inspectedLength;
     if (key === 'insp_width') return row.inspectedWidth;
     if (key === 'width_uom') return row.widthUom;
-    if (key === 'pts1') return row.pts1;
-    if (key === 'pts2') return row.pts2;
-    if (key === 'pts3') return row.pts3;
-    if (key === 'pts4') return row.pts4;
-    if (key === 'score') {
-      const score = fptScore(row, uom);
-      return score == null ? '' : `${score.toFixed(2)} ${fptVerdict(score)}`;
-    }
     if (key === 'override') return row.overrideReason;
     if (key === 'result') return row.result;
     if (key === 'remarks') return row.remarks;
@@ -345,10 +316,6 @@ export default function MmWarehouseTestingDetail() {
         if (key === 'insp_len') return { ...item, inspectedLength: value };
         if (key === 'insp_width') return { ...item, inspectedWidth: value };
         if (key === 'width_uom') return { ...item, widthUom: value === 'cm' ? 'cm' : 'in' };
-        if (key === 'pts1') return { ...item, pts1: value };
-        if (key === 'pts2') return { ...item, pts2: value };
-        if (key === 'pts3') return { ...item, pts3: value };
-        if (key === 'pts4') return { ...item, pts4: value };
         if (key === 'override') return { ...item, overrideReason: value };
         if (key === 'result') {
           const next = normalizePassFail(value);
@@ -387,18 +354,7 @@ export default function MmWarehouseTestingDetail() {
       showNotification('Receive this mill challan before testing', 'error');
       return;
     }
-    const mismatched = rows.find((row) => {
-      if (!canInspect(row) || (row.result !== 'pass' && row.result !== 'fail')) return false;
-      const score = fptScore(row, uom);
-      if (score == null) return false;
-      const computed = fptVerdict(score);
-      return row.result !== computed && row.overrideReason.trim().length === 0;
-    });
-    if (mismatched) {
-      showNotification(`${mismatched.unit_code}: an override needs a reason`, 'error');
-      return;
-    }
-    void write(payloadFor(rows, fields), 'Inspection saved');
+    void write(payloadFor(rows, fields), 'Testing saved');
   };
 
   const passRemaining = () => {

@@ -127,7 +127,10 @@ export const useNavigationStore = create<NavigationState>()(
       setAuthenticated: (status) => set({ isAuthenticated: status }),
       setFactoryId: (factoryId) => set({ factoryId }),
       setUserProfile: (profile) => set({ userProfile: profile }),
-      setPendingSaveAction: (action) => set({ pendingSaveAction: action }),
+      setPendingSaveAction: (action) => {
+        if (action === null && get().pendingSaveAction === null) return;
+        set({ pendingSaveAction: action });
+      },
       setPendingDiscardAction: (action) => set({ pendingDiscardAction: action }),
     }),
     {

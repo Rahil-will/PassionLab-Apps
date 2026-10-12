@@ -1,5 +1,5 @@
 import React, { Component, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { SelectDropdown } from '../ui';
 import { useModuleEnabled } from '../../core/modules/useModuleEnabled';
 import { useFabricComponentsCatalog, useSupportDropdownsCatalog } from '../../lib/queries/settingsSlices';
@@ -7,6 +7,8 @@ import { dropdownValuesForCategory } from '../../lib/supportDropdownValues';
 import { materialRequiredQty } from '../../lib/colorwayMaterialsDb';
 import { useMmRequirementCatalog, type MmRequirementFieldOption } from '../../modules/material/lib/useMmRequirementCatalog';
 import { useNavigationStore } from '../../stores';
+import { fabricSpecLine, uomLabel } from '../../modules/material/lib/fabricLabels';
+import { groupStyleFabricLines, requiredQty } from '../../lib/styleFabricLines';
 import type { Colorway, Material } from '../../types';
 
 const cellPad = 'min-h-8 pl-2.5 pr-2 py-0';
@@ -44,6 +46,18 @@ const TRIM_COL = {
   qty: EDGE.qty,
   total: EDGE.total,
   del: EDGE.del,
+} as const;
+
+/** Linked fabric table — same chrome / column rhythm as trims. */
+const FABRIC_LINKED_COL = {
+  sno: EDGE.sno,
+  name: '20%',
+  placement: '11%',
+  color: '13%',
+  ref: '11%',
+  uom: EDGE.uom,
+  qty: EDGE.qty,
+  total: EDGE.total,
 } as const;
 
 const TRIM_COL_RO = {
@@ -164,11 +178,16 @@ export interface ColorwayMaterialsPanelProps {
   colorway: Colorway;
   adjustedQty: number;
   onAddMaterial?: (category: 'Fabric' | 'Trim') => void;
-  onUpdateMaterial?: (matId: string, field: keyof Material, value: string | number | null) => void;
+  /** Value type widened to boolean so callers can set consOverridden without casting. */
+  onUpdateMaterial?: (matId: string, field: keyof Material, value: string | number | boolean | null) => void;
   onUpdateParam?: (matId: string, key: string, value: string) => void;
   onRemoveMaterial?: (matId: string) => void;
   showCaption?: boolean;
   readOnly?: boolean;
+  /** All colorways of the order — used to compute style-line default cons for reset. */
+  allColorways?: Colorway[];
+  /** Navigate back to Style Fabrics on the order master page. */
+  onOpenStyleFabrics?: () => void;
 }
 
 class MaterialsPanelGuard extends Component<{ children: React.ReactNode }, { failed: boolean }> {
@@ -377,6 +396,8 @@ const ColorwayMaterialsInner: React.FC<ColorwayMaterialsPanelProps> = ({
   onRemoveMaterial,
   showCaption = true,
   readOnly = false,
+  allColorways,
+  onOpenStyleFabrics,
 }) => {
   const materialOn = useModuleEnabled('material');
   const factoryId = useNavigationStore((s) => s.factoryId);
@@ -438,9 +459,21 @@ const ColorwayMaterialsInner: React.FC<ColorwayMaterialsPanelProps> = ({
     return map;
   }, [materialDefs]);
 
+  // Style-line default cons by lineKey — for reset button in linked fabric rows.
+  const styleLineConsByKey = useMemo(() => {
+    const allCw = allColorways ?? [colorway];
+    const lines = groupStyleFabricLines(allCw);
+    return new Map(lines.map((l) => [l.lineKey, l.consPerPc]));
+  }, [allColorways, colorway]);
+
   const materials = colorway.materials ?? [];
   const fabrics = materials.filter((m) => m.category === 'Fabric');
+  // Linked: style fabric lines from master (lineKey + fabricId set).
+  const linked = fabrics.filter((m) => Boolean(m.lineKey && m.fabricId));
+  // Legacy: rows without fabricId (from before fabric master, or manually added).
+  const legacy = fabrics.filter((m) => !m.fabricId);
   const trims = materials.filter((m) => m.category === 'Trim');
+
   const [fabricLossOn, setFabricLossOn] = useState(false);
   const [fabricWasteOn, setFabricWasteOn] = useState(false);
   const [trimLossOn, setTrimLossOn] = useState(false);
@@ -461,12 +494,13 @@ const ColorwayMaterialsInner: React.FC<ColorwayMaterialsPanelProps> = ({
 
   const toggleFabricLoss = () => {
     if (readOnly) return;
-    if (fabricLossOn) clearPct(fabrics, 'processLossPct');
+    // Linked PL% is style-owned (read-only); only clear legacy when turning off.
+    if (fabricLossOn) clearPct(legacy, 'processLossPct');
     setFabricLossOn((cur) => !cur);
   };
   const toggleFabricWaste = () => {
     if (readOnly) return;
-    if (fabricWasteOn) clearPct(fabrics, 'wastagePct');
+    if (fabricWasteOn) clearPct(legacy, 'wastagePct');
     setFabricWasteOn((cur) => !cur);
   };
   const toggleTrimLoss = () => {
@@ -490,7 +524,7 @@ const ColorwayMaterialsInner: React.FC<ColorwayMaterialsPanelProps> = ({
 
   const seenParamKeys = new Set<string>();
   const unionParamCols: MmAttr[] = [];
-  for (const mat of fabrics) {
+  for (const mat of legacy) {
     for (const def of paramsForMaterial(mat)) {
       const key = paramKey(def);
       if (!key || seenParamKeys.has(key)) continue;
@@ -503,9 +537,12 @@ const ColorwayMaterialsInner: React.FC<ColorwayMaterialsPanelProps> = ({
   const typeOptions = fabricTypeNames;
   const trimCategorySelectOptions = trimCategoryOptions;
 
-  const fabricColSpan = (readOnly ? 7 : 8) + unionParamCols.length + (fabricLossOn ? 1 : 0) + (fabricWasteOn ? 1 : 0);
+  // Legacy table col spans (old behaviour).
+  const legacyColSpan = (readOnly ? 7 : 8) + unionParamCols.length + (fabricLossOn ? 1 : 0) + (fabricWasteOn ? 1 : 0);
+  const linkedColSpan = 8 + (fabricLossOn ? 1 : 0) + (fabricWasteOn ? 1 : 0);
   const trimColSpan = (readOnly ? 8 : 9) + (trimLossOn ? 1 : 0) + (trimWasteOn ? 1 : 0);
   const trimW = readOnly ? TRIM_COL_RO : TRIM_COL;
+  const fabricW = FABRIC_LINKED_COL;
 
   if (!materialOn) return null;
 
@@ -525,172 +562,393 @@ const ColorwayMaterialsInner: React.FC<ColorwayMaterialsPanelProps> = ({
             <ExtraColChip label="Wastage %" active={fabricWasteOn} tone="rose" disabled={readOnly} onClick={toggleFabricWaste} />
           </div>
         </div>
-        <RoundedTable
-          footer={readOnly ? undefined : (
-            <AddBelowTableButton label="Add Fabric" onClick={() => onAddMaterial?.('Fabric')} />
-          )}
-        >
-          <table className="w-full table-fixed border-collapse text-left">
-            <colgroup>
-              <col style={{ width: EDGE.sno }} />
-              <col style={{ width: EDGE.name }} />
-              <col />
-              <col />
-              {unionParamCols.map((p) => (
-                <col key={paramKey(p)} />
-              ))}
-              <col style={{ width: EDGE.uom }} />
-              <col style={{ width: EDGE.qty }} />
-              {fabricLossOn ? <col style={{ width: EDGE.pct }} /> : null}
-              {fabricWasteOn ? <col style={{ width: EDGE.pct }} /> : null}
-              <col style={{ width: EDGE.total }} />
-              {readOnly ? null : <col style={{ width: EDGE.del }} />}
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={thCls}>S.No</th>
-                <th className={thCls}>Fabric name</th>
-                <th className={thCls}>Fabric category</th>
-                <th className={thCls}>Fabric type</th>
-                {unionParamCols.map((p) => (
-                  <th key={paramKey(p)} className={paramThCls}>{String(p.label)}</th>
-                ))}
-                <th className={thCenterCls}>UOM</th>
-                <th className={qtyHeadCls}>Cons / pc</th>
-                {fabricLossOn ? <th className={lossHeadCls} title="Process loss %">PL%</th> : null}
-                {fabricWasteOn ? <th className={wasteHeadCls} title="Wastage %">W%</th> : null}
-                <th className={qtyHeadCls}>Total cons</th>
-                {readOnly ? null : <th className={deleteHeadCls} />}
-              </tr>
-            </thead>
-            <tbody>
-              {fabrics.map((mat, idx) => {
-                const rowParams = paramsForMaterial(mat);
-                const rowKeys = new Set(rowParams.map(paramKey));
-                return (
-                  <tr key={mat.id} className="hover:bg-slate-50">
-                    <td className={tdCls}>
-                      <span className={snoCellClass}>{idx + 1}</span>
-                    </td>
-                    <td className={tdCls}>
-                      {readOnly ? (
-                        <TextCell value={mat.name} />
-                      ) : (
-                        <WrapTextarea
-                          value={mat.name}
-                          onChange={(next) => onUpdateMaterial?.(mat.id, 'name', next)}
-                          placeholder="Name"
-                        />
-                      )}
-                    </td>
-                    <td className={tdCls}>
-                      {readOnly ? (
-                        <TextCell value={mat.fabricCategory} />
-                      ) : (
-                        <CellSelect
-                          value={catalogMatch(categoryOptions, mat.fabricCategory || '')}
-                          onChange={(next) => onUpdateMaterial?.(mat.id, 'fabricCategory', next)}
-                          options={categoryOptions}
-                        />
-                      )}
-                    </td>
-                    <td className={tdCls}>
-                      {readOnly ? (
-                        <TextCell value={mat.type} />
-                      ) : (
-                        <CellSelect
-                          value={catalogMatch(typeOptions, mat.type || '')}
-                          onChange={(next) => onUpdateMaterial?.(mat.id, 'type', next)}
-                          options={typeOptions}
-                        />
-                      )}
-                    </td>
-                    {unionParamCols.map((p) => {
-                      const key = paramKey(p);
-                      const applies = rowKeys.has(key);
-                      return (
-                        <td key={key} className={tdCls}>
-                          {applies ? (
-                            <ParamInput mat={mat} def={p} onUpdateParam={onUpdateParam} readOnly={readOnly} />
-                          ) : (
-                            <span className={emptyCellClass}>—</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className={tdCls}>
-                      {readOnly ? (
-                        <TextCell value={mat.unit} className="text-center" />
-                      ) : (
-                        <CellSelect
-                          value={catalogMatch(fabricUomOptions, mat.unit || '')}
-                          onChange={(next) => onUpdateMaterial?.(mat.id, 'unit', next)}
-                          options={fabricUomOptions}
-                          placeholder="UOM"
-                          align="center"
-                        />
-                      )}
-                    </td>
-                    <td className={qtyCellCls}>
-                      {readOnly ? (
-                        <span className={qtyDisplayClass}>
-                          {mat.avgCons ? formatDecimal(Number(mat.avgCons)) : <span className="text-blue-300">—</span>}
-                        </span>
-                      ) : (
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className={qtyInputClass}
-                          value={mat.avgCons || ''}
-                          onChange={(e) => onUpdateMaterial?.(mat.id, 'avgCons', parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                        />
-                      )}
-                    </td>
-                    {fabricLossOn ? (
-                      <td className={lossCellCls}>
-                        <PctCell
-                          value={mat.processLossPct}
-                          readOnly={readOnly}
-                          tone="amber"
-                          onChange={(next) => onUpdateMaterial?.(mat.id, 'processLossPct', next)}
-                        />
-                      </td>
-                    ) : null}
-                    {fabricWasteOn ? (
-                      <td className={wasteCellCls}>
-                        <PctCell
-                          value={mat.wastagePct}
-                          readOnly={readOnly}
-                          tone="rose"
-                          onChange={(next) => onUpdateMaterial?.(mat.id, 'wastagePct', next)}
-                        />
-                      </td>
-                    ) : null}
-                    <td className={qtyCellCls}>
-                      <span className={qtyDisplayClass}>
-                        {formatTotalQty(Number(mat.avgCons) || 0, adjustedQty, fabricLossOn ? mat.processLossPct : null, fabricWasteOn ? mat.wastagePct : null)}
-                      </span>
-                    </td>
-                    {readOnly ? null : (
-                      <DeleteCell label="Remove fabric" onClick={() => onRemoveMaterial?.(mat.id)} />
-                    )}
-                  </tr>
-                );
-              })}
-              {fabrics.length === 0 && (
+
+        {/* ── LINKED fabric rows (same table chrome as Trims) ── */}
+        {linked.length > 0 && (
+          <RoundedTable>
+            <table className="w-full table-fixed border-collapse text-left">
+              <colgroup>
+                <col style={{ width: fabricW.sno }} />
+                <col style={{ width: fabricW.name }} />
+                <col style={{ width: fabricW.placement }} />
+                <col style={{ width: fabricW.color }} />
+                <col style={{ width: fabricW.ref }} />
+                <col style={{ width: fabricW.uom }} />
+                <col style={{ width: fabricW.qty }} />
+                {fabricLossOn ? <col style={{ width: EDGE.pct }} /> : null}
+                {fabricWasteOn ? <col style={{ width: EDGE.pct }} /> : null}
+                <col style={{ width: fabricW.total }} />
+              </colgroup>
+              <thead>
                 <tr>
-                  <td colSpan={fabricColSpan} className="text-center py-6 text-xs text-slate-400 italic">
-                    {readOnly
-                      ? 'No fabrics for this color.'
-                      : 'No fabrics. Add one, pick a category, then a fabric type to load its parameters.'}
+                  <th className={thCls}>S.No</th>
+                  <th className={thCls}>Fabric</th>
+                  <th className={thCls}>Placement</th>
+                  <th className={thCls}>Fabric colour</th>
+                  <th className={thCls}>Colour ref</th>
+                  <th className={thCenterCls}>UOM</th>
+                  <th className={qtyHeadCls}>Cons / pc</th>
+                  {fabricLossOn ? <th className={lossHeadCls} title="Process loss %">PL%</th> : null}
+                  {fabricWasteOn ? <th className={wasteHeadCls} title="Wastage %">W%</th> : null}
+                  <th className={qtyHeadCls}>Total cons</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linked.map((mat, idx) => {
+                  const fabric = mat.fabric ?? null;
+                  const fabricLabel = fabric
+                    ? `${fabric.code} · ${fabric.name}`
+                    : mat.name || '—';
+                  const specLine = fabric ? fabricSpecLine(fabric) : '';
+                  const uom = mat.unit ? uomLabel(mat.unit) : '—';
+                  const isFixedColor =
+                    fabric?.color_method === 'yarn_dyed' ||
+                    fabric?.color_method === 'melange' ||
+                    fabric?.color_method === 'print';
+                  const hasContrast =
+                    Boolean(mat.fabricColor) &&
+                    mat.fabricColor!.trim().toLowerCase() !== colorway.name.trim().toLowerCase();
+                  const styleCons = mat.lineKey ? (styleLineConsByKey.get(mat.lineKey) ?? null) : null;
+                  const showReset = mat.consOverridden === true && styleCons != null && !readOnly;
+                  const consAmbered = mat.consOverridden === true;
+
+                  return (
+                    <tr key={mat.id} className="hover:bg-slate-50">
+                      {/* S.No */}
+                      <td className={tdCls}>
+                        <span className={snoCellClass}>{idx + 1}</span>
+                      </td>
+                      {/* Fabric */}
+                      <td className={tdCls}>
+                        <span className="block pl-2.5 pr-2 py-1 text-[11px] font-semibold text-slate-800 leading-snug">
+                          {fabricLabel}
+                        </span>
+                        {specLine ? (
+                          <span className="block pl-2.5 pr-2 pb-1 text-[10px] text-slate-400 leading-snug whitespace-pre-wrap break-words">
+                            {specLine}
+                          </span>
+                        ) : null}
+                      </td>
+                      {/* Placement (read-only) */}
+                      <td className={tdCls}>
+                        <TextCell value={mat.fabricCategory} />
+                      </td>
+                      {/* Fabric colour */}
+                      <td className={tdCls}>
+                        {isFixedColor ? (
+                          <span className="block pl-2.5 pr-2 py-0 text-[11px] text-slate-500 leading-8 italic">
+                            {fabric?.design_ref || '—'}
+                          </span>
+                        ) : readOnly ? (
+                          <span className="block pl-2.5 pr-2 py-0 text-[11px] font-medium text-slate-700 leading-8">
+                            {mat.fabricColor || <span className="text-slate-300">{colorway.name}</span>}
+                            {hasContrast && (
+                              <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                Contrast
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-1 pl-2 pr-1 min-h-8">
+                            <input
+                              type="text"
+                              className="flex-1 min-w-0 text-[11px] font-medium bg-transparent border-0 outline-none text-slate-700 placeholder:text-slate-300"
+                              value={mat.fabricColor ?? ''}
+                              placeholder={colorway.name}
+                              onChange={(e) => onUpdateMaterial?.(mat.id, 'fabricColor', e.target.value || null)}
+                            />
+                            {hasContrast && (
+                              <span className="shrink-0 inline-flex items-center px-1.5 py-0 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                Contrast
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      {/* Colour ref */}
+                      <td className={tdCls}>
+                        {readOnly ? (
+                          <TextCell value={mat.fabricColorRef} />
+                        ) : (
+                          <WrapTextarea
+                            value={mat.fabricColorRef ?? ''}
+                            onChange={(next) => onUpdateMaterial?.(mat.id, 'fabricColorRef', next || null)}
+                            placeholder="Ref"
+                          />
+                        )}
+                      </td>
+                      {/* UOM (read-only) */}
+                      <td className={tdCls}>
+                        <TextCell value={uom} className="text-center" />
+                      </td>
+                      {/* Cons/pc */}
+                      <td className={consAmbered ? 'border-b border-slate-100 p-0 bg-amber-50 text-center align-top overflow-hidden' : qtyCellCls}>
+                        {readOnly ? (
+                          <span className={`${qtyDisplayClass} ${consAmbered ? 'text-amber-800' : ''}`}>
+                            {mat.avgCons ? formatDecimal(Number(mat.avgCons)) : <span className="text-blue-300">—</span>}
+                          </span>
+                        ) : (
+                          <div className="flex items-center min-h-8">
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              className={`${qtyInputClass} flex-1 ${consAmbered ? 'text-amber-800' : ''}`}
+                              value={mat.avgCons || ''}
+                              onChange={(e) => {
+                                onUpdateMaterial?.(mat.id, 'avgCons', parseFloat(e.target.value) || 0);
+                                onUpdateMaterial?.(mat.id, 'consOverridden', true);
+                              }}
+                              placeholder="0.00"
+                            />
+                            {showReset && (
+                              <button
+                                type="button"
+                                title="Reset to style line default"
+                                onClick={() => {
+                                  onUpdateMaterial?.(mat.id, 'avgCons', styleCons!);
+                                  onUpdateMaterial?.(mat.id, 'consOverridden', false);
+                                }}
+                                className="shrink-0 px-1 text-amber-700 hover:text-amber-900"
+                              >
+                                <RotateCcw size={11} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      {fabricLossOn ? (
+                        <td className={lossCellCls}>
+                          <PctCell value={mat.processLossPct} readOnly tone="amber" />
+                        </td>
+                      ) : null}
+                      {fabricWasteOn ? (
+                        <td className={wasteCellCls}>
+                          <PctCell value={mat.wastagePct} readOnly tone="rose" />
+                        </td>
+                      ) : null}
+                      {/* Total cons */}
+                      <td className={qtyCellCls}>
+                        <span className={qtyDisplayClass}>
+                          {formatDecimal(
+                            requiredQty(
+                              Number(mat.avgCons) || 0,
+                              adjustedQty,
+                              mat.processLossPct,
+                              mat.wastagePct,
+                            ),
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {linked.length === 0 && (
+                  <tr>
+                    <td colSpan={linkedColSpan} className="text-center py-6 text-xs text-slate-400 italic">
+                      No linked fabrics for this color.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </RoundedTable>
+        )}
+
+        {linked.length === 0 && legacy.length === 0 && !readOnly && (
+          <RoundedTable>
+            <table className="w-full table-fixed border-collapse text-left">
+              <tbody>
+                <tr>
+                  <td className="text-center py-6 text-xs text-slate-400 italic">
+                    Add fabric lines under Style Fabrics above, then set colour and cons here.
                   </td>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </RoundedTable>
+              </tbody>
+            </table>
+          </RoundedTable>
+        )}
+
+        {/* ── LEGACY fabric rows (no fabricId) ── */}
+        {legacy.length > 0 && (
+          <RoundedTable
+            footer={undefined /* No Add Fabric button when material module ON */}
+          >
+            <table className="w-full table-fixed border-collapse text-left">
+              <colgroup>
+                <col style={{ width: EDGE.sno }} />
+                <col style={{ width: EDGE.name }} />
+                <col />
+                <col />
+                {unionParamCols.map((p) => (
+                  <col key={paramKey(p)} />
+                ))}
+                <col style={{ width: EDGE.uom }} />
+                <col style={{ width: EDGE.qty }} />
+                {fabricLossOn ? <col style={{ width: EDGE.pct }} /> : null}
+                {fabricWasteOn ? <col style={{ width: EDGE.pct }} /> : null}
+                <col style={{ width: EDGE.total }} />
+                {readOnly ? null : <col style={{ width: EDGE.del }} />}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className={thCls}>S.No</th>
+                  <th className={thCls}>Fabric name</th>
+                  <th className={thCls}>Fabric category</th>
+                  <th className={thCls}>Fabric type</th>
+                  {unionParamCols.map((p) => (
+                    <th key={paramKey(p)} className={paramThCls}>{String(p.label)}</th>
+                  ))}
+                  <th className={thCenterCls}>UOM</th>
+                  <th className={qtyHeadCls}>Cons / pc</th>
+                  {fabricLossOn ? <th className={lossHeadCls} title="Process loss %">PL%</th> : null}
+                  {fabricWasteOn ? <th className={wasteHeadCls} title="Wastage %">W%</th> : null}
+                  <th className={qtyHeadCls}>Total cons</th>
+                  {readOnly ? null : <th className={deleteHeadCls} />}
+                </tr>
+              </thead>
+              <tbody>
+                {legacy.map((mat, idx) => {
+                  const rowParams = paramsForMaterial(mat);
+                  const rowKeys = new Set(rowParams.map(paramKey));
+                  return (
+                    <tr key={mat.id} className="hover:bg-slate-50">
+                      <td className={tdCls}>
+                        <span className={snoCellClass}>{idx + 1}</span>
+                      </td>
+                      <td className={tdCls}>
+                        {readOnly ? (
+                          <div>
+                            <TextCell value={mat.name} />
+                            <span className="ml-2 inline-flex items-center px-1.5 py-0 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              Not linked to fabric master
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <WrapTextarea
+                              value={mat.name}
+                              onChange={(next) => onUpdateMaterial?.(mat.id, 'name', next)}
+                              placeholder="Name"
+                            />
+                            <span className="inline-flex items-center mx-2.5 mb-1 px-1.5 py-0 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              Not linked to fabric master
+                            </span>
+                          </>
+                        )}
+                      </td>
+                      <td className={tdCls}>
+                        {readOnly ? (
+                          <TextCell value={mat.fabricCategory} />
+                        ) : (
+                          <CellSelect
+                            value={catalogMatch(categoryOptions, mat.fabricCategory || '')}
+                            onChange={(next) => onUpdateMaterial?.(mat.id, 'fabricCategory', next)}
+                            options={categoryOptions}
+                          />
+                        )}
+                      </td>
+                      <td className={tdCls}>
+                        {readOnly ? (
+                          <TextCell value={mat.type} />
+                        ) : (
+                          <CellSelect
+                            value={catalogMatch(typeOptions, mat.type || '')}
+                            onChange={(next) => onUpdateMaterial?.(mat.id, 'type', next)}
+                            options={typeOptions}
+                          />
+                        )}
+                      </td>
+                      {unionParamCols.map((p) => {
+                        const key = paramKey(p);
+                        const applies = rowKeys.has(key);
+                        return (
+                          <td key={key} className={tdCls}>
+                            {applies ? (
+                              <ParamInput mat={mat} def={p} onUpdateParam={onUpdateParam} readOnly={readOnly} />
+                            ) : (
+                              <span className={emptyCellClass}>—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className={tdCls}>
+                        {readOnly ? (
+                          <TextCell value={mat.unit} className="text-center" />
+                        ) : (
+                          <CellSelect
+                            value={catalogMatch(fabricUomOptions, mat.unit || '')}
+                            onChange={(next) => onUpdateMaterial?.(mat.id, 'unit', next)}
+                            options={fabricUomOptions}
+                            placeholder="UOM"
+                            align="center"
+                          />
+                        )}
+                      </td>
+                      <td className={qtyCellCls}>
+                        {readOnly ? (
+                          <span className={qtyDisplayClass}>
+                            {mat.avgCons ? formatDecimal(Number(mat.avgCons)) : <span className="text-blue-300">—</span>}
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className={qtyInputClass}
+                            value={mat.avgCons || ''}
+                            onChange={(e) => onUpdateMaterial?.(mat.id, 'avgCons', parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                          />
+                        )}
+                      </td>
+                      {fabricLossOn ? (
+                        <td className={lossCellCls}>
+                          <PctCell
+                            value={mat.processLossPct}
+                            readOnly={readOnly}
+                            tone="amber"
+                            onChange={(next) => onUpdateMaterial?.(mat.id, 'processLossPct', next)}
+                          />
+                        </td>
+                      ) : null}
+                      {fabricWasteOn ? (
+                        <td className={wasteCellCls}>
+                          <PctCell
+                            value={mat.wastagePct}
+                            readOnly={readOnly}
+                            tone="rose"
+                            onChange={(next) => onUpdateMaterial?.(mat.id, 'wastagePct', next)}
+                          />
+                        </td>
+                      ) : null}
+                      <td className={qtyCellCls}>
+                        <span className={qtyDisplayClass}>
+                          {formatTotalQty(Number(mat.avgCons) || 0, adjustedQty, fabricLossOn ? mat.processLossPct : null, fabricWasteOn ? mat.wastagePct : null)}
+                        </span>
+                      </td>
+                      {readOnly ? null : (
+                        <DeleteCell label="Remove fabric" onClick={() => onRemoveMaterial?.(mat.id)} />
+                      )}
+                    </tr>
+                  );
+                })}
+                {legacy.length === 0 && (
+                  <tr>
+                    <td colSpan={legacyColSpan} className="text-center py-6 text-xs text-slate-400 italic">
+                      {readOnly ? 'No fabrics for this color.' : 'No legacy fabric rows.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </RoundedTable>
+        )}
+
+        {/* Empty state when both linked and legacy are empty */}
+        {linked.length === 0 && legacy.length === 0 && readOnly && (
+          <p className="text-center py-6 text-xs text-slate-400 italic">No fabrics for this color.</p>
+        )}
       </div>
 
       <div className="px-4 pb-4 space-y-3">

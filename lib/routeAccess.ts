@@ -1,5 +1,6 @@
 import { RoutePath } from '../types';
 import { findModuleRoute, moduleKeyForRoute } from '../core/modules/registry';
+import { mmFeatureForRoute } from './routeMap';
 
 /** Desktop roles with full read/write access in this app. */
 export const DESKTOP_ADMIN_ROLES = ['admin', 'superadmin'] as const;
@@ -42,6 +43,9 @@ const ADMIN_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.WORK_CENTER_PROCESS_FLOWS,
   RoutePath.MATERIAL_MANAGEMENT,
   RoutePath.WORK_CENTER_MATERIAL,
+  RoutePath.MATERIAL_FABRICS,
+  RoutePath.MATERIAL_FABRIC_DETAIL,
+  RoutePath.MATERIAL_FABRICS_SETUP,
   RoutePath.MATERIAL_MILL,
   RoutePath.MATERIAL_MILL_BATCHES,
   RoutePath.MATERIAL_MILL_BATCH_NEW,
@@ -50,6 +54,7 @@ const ADMIN_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.MATERIAL_MILL_STYLES,
   RoutePath.MATERIAL_MILL_HISTORY,
   RoutePath.MATERIAL_MILL_STOCK,
+  RoutePath.MATERIAL_MILL_PROCESS_SEND,
   RoutePath.MATERIAL_MILL_LINE,
   RoutePath.MATERIAL_MILL_ASSIGN,
   RoutePath.MATERIAL_MILL_DISPATCH,
@@ -127,11 +132,19 @@ const VIEWER_ROUTE_PREFIXES = [
   '#/mm/',
 ] as const;
 
+export interface MmFeatureFlags {
+  fabric_warehouse: boolean;
+  fabric_mill: boolean;
+  trims: boolean;
+}
+
 export interface RouteAccessContext {
   /** factory_modules.enabled by key */
   modulesEnabled?: Partial<Record<string, boolean>>;
   /** profiles.assigned_apps permission keys */
   assignedApps?: readonly string[];
+  /** Material sub-switches. Absent until mm_get_material_features has loaded. */
+  mmFeatures?: MmFeatureFlags;
 }
 
 export function isDesktopAdminRole(role: string | null | undefined): role is DesktopAdminRole {
@@ -177,6 +190,33 @@ function hasAssignedPermission(
   return assignedApps.includes(permission);
 }
 
+function mmFeatureEnabled(flags: MmFeatureFlags, route: string): boolean {
+  const feature = mmFeatureForRoute(route);
+  if (!feature) return true;
+  if (feature === 'fabric') return flags.fabric_warehouse || flags.fabric_mill;
+  return flags[feature];
+}
+
+function passesMmFeature(route: string, ctx?: RouteAccessContext): boolean {
+  if (!ctx?.mmFeatures) return true;
+  return mmFeatureEnabled(ctx.mmFeatures, route);
+}
+
+export function mmFeatureDeniedLabel(
+  role: string | null | undefined,
+  route: string,
+  ctx?: RouteAccessContext,
+): string | null {
+  if (!ctx?.mmFeatures || mmFeatureEnabled(ctx.mmFeatures, route)) return null;
+  const withoutFeatures: RouteAccessContext = { ...ctx, mmFeatures: undefined };
+  if (!canAccessRoute(role, route, withoutFeatures)) return null;
+  const feature = mmFeatureForRoute(route);
+  if (feature === 'fabric_mill') return 'Fabric mill';
+  if (feature === 'trims') return 'Trims warehouse';
+  if (feature === 'fabric') return 'Fabric';
+  return 'Fabric warehouse';
+}
+
 function passesModuleGates(route: string, ctx?: RouteAccessContext): boolean {
   const moduleHit = findModuleRoute(route);
   if (!moduleHit) return true;
@@ -216,6 +256,29 @@ function passesLegacyRoleCheck(role: string | null | undefined, route: string): 
   return false;
 }
 
+const FABRIC_MASTER_READ_PERMS = ['mm_inventory', 'mm_roll_entry', 'mm_config'] as const;
+
+function isFabricMasterRoute(route: string): boolean {
+  return route === RoutePath.MATERIAL_FABRICS
+    || route === RoutePath.MATERIAL_FABRIC_DETAIL
+    || route === RoutePath.MATERIAL_FABRICS_SETUP;
+}
+
+/** List/detail: admin or fabric ops apps. Setup: admin / superadmin / mm_config only. */
+function passesFabricMasterAccess(
+  role: string | null | undefined,
+  route: string,
+  ctx?: RouteAccessContext,
+): boolean {
+  if (!ctx?.modulesEnabled?.material) return false;
+  if (route === RoutePath.MATERIAL_FABRICS_SETUP) {
+    if (isDesktopAdminRole(role)) return true;
+    return hasAssignedPermission(ctx.assignedApps, 'mm_config');
+  }
+  if (isDesktopAdminRole(role)) return true;
+  return FABRIC_MASTER_READ_PERMS.some((key) => hasAssignedPermission(ctx.assignedApps, key));
+}
+
 /**
  * Route access = existing role checks (untouched for legacy routes)
  * AND module entitlement (when route belongs to an entitled module)
@@ -228,9 +291,14 @@ export function canAccessRoute(
   route: string,
   ctx?: RouteAccessContext,
 ): boolean {
+  if (isFabricMasterRoute(route)) {
+    if (!passesFabricMasterAccess(role, route, ctx)) return false;
+    return passesMmFeature(route, ctx);
+  }
   if (!passesLegacyRoleCheck(role, route)) return false;
   if (!passesModuleGates(route, ctx)) return false;
   if (!passesPermissionGate(role, route, ctx)) return false;
+  if (!passesMmFeature(route, ctx)) return false;
   return true;
 }
 

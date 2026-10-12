@@ -12,14 +12,15 @@ import {
     shouldSkipOrderDraftHydrate,
 } from '../../lib/orderDraftStorage';
 import { useOrderFormSettings } from '../../lib/queries/settingsSlices';
-import { RoutePath, ORDER_TYPE_LABELS } from '../../types';
-import { Save, X, Trash2, CheckCircle2, AlertTriangle, Loader2, Edit2 } from 'lucide-react';
+import { RoutePath } from '../../types';
+import { Trash2, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { OrderMasterDetailSkeleton } from '../../components/production/OrderMasterDetailSkeleton';
 import { ShipmentPlanPanel, type ShipmentPlanPanelHandle } from '../../components/production/ShipmentPlanPanel';
 import { Button, Card, Modal } from '../../components/ui';
 import { UnsavedChangesModal } from '../../components/settings/UnsavedChangesModal';
 import { DesktopWriteGate } from '../../components/DesktopWriteGate';
 import { PageShell } from '../../components/layout/PageShell';
+import { usePageHeader } from '../../components/Breadcrumb';
 import { daysBetween, formatDateDDMMYYYY, todayIso } from '../../lib/orderDateUtils';
 import { previewInternalOrderNo } from '../../lib/internalOrderNo';
 import { supabase } from '../../lib/supabase';
@@ -58,12 +59,26 @@ import {
     validateShipmentPlanQty,
 } from '../../lib/orderShipmentPlan';
 import { OrderHeaderSection } from './create-order/components/OrderHeaderSection';
+import { OrderValidationSummary } from './create-order/components/OrderValidationSummary';
 import { ColorwayWorkspaceSection } from './create-order/components/ColorwayWorkspaceSection';
 import { ShipmentPlanSection } from './create-order/components/ShipmentPlanSection';
 import { useHeaderReducer } from './create-order/hooks/useHeaderReducer';
 import { useColorwayReducer } from './create-order/hooks/useColorwayReducer';
 import { useShipmentReducer } from './create-order/hooks/useShipmentReducer';
 import { useValidationReducer } from './create-order/hooks/useValidationReducer';
+import { useModuleEnabled } from '../../core/modules/useModuleEnabled';
+import {
+    type OrderWizardStage,
+    isMaterialsStepFilled,
+    isShipmentsStepFilled,
+    isStyleStepFilled,
+    resolveOrderWizardStage,
+} from './create-order/orderWizardStages';
+import { OrderWizardFooter } from './create-order/components/OrderWizardFooter';
+import { MaterialsStageSection } from './create-order/components/MaterialsStageSection';
+import { OrderReviewSummary } from './create-order/components/OrderReviewSummary';
+import { groupLegacyFabricLines } from '../../lib/styleFabricLines';
+import { reloadOrderFromDb } from '../../lib/reloadOrderFromDb';
 import type { StyleOrder } from '../../types';
 
 type OrderDraftPayload = {
@@ -106,7 +121,24 @@ export const CreateOrderMaster: React.FC = () => {
     const draftOrderIdRef = useRef<string | null>(null);
     const shipmentPlanRef = useRef<ShipmentPlanPanelHandle>(null);
 
+    const materialOn = useModuleEnabled('material');
+    const styleFabricsRef = useRef<HTMLDivElement | null>(null);
+
     const { state: header, dispatch: headerDispatch } = useHeaderReducer();
+    usePageHeader(
+        isEditingExistingOrder
+            ? {
+                title: 'Edit Order',
+                subtitle: header.styleName.trim()
+                    ? header.styleName.trim()
+                    : 'Update this production order',
+            }
+            : {
+                title: 'Create Order',
+                subtitle: 'Create a new production order',
+            },
+        isEditingExistingOrder ? `edit:${editOrderId}:${header.styleName}` : 'create',
+    );
     const { state: colorway, dispatch: colorwayDispatch } = useColorwayReducer();
     const { state: shipment, dispatch: shipmentDispatch } = useShipmentReducer();
     const { state: errors, dispatch: validationDispatch } = useValidationReducer();
@@ -118,6 +150,8 @@ export const CreateOrderMaster: React.FC = () => {
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [showDiscardDialog, setShowDiscardDialog] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [fabricWarnings, setFabricWarnings] = useState<string[]>([]);
+    const [stage, setStage] = useState<OrderWizardStage>(() => resolveOrderWizardStage(routeParams?.stage));
 
     const headerDispatchWithUnsaved = React.useCallback(
         (action: Parameters<typeof headerDispatch>[0]) => {
@@ -625,30 +659,36 @@ export const CreateOrderMaster: React.FC = () => {
         };
     };
 
-    const openColorPage = (opts: { addNew?: boolean; colorId?: string }) => {
+    const changeStage = (next: OrderWizardStage) => {
+        setStage(next);
+    };
+
+    const softValidateStyle = (): boolean => {
+        if (!header.styleName.trim()) {
+            showNotification('Style name is required', 'error');
+            return false;
+        }
+        if (!header.styleRef.trim()) {
+            showNotification('Style reference is required', 'error');
+            return false;
+        }
+        if (!header.selectedBuyer) {
+            showNotification('Buyer is required', 'error');
+            return false;
+        }
         if (!hasSizeContext) {
-            showNotification('Select a size group first', 'error');
-            return;
+            showNotification('Size group is required', 'error');
+            return false;
         }
-
-        const draft = constructOrderObject();
-        setWipOrder(draft);
-
-        if (factoryId && !isEditingExistingOrder) {
-            void set(orderDraftStorageKey(factoryId), {
-                id: draft.id,
-                header: (({ factoryCode: _, ...rest }) => rest)(header),
-                colorways: draft.colorways,
-                shipmentPlan: shipment.plan,
-                epoch: currentOrderDraftEpoch(),
-            });
+        if (colorway.colorways.length === 0 || !colorway.colorways.some((c) => c.name.trim())) {
+            showNotification('Add at least one colour with a name', 'error');
+            return false;
         }
-
-        const params: Record<string, string> = {};
-        if (opts.addNew || !opts.colorId) params.add = '1';
-        else params.colorId = opts.colorId;
-        if (isEditingExistingOrder && editOrderId) params.id = editOrderId;
-        navigate(RoutePath.CREATE_ORDER_COLOR, params);
+        if (colorway.colorways.every((c) => sumSizeOrderQty(c.sizes) === 0)) {
+            showNotification('Enter order quantities for at least one colour', 'error');
+            return false;
+        }
+        return true;
     };
 
     const validateHeader = async () => {
@@ -680,6 +720,7 @@ export const CreateOrderMaster: React.FC = () => {
 
     const handleConfirmOrder = async (options?: { silent?: boolean }): Promise<boolean> => {
         if (saving) return false;
+        setFabricWarnings([]);
         if (!(await validateHeader())) {
             showNotification('Please fill in all required fields highlighted in red.', 'error');
             return false;
@@ -733,6 +774,30 @@ export const CreateOrderMaster: React.FC = () => {
             }
         }
 
+        // Material module — plan fabrics must have a SKU picked
+        if (materialOn) {
+            const planFabrics = (colorway.materialPlan ?? []).filter((p) => p.kind === 'Fabric');
+            for (let i = 0; i < planFabrics.length; i++) {
+                if (!planFabrics[i].fabricId) {
+                    showNotification(`Fabric line ${i + 1}: pick a fabric`, 'error');
+                    changeStage('materials');
+                    styleFabricsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    return false;
+                }
+            }
+            const legacyGroups = groupLegacyFabricLines(colorway.colorways);
+            const legacyCount = legacyGroups.reduce((n, g) => n + g.colorwayNames.length, 0);
+            setFabricWarnings(
+                legacyCount > 0
+                    ? [
+                        `${legacyCount} legacy fabric row${legacyCount === 1 ? '' : 's'} not linked to the fabric master`,
+                      ]
+                    : [],
+            );
+        } else {
+            setFabricWarnings([]);
+        }
+
         setSaving(true);
         try {
             const finalOrder = orderForValidation;
@@ -742,11 +807,22 @@ export const CreateOrderMaster: React.FC = () => {
             if (!saved) return false;
             const newOrderId = isEditingExistingOrder ? editOrderId : finalOrder.id;
 
+            // Reload from DB so reqQty reflects server-computed total_cons
+            let colorwaysForHydrate = finalOrder.colorways;
+            if (factoryId && newOrderId) {
+                try {
+                    const reloaded = await reloadOrderFromDb(factoryId, newOrderId);
+                    if (reloaded) colorwaysForHydrate = reloaded.colorways;
+                } catch {
+                    // Non-critical: keep draft colorways
+                }
+            }
+
             colorwayDispatch({
                 type: 'hydrate',
-                colorways: finalOrder.colorways,
+                colorways: colorwaysForHydrate,
                 selectedColorId: colorway.selectedColorId,
-                snapshot: finalOrder.colorways,
+                snapshot: colorwaysForHydrate,
             });
             headerDispatch({
                 type: 'setSizeGroup',
@@ -773,7 +849,16 @@ export const CreateOrderMaster: React.FC = () => {
             }
             return true;
         } catch (error) {
-            showNotification('Failed to save order. Please try again.', 'error');
+            if (error instanceof Error && error.message.startsWith('LINE_MISMATCH:')) {
+                showNotification(
+                    'A fabric line differs between colours. Edit it from Style Fabrics.',
+                    'error',
+                );
+                changeStage('materials');
+                styleFabricsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                showNotification('Failed to save order. Please try again.', 'error');
+            }
             return false;
         } finally {
             setSaving(false);
@@ -918,13 +1003,229 @@ export const CreateOrderMaster: React.FC = () => {
         [header.jobCardDate, shipment.plan],
     );
 
-    const estProdMins = Number(totalAdjustedQty) * (Number(header.sewingSam) || 0);
-    const estProdHours = estProdMins > 0 ? (estProdMins / 60).toFixed(1) : '0';
-
     const shipmentPlanTotal = useMemo(() => planTotalQty(shipment.plan), [shipment.plan]);
     const shipmentBalance = useMemo(
         () => planBalanceTotal(shipment.plan, colorway.colorways, displaySizes),
         [shipment.plan, colorway.colorways, displaySizes],
+    );
+
+    // ── shared summary card content (rendered inside every stage footer) ────────
+    const completedStages = useMemo(() => {
+        const done = new Set<OrderWizardStage>();
+        if (isStyleStepFilled({
+            styleName: header.styleName,
+            styleRef: header.styleRef,
+            buyerId: header.selectedBuyer,
+            hasSizeContext,
+            colorways: colorway.colorways.map((c) => ({
+                name: c.name,
+                orderQty: sumSizeOrderQty(c.sizes),
+            })),
+        })) done.add('style');
+        if (isMaterialsStepFilled(colorway.materialPlan ?? [])) done.add('materials');
+        if (isShipmentsStepFilled(shipment.plan.lines.map((line) => ({
+            active: isActiveShipmentLine(line),
+            shipmentDate: line.shipmentDate,
+            qty: rowTotal(line),
+        })))) done.add('shipments');
+        return done;
+    }, [
+        header.styleName,
+        header.styleRef,
+        header.selectedBuyer,
+        hasSizeContext,
+        colorway.colorways,
+        colorway.materialPlan,
+        shipment.plan.lines,
+    ]);
+
+    const summarySubtitle =
+        colorway.colorways.length > 0 && totalOrderQty > 0
+            ? `${colorway.colorways.length} color${colorway.colorways.length !== 1 ? 's' : ''} · ${totalOrderQty.toLocaleString()} pcs order · ${totalAdjustedQty.toLocaleString()} pcs adjusted`
+            : 'Complete style details and add colours to continue';
+
+    const summaryAction = (
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${
+            colorway.colorways.length > 0 && totalOrderQty > 0
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+        }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${colorway.colorways.length > 0 && totalOrderQty > 0 ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+            {colorway.colorways.length > 0 && totalOrderQty > 0 ? 'Ready to save' : 'Incomplete'}
+        </span>
+    );
+
+    const summarySharedContent = (
+        <>
+            <div className="grid grid-cols-[repeat(6,minmax(0,1fr))] gap-3 pb-4 border-b border-slate-100 min-w-0">
+                <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Job no.</span>
+                    <span className="text-[1.05rem] font-extrabold text-slate-900 leading-tight truncate">{previewInternalNo || '—'}</span>
+                    <span className="text-[9px] text-slate-400 truncate">{header.styleName || 'New order'}</span>
+                </div>
+                <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Order Qty</span>
+                    <span className="text-[1.05rem] font-extrabold tabular-nums text-slate-900 leading-tight">{totalOrderQty.toLocaleString()} <span className="text-[10px] font-semibold text-slate-400">pcs</span></span>
+                    <span className="text-[9px] text-slate-400">{colorway.colorways.length} color{colorway.colorways.length !== 1 ? 's' : ''} · {displaySizes.length} sizes</span>
+                </div>
+                <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-blue-500">Adjusted Qty</span>
+                    <span className="text-[1.05rem] font-extrabold tabular-nums text-blue-900 leading-tight">{totalAdjustedQty.toLocaleString()} <span className="text-[10px] font-semibold text-blue-400">pcs</span></span>
+                    <span className="text-[9px] text-blue-400 truncate">
+                        {totalAllowancePct === 0
+                            ? 'No allowance'
+                            : [
+                                header.cuttingAllowance > 0 ? `Cut ${header.cuttingAllowance}%` : null,
+                                header.applyExtraAllowance && buyerExtraPct > 0 ? `Ship +${buyerExtraPct}%` : null,
+                              ].filter(Boolean).join(' · ')}
+                    </span>
+                </div>
+                <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-violet-500">Lead Days</span>
+                    <span className="text-[1.05rem] font-extrabold tabular-nums text-violet-900 leading-tight">
+                        {productionLeadDays != null ? productionLeadDays : '—'}
+                        <span className="text-[10px] font-semibold text-violet-400"> days</span>
+                    </span>
+                    <span className="text-[9px] text-violet-400 truncate">
+                        {overallLeadDays != null ? `${overallLeadDays}d order→ship` : 'No shipment date'}
+                    </span>
+                </div>
+                <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Shipment Plan Total</span>
+                    <span className="text-[1.05rem] font-extrabold tabular-nums text-slate-900 leading-tight">
+                        {shipmentPlanTotal.toLocaleString()} <span className="text-[10px] font-semibold text-slate-400">pcs</span>
+                    </span>
+                    <span className="text-[9px] text-slate-400">
+                        {shipment.plan.lines.length} line{shipment.plan.lines.length !== 1 ? 's' : ''}
+                    </span>
+                </div>
+                <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600">Shipment Balance</span>
+                    <span className="text-[1.05rem] font-extrabold tabular-nums text-amber-900 leading-tight">
+                        {shipmentBalance.toLocaleString()} <span className="text-[10px] font-semibold text-amber-500">pcs</span>
+                    </span>
+                    <span className="text-[9px] text-amber-600 truncate">Not yet in plan</span>
+                </div>
+            </div>
+
+            {(() => {
+                const today = new Date(); today.setHours(0,0,0,0);
+                const msPerDay = 86400000;
+                type Milestone = {
+                    label: string;
+                    sublabel?: string;
+                    date: string;
+                    color: 'slate' | 'blue' | 'violet' | 'amber' | 'grey';
+                    rescheduled?: boolean;
+                };
+                const milestones: Milestone[] = [];
+                if (header.orderDate) milestones.push({ label: 'Order', sublabel: formatDateDDMMYYYY(header.orderDate), date: header.orderDate, color: 'slate' });
+                if (header.jobCardDate) milestones.push({ label: 'Job Card', sublabel: formatDateDDMMYYYY(header.jobCardDate), date: header.jobCardDate, color: 'violet' });
+
+                const activeShipDates = [...new Set(
+                    shipment.plan.lines
+                        .filter(isActiveShipmentLine)
+                        .map((l) => l.shipmentDate)
+                        .filter(Boolean),
+                )].sort();
+                const lastActiveDate = activeShipDates.at(-1) ?? '';
+
+                const shipDateMap = new Map<string, { activeQty: number; rescheduledQty: number }>();
+                for (const line of expandShipmentPlanLines(shipment.plan.lines)) {
+                    if (!line.shipmentDate) continue;
+                    const entry = shipDateMap.get(line.shipmentDate) ?? { activeQty: 0, rescheduledQty: 0 };
+                    const qty = rowTotal(line);
+                    if (isActiveShipmentLine(line)) entry.activeQty += qty;
+                    else if (line.status === 'rescheduled') entry.rescheduledQty += qty;
+                    shipDateMap.set(line.shipmentDate, entry);
+                }
+
+                let activeShipIdx = 0;
+                for (const d of [...shipDateMap.keys()].sort()) {
+                    const { activeQty, rescheduledQty } = shipDateMap.get(d)!;
+                    if (activeQty > 0) {
+                        activeShipIdx += 1;
+                        milestones.push({
+                            label: d === lastActiveDate ? 'Ex-Factory' : `Shipment ${activeShipIdx}`,
+                            sublabel: `${formatDateDDMMYYYY(d)}${activeQty > 0 ? ` · ${activeQty.toLocaleString()} pcs` : ''}`,
+                            date: d,
+                            color: d === lastActiveDate ? 'blue' : 'amber',
+                        });
+                    }
+                    if (rescheduledQty > 0) {
+                        milestones.push({
+                            label: 'Rescheduled',
+                            sublabel: `${formatDateDDMMYYYY(d)} · ${rescheduledQty.toLocaleString()} pcs`,
+                            date: d,
+                            color: 'grey',
+                            rescheduled: true,
+                        });
+                    }
+                }
+
+                if (milestones.length < 2) return (
+                    <div className="py-4 text-[10px] text-slate-400 italic text-center">
+                        Set order date and add shipment lines to see the timeline
+                    </div>
+                );
+
+                const nodeColors: Record<Milestone['color'], { dot: string; label: string; sub: string; connector: string }> = {
+                    slate:  { dot: 'bg-slate-400 ring-slate-200',  label: 'text-slate-600', sub: 'text-slate-400', connector: 'bg-slate-200' },
+                    violet: { dot: 'bg-violet-500 ring-violet-200', label: 'text-violet-700', sub: 'text-slate-400', connector: 'bg-slate-200' },
+                    amber:  { dot: 'bg-amber-400 ring-amber-200',  label: 'text-amber-700',  sub: 'text-slate-400', connector: 'bg-amber-100' },
+                    blue:   { dot: 'bg-blue-500 ring-blue-200',    label: 'text-blue-700',  sub: 'text-slate-400', connector: 'bg-blue-100' },
+                    grey:   { dot: 'bg-slate-300 ring-slate-100',  label: 'text-slate-400', sub: 'text-slate-400', connector: 'bg-slate-100' },
+                };
+
+                return (
+                    <div className="pt-4 w-full">
+                        <div className="flex items-start w-full">
+                            {milestones.map((m, idx) => {
+                                const isLast = idx === milestones.length - 1;
+                                const c = nodeColors[m.color];
+                                const mDate = new Date(m.date); mDate.setHours(0,0,0,0);
+                                const daysLeft = Math.round((mDate.getTime() - today.getTime()) / msPerDay);
+                                const spanDays = isLast ? 0 : (() => {
+                                    const next = new Date(milestones[idx+1].date); next.setHours(0,0,0,0);
+                                    return Math.max(1, Math.round((next.getTime() - mDate.getTime()) / msPerDay));
+                                })();
+                                return (
+                                    <div key={`${m.date}-${m.label}-${idx}`} className={`flex items-start ${isLast ? '' : 'flex-1'}`}>
+                                        <div className={`flex flex-col items-start w-full ${m.rescheduled ? 'opacity-60' : ''}`}>
+                                            <div className="flex items-center w-full">
+                                                <div className={`w-3 h-3 rounded-full ring-2 ring-offset-1 shrink-0 ${c.dot}`} />
+                                                {!isLast && (
+                                                    <div className="flex-1 flex flex-col justify-center min-w-0 mx-1">
+                                                        <div className={`h-0.5 w-full ${c.connector}`} />
+                                                        <span className="text-[8px] text-slate-400 tabular-nums text-center mt-0.5">{spanDays}d</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="mt-1.5 text-left" style={{ maxWidth: '7rem' }}>
+                                                <p className={`text-[9px] font-bold uppercase tracking-wide ${c.label}`}>{m.label}</p>
+                                                <p className={`text-[9px] ${c.sub} mt-0.5`}>{m.sublabel}</p>
+                                                {daysLeft >= 0
+                                                    ? <p className={`text-[8px] font-semibold mt-0.5 ${daysLeft <= 7 ? 'text-red-500' : daysLeft <= 21 ? 'text-amber-600' : 'text-slate-400'}`}>{daysLeft === 0 ? 'Today' : `${daysLeft}d left`}</p>
+                                                    : <p className="text-[8px] font-semibold mt-0.5 text-slate-300">{Math.abs(daysLeft)}d ago</p>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
+
+            <div className="border-t border-slate-100 mt-4" />
+
+            {fabricWarnings.length > 0 && (
+                <div className="pt-4">
+                    <OrderValidationSummary errors={{}} warnings={fabricWarnings} />
+                </div>
+            )}
+        </>
     );
 
     return (
@@ -944,286 +1245,158 @@ export const CreateOrderMaster: React.FC = () => {
 
             {!isOrderMissing && !isOrderLoading && (
             <div className={`grid grid-cols-12 gap-6 [&_input]:shadow-none [&_input]:text-[11px] [&_input]:py-1.5 [&_button[role=combobox]]:text-[11px] [&_label]:text-[11px] ${saving ? 'opacity-60 pointer-events-none' : ''}`}>
-                <OrderHeaderSection
-                    headerState={header}
-                    headerDispatch={headerDispatchWithUnsaved}
-                    errors={errors}
-                    buyers={buyers}
-                    sizeGroupDropdownOptions={sizeGroupDropdownOptions}
-                    garmentTypes={garmentTypes}
-                    merchantNames={merchantNames}
-                    seasons={seasons}
-                    previewInternalNo={previewInternalNo}
-                    onSizeGroupChange={handleSizeGroupChange}
-                />
 
-                <ColorwayWorkspaceSection
-                    colorwayState={colorway}
-                    colorwayDispatch={colorwayDispatchWithUnsaved}
-                    displaySizes={displaySizes}
-                    totalAllowancePct={totalAllowancePct}
-                    hasSizeContext={hasSizeContext}
-                    headerState={header}
-                    buyerExtraPct={buyerExtraPct}
-                    onOpenColorPage={openColorPage}
-                />
+                {/* ── STYLE stage ─────────────────────────────────────── */}
+                {stage === 'style' && (
+                    <>
+                        <OrderHeaderSection
+                            headerState={header}
+                            headerDispatch={headerDispatchWithUnsaved}
+                            errors={errors}
+                            buyers={buyers}
+                            sizeGroupDropdownOptions={sizeGroupDropdownOptions}
+                            garmentTypes={garmentTypes}
+                            merchantNames={merchantNames}
+                            seasons={seasons}
+                            previewInternalNo={previewInternalNo}
+                            onSizeGroupChange={handleSizeGroupChange}
+                        />
 
-                <ShipmentPlanSection
-                    shipmentState={shipment}
-                    shipmentDispatch={shipmentDispatchWithUnsaved}
-                    shipmentPlanRef={shipmentPlanRef}
-                    colorways={colorway.colorways}
-                    displaySizes={displaySizes}
-                    shipModes={shipModes}
-                    shipmentTypes={shipmentTypes}
-                    destinationCountries={destinationCountries}
-                    jobCardDate={header.jobCardDate || undefined}
-                    disabled={!hasSizeContext}
-                    requireDateChangeReason={isEditingExistingOrder}
-                />
+                        <ColorwayWorkspaceSection
+                            colorwayState={colorway}
+                            colorwayDispatch={colorwayDispatchWithUnsaved}
+                            displaySizes={displaySizes}
+                            totalAllowancePct={totalAllowancePct}
+                            hasSizeContext={hasSizeContext}
+                            headerState={header}
+                            buyerExtraPct={buyerExtraPct}
+                        />
 
-                <div className="col-span-12">
-                    <Card
-                        title="Order Summary"
-                        subtitle={
-                            colorway.colorways.length > 0 && totalOrderQty > 0
-                                ? `${colorway.colorways.length} color${colorway.colorways.length !== 1 ? 's' : ''} · ${totalOrderQty.toLocaleString()} pcs order · ${totalAdjustedQty.toLocaleString()} pcs adjusted`
-                                : 'Complete style details and add colours to continue'
-                        }
-                        className="shadow-sm border-slate-200"
-                        action={
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${
-                                colorway.colorways.length > 0 && totalOrderQty > 0
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${colorway.colorways.length > 0 && totalOrderQty > 0 ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                                {colorway.colorways.length > 0 && totalOrderQty > 0 ? 'Ready to save' : 'Incomplete'}
-                            </span>
-                        }
-                    >
-                        <div className="flex items-start justify-between pb-4 border-b border-slate-100 text-[11px]">
-                            {[
-                                { label: 'Job No.', val: previewInternalNo || '—' },
-                                { label: 'Buyer', val: selectedBuyerObj?.name || '—' },
-                                { label: 'Style', val: header.styleName || '—' },
-                                { label: 'PO', val: header.poNumber || '—' },
-                                { label: 'Type', val: ORDER_TYPE_LABELS[header.orderType] },
-                                { label: 'Season', val: header.season || '—', muted: !header.season },
-                                { label: 'Garment', val: header.garmentType || '—', muted: !header.garmentType },
-                                { label: 'Priority', val: header.priority.charAt(0).toUpperCase() + header.priority.slice(1) },
-                            ].map((item, i, arr) => (
-                                <React.Fragment key={item.label}>
-                                    <span className="flex flex-col items-start gap-0.5 px-2 min-w-0">
-                                        <span className="text-[8px] font-bold uppercase tracking-wide text-slate-400 whitespace-nowrap">{item.label}</span>
-                                        <span className={`font-semibold whitespace-nowrap ${item.muted ? 'text-slate-300' : 'text-slate-700'}`}>{item.val}</span>
-                                    </span>
-                                    {i < arr.length - 1 && <span className="text-slate-200 select-none shrink-0 self-stretch flex items-center px-0.5">|</span>}
-                                </React.Fragment>
-                            ))}
+                        <OrderWizardFooter
+                            stage={stage}
+                            completed={completedStages}
+                            onSelectStage={changeStage}
+                            showBack={false}
+                            nextLabel="Next"
+                            onNext={() => { if (softValidateStyle()) changeStage('materials'); }}
+                            summaryTitle="Order Summary"
+                            summarySubtitle={summarySubtitle}
+                            summaryAction={summaryAction}
+                        >
+                            {summarySharedContent}
+                        </OrderWizardFooter>
+                    </>
+                )}
+
+                {/* ── MATERIALS stage ──────────────────────────────────── */}
+                {stage === 'materials' && (
+                    <>
+                        <MaterialsStageSection
+                            colorwayState={colorway}
+                            colorwayDispatch={colorwayDispatchWithUnsaved}
+                            styleFabricsRef={styleFabricsRef}
+                        />
+
+                        <OrderWizardFooter
+                            stage={stage}
+                            completed={completedStages}
+                            onSelectStage={changeStage}
+                            showBack={true}
+                            onBack={() => changeStage('style')}
+                            nextLabel="Next"
+                            onNext={() => changeStage('shipments')}
+                            summaryTitle="Order Summary"
+                            summarySubtitle={summarySubtitle}
+                            summaryAction={summaryAction}
+                        >
+                            {summarySharedContent}
+                        </OrderWizardFooter>
+                    </>
+                )}
+
+                {/* ── SHIPMENTS stage ──────────────────────────────────── */}
+                {stage === 'shipments' && (
+                    <>
+                        <ShipmentPlanSection
+                            shipmentState={shipment}
+                            shipmentDispatch={shipmentDispatchWithUnsaved}
+                            shipmentPlanRef={shipmentPlanRef}
+                            colorways={colorway.colorways}
+                            displaySizes={displaySizes}
+                            shipModes={shipModes}
+                            shipmentTypes={shipmentTypes}
+                            destinationCountries={destinationCountries}
+                            jobCardDate={header.jobCardDate || undefined}
+                            disabled={!hasSizeContext}
+                            requireDateChangeReason={isEditingExistingOrder}
+                        />
+
+                        <OrderWizardFooter
+                            stage={stage}
+                            completed={completedStages}
+                            onSelectStage={changeStage}
+                            showBack={true}
+                            onBack={() => changeStage('materials')}
+                            nextLabel="Next"
+                            onNext={() => changeStage('review')}
+                            summaryTitle="Order Summary"
+                            summarySubtitle={summarySubtitle}
+                            summaryAction={summaryAction}
+                        >
+                            {summarySharedContent}
+                        </OrderWizardFooter>
+                    </>
+                )}
+
+                {/* ── REVIEW stage ─────────────────────────────────────── */}
+                {stage === 'review' && (
+                    <>
+                        <div className="col-span-12">
+                            <OrderReviewSummary
+                                header={header}
+                                buyerName={selectedBuyerObj?.name || ''}
+                                colorways={colorway.colorways}
+                                materialPlan={colorway.materialPlan ?? []}
+                                shipmentPlan={shipment.plan}
+                                displaySizes={displaySizes}
+                                totalAllowancePct={totalAllowancePct}
+                                buyerExtraPct={buyerExtraPct}
+                            />
                         </div>
 
-                        <div className="grid grid-cols-[repeat(6,minmax(0,1fr))] gap-3 py-4 border-b border-slate-100 min-w-0">
-                            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col gap-0.5 min-w-0">
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Order Qty</span>
-                                <span className="text-[1.05rem] font-extrabold tabular-nums text-slate-900 leading-tight">{totalOrderQty.toLocaleString()} <span className="text-[10px] font-semibold text-slate-400">pcs</span></span>
-                                <span className="text-[9px] text-slate-400">{colorway.colorways.length} color{colorway.colorways.length !== 1 ? 's' : ''} · {displaySizes.length} sizes</span>
-                            </div>
-                            <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-blue-500">Adjusted Qty</span>
-                                <span className="text-[1.05rem] font-extrabold tabular-nums text-blue-900 leading-tight">{totalAdjustedQty.toLocaleString()} <span className="text-[10px] font-semibold text-blue-400">pcs</span></span>
-                                <span className="text-[9px] text-blue-400 truncate">
-                                    {totalAllowancePct === 0
-                                        ? 'No allowance'
-                                        : [
-                                            header.cuttingAllowance > 0 ? `Cut ${header.cuttingAllowance}%` : null,
-                                            header.applyExtraAllowance && buyerExtraPct > 0 ? `Ship +${buyerExtraPct}%` : null,
-                                          ].filter(Boolean).join(' · ')}
-                                </span>
-                            </div>
-                            <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-violet-500">Lead Days</span>
-                                <span className="text-[1.05rem] font-extrabold tabular-nums text-violet-900 leading-tight">
-                                    {productionLeadDays != null ? productionLeadDays : '—'}
-                                    <span className="text-[10px] font-semibold text-violet-400"> days</span>
-                                </span>
-                                <span className="text-[9px] text-violet-400 truncate">
-                                    {overallLeadDays != null ? `${overallLeadDays}d order→ship` : 'No shipment date'}
-                                </span>
-                            </div>
-                            <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600">Est. Sewing</span>
-                                <span className="text-[1.05rem] font-extrabold tabular-nums text-emerald-900 leading-tight">
-                                    {Number(estProdHours) > 0 ? estProdHours : '—'}
-                                    <span className="text-[10px] font-semibold text-emerald-400"> hrs</span>
-                                </span>
-                                <span className="text-[9px] text-emerald-500 truncate">
-                                    {header.sewingSam ? `${header.sewingSam} min/pc SAM` : 'No SAM set'}
-                                </span>
-                            </div>
-                            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 flex flex-col gap-0.5 min-w-0">
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">Shipment Plan Total</span>
-                                <span className="text-[1.05rem] font-extrabold tabular-nums text-slate-900 leading-tight">
-                                    {shipmentPlanTotal.toLocaleString()} <span className="text-[10px] font-semibold text-slate-400">pcs</span>
-                                </span>
-                                <span className="text-[9px] text-slate-400">
-                                    {shipment.plan.lines.length} line{shipment.plan.lines.length !== 1 ? 's' : ''}
-                                </span>
-                            </div>
-                            <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 flex flex-col gap-0.5 min-w-0">
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600">Shipment Balance</span>
-                                <span className="text-[1.05rem] font-extrabold tabular-nums text-amber-900 leading-tight">
-                                    {shipmentBalance.toLocaleString()} <span className="text-[10px] font-semibold text-amber-500">pcs</span>
-                                </span>
-                                <span className="text-[9px] text-amber-600 truncate">Not yet in plan</span>
-                            </div>
-                        </div>
-
-                        {(() => {
-                            const today = new Date(); today.setHours(0,0,0,0);
-                            const msPerDay = 86400000;
-                            type Milestone = {
-                                label: string;
-                                sublabel?: string;
-                                date: string;
-                                color: 'slate' | 'blue' | 'violet' | 'amber' | 'grey';
-                                rescheduled?: boolean;
-                            };
-                            const milestones: Milestone[] = [];
-                            if (header.orderDate) milestones.push({ label: 'Order', sublabel: formatDateDDMMYYYY(header.orderDate), date: header.orderDate, color: 'slate' });
-                            if (header.jobCardDate) milestones.push({ label: 'Job Card', sublabel: formatDateDDMMYYYY(header.jobCardDate), date: header.jobCardDate, color: 'violet' });
-
-                            const activeShipDates = [...new Set(
-                                shipment.plan.lines
-                                    .filter(isActiveShipmentLine)
-                                    .map((l) => l.shipmentDate)
-                                    .filter(Boolean),
-                            )].sort();
-                            const lastActiveDate = activeShipDates.at(-1) ?? '';
-
-                            const shipDateMap = new Map<string, { activeQty: number; rescheduledQty: number }>();
-                            for (const line of expandShipmentPlanLines(shipment.plan.lines)) {
-                                if (!line.shipmentDate) continue;
-                                const entry = shipDateMap.get(line.shipmentDate) ?? { activeQty: 0, rescheduledQty: 0 };
-                                const qty = rowTotal(line);
-                                if (isActiveShipmentLine(line)) entry.activeQty += qty;
-                                else if (line.status === 'rescheduled') entry.rescheduledQty += qty;
-                                shipDateMap.set(line.shipmentDate, entry);
-                            }
-
-                            let activeShipIdx = 0;
-                            for (const d of [...shipDateMap.keys()].sort()) {
-                                const { activeQty, rescheduledQty } = shipDateMap.get(d)!;
-                                if (activeQty > 0) {
-                                    activeShipIdx += 1;
-                                    milestones.push({
-                                        label: d === lastActiveDate ? 'Ex-Factory' : `Shipment ${activeShipIdx}`,
-                                        sublabel: `${formatDateDDMMYYYY(d)}${activeQty > 0 ? ` · ${activeQty.toLocaleString()} pcs` : ''}`,
-                                        date: d,
-                                        color: d === lastActiveDate ? 'blue' : 'amber',
-                                    });
-                                }
-                                if (rescheduledQty > 0) {
-                                    milestones.push({
-                                        label: 'Rescheduled',
-                                        sublabel: `${formatDateDDMMYYYY(d)} · ${rescheduledQty.toLocaleString()} pcs`,
-                                        date: d,
-                                        color: 'grey',
-                                        rescheduled: true,
-                                    });
-                                }
-                            }
-
-                            if (milestones.length < 2) return (
-                                <div className="py-4 text-[10px] text-slate-400 italic text-center">
-                                    Set order date and add shipment lines to see the timeline
-                                </div>
-                            );
-
-                            const nodeColors: Record<Milestone['color'], { dot: string; label: string; sub: string; connector: string }> = {
-                                slate:  { dot: 'bg-slate-400 ring-slate-200',  label: 'text-slate-600', sub: 'text-slate-400', connector: 'bg-slate-200' },
-                                violet: { dot: 'bg-violet-500 ring-violet-200', label: 'text-violet-700', sub: 'text-slate-400', connector: 'bg-slate-200' },
-                                amber:  { dot: 'bg-amber-400 ring-amber-200',  label: 'text-amber-700',  sub: 'text-slate-400', connector: 'bg-amber-100' },
-                                blue:   { dot: 'bg-blue-500 ring-blue-200',    label: 'text-blue-700',  sub: 'text-slate-400', connector: 'bg-blue-100' },
-                                grey:   { dot: 'bg-slate-300 ring-slate-100',  label: 'text-slate-400', sub: 'text-slate-400', connector: 'bg-slate-100' },
-                            };
-
-                            return (
-                                <div className="pt-4 w-full">
-                                    <div className="flex items-start w-full">
-                                        {milestones.map((m, idx) => {
-                                            const isLast = idx === milestones.length - 1;
-                                            const c = nodeColors[m.color];
-                                            const mDate = new Date(m.date); mDate.setHours(0,0,0,0);
-                                            const daysLeft = Math.round((mDate.getTime() - today.getTime()) / msPerDay);
-                                            const spanDays = isLast ? 0 : (() => {
-                                                const next = new Date(milestones[idx+1].date); next.setHours(0,0,0,0);
-                                                return Math.max(1, Math.round((next.getTime() - mDate.getTime()) / msPerDay));
-                                            })();
-                                            return (
-                                                <div key={`${m.date}-${m.label}-${idx}`} className={`flex items-start ${isLast ? '' : 'flex-1'}`}>
-                                                    <div className={`flex flex-col items-start w-full ${m.rescheduled ? 'opacity-60' : ''}`}>
-                                                        <div className="flex items-center w-full">
-                                                            <div className={`w-3 h-3 rounded-full ring-2 ring-offset-1 shrink-0 ${c.dot}`} />
-                                                            {!isLast && (
-                                                                <div className="flex-1 flex flex-col justify-center min-w-0 mx-1">
-                                                                    <div className={`h-0.5 w-full ${c.connector}`} />
-                                                                    <span className="text-[8px] text-slate-400 tabular-nums text-center mt-0.5">{spanDays}d</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="mt-1.5 text-left" style={{ maxWidth: '7rem' }}>
-                                                            <p className={`text-[9px] font-bold uppercase tracking-wide ${c.label}`}>{m.label}</p>
-                                                            <p className={`text-[9px] ${c.sub} mt-0.5`}>{m.sublabel}</p>
-                                                            {daysLeft >= 0
-                                                                ? <p className={`text-[8px] font-semibold mt-0.5 ${daysLeft <= 7 ? 'text-red-500' : daysLeft <= 21 ? 'text-amber-600' : 'text-slate-400'}`}>{daysLeft === 0 ? 'Today' : `${daysLeft}d left`}</p>
-                                                                : <p className="text-[8px] font-semibold mt-0.5 text-slate-300">{Math.abs(daysLeft)}d ago</p>
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        <div className="border-t border-slate-100 mt-4" />
-
-                        <div className="flex items-center justify-between gap-4 pt-4">
-                            <DesktopWriteGate>
+                        <OrderWizardFooter
+                            stage={stage}
+                            completed={completedStages}
+                            onSelectStage={changeStage}
+                            showBack={true}
+                            onBack={() => changeStage('shipments')}
+                            onDiscard={handleCancel}
+                            nextLabel={saving ? 'Saving…' : isEditingExistingOrder ? 'Edit Order' : 'Create Order'}
+                            onNext={() => void handleConfirmOrder()}
+                            nextDisabled={saving}
+                            gateNext
+                            summaryTitle="Order Summary"
+                            summarySubtitle={summarySubtitle}
+                            summaryAction={summaryAction}
+                        >
+                            {summarySharedContent}
                             {isEditingExistingOrder ? (
-                                <Button
-                                    variant="danger-light"
-                                    icon={Trash2}
-                                    onClick={() => setDeleteModalOpen(true)}
-                                    className="text-[10px]"
-                                >
-                                    Delete Order
-                                </Button>
-                            ) : (
-                                <span />
-                            )}
-                            </DesktopWriteGate>
-                            <div className="flex items-center gap-3">
-                                <Button variant="secondary" onClick={handleCancel} icon={X} className="text-slate-500 hover:text-slate-800">
-                                    Discard
-                                </Button>
-                                <DesktopWriteGate>
-                                <Button
-                                    onClick={() => void handleConfirmOrder()}
-                                    disabled={saving}
-                                    icon={isEditingExistingOrder ? Edit2 : Save}
-                                    className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 px-8 py-2.5 h-auto text-[10px] disabled:opacity-60"
-                                >
-                                    {saving ? 'Saving…' : isEditingExistingOrder ? 'Update Order' : 'Create Order'}
-                                </Button>
-                                </DesktopWriteGate>
-                            </div>
-                        </div>
-                    </Card>
-                </div>
+                                <div className="flex items-center pt-4">
+                                    <DesktopWriteGate>
+                                        <Button
+                                            variant="danger-light"
+                                            icon={Trash2}
+                                            onClick={() => setDeleteModalOpen(true)}
+                                            className="text-[10px]"
+                                        >
+                                            Delete Order
+                                        </Button>
+                                    </DesktopWriteGate>
+                                </div>
+                            ) : null}
+                        </OrderWizardFooter>
+                    </>
+                )}
 
                 <Modal isOpen={deleteModalOpen} onClose={() => !deleteLoading && setDeleteModalOpen(false)}>
                     <div className="p-6">

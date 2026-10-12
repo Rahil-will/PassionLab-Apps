@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Input, Modal, SelectDropdown } from '../../../components/ui';
+import { MmChallanPrintDocument } from './MmChallanPrintDocument';
 import { LabeledDatePicker } from '../../../components/SingleDatePicker';
 import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
 import { queryKeys } from '../../../lib/queryKeys';
@@ -12,7 +13,10 @@ import {
   type MmV4ProcSide,
   type MmV4RollRow,
 } from '../lib/mmV4Rpc';
-import { useMmV4Config } from '../lib/useMmV4Config';
+import { useMmPartners, useMmProcesses } from '../lib/useMmV4Config';
+import { unitFormOptionLabel } from '../lib/mmUnitForm';
+import { useMmChallanPrint } from '../lib/useMmChallanPrint';
+import type { MmChallanPrintDoc } from '../lib/mmChallanPrint';
 
 function todayIso(): string {
   const now = new Date();
@@ -40,18 +44,21 @@ export function MmProcSendModalV4({
 }) {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const { showNotification } = useNotificationStore();
-  const { data: v4 } = useMmV4Config(open);
 
   const [processTypeId, setProcessTypeId] = useState('');
   const [unitFacilityId, setUnitFacilityId] = useState('');
   const [unitRefNo, setUnitRefNo] = useState('');
   const [sentAt, setSentAt] = useState(todayIso());
   const [remarks, setRemarks] = useState('');
+  const [targetColor, setTargetColor] = useState('');
   const [reprocess, setReprocess] = useState(Boolean(parentChallanId) || purposeProp === 'reprocess');
   const [reprocessReason, setReprocessReason] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
+  const [printDoc, setPrintDoc] = useState<MmChallanPrintDoc | null>(null);
+  const [pendingSent, setPendingSent] = useState<{ id: string; challanNo: string } | null>(null);
+  const { requestPrint } = useMmChallanPrint(printDoc);
 
   useEffect(() => {
     if (!open) return;
@@ -60,28 +67,26 @@ export function MmProcSendModalV4({
     setUnitRefNo('');
     setSentAt(todayIso());
     setRemarks('');
+    setTargetColor('');
     setReprocess(Boolean(parentChallanId) || purposeProp === 'reprocess');
     setReprocessReason('');
     setPicked(preselectedRollIds ?? []);
     setSearch('');
     setBusy(false);
+    setPrintDoc(null);
+    setPendingSent(null);
   }, [open, preselectedRollIds, parentChallanId, purposeProp]);
 
+  const processesQ = useMmProcesses(open);
+  const partnersQ = useMmPartners('process_vendor', false, open);
   const processTypes = useMemo(
-    () => (v4?.process_types ?? []).filter((t) => t.active !== false),
-    [v4?.process_types],
+    () => (processesQ.data ?? []).filter((row) => row.active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+    [processesQ.data],
   );
-
   const units = useMemo(() => {
-    const all = (v4?.facilities ?? []).filter(
-      (f) => f.kind === 'process_unit' && f.is_active !== false,
-    );
-    if (!processTypeId) return all;
-    return all.filter((f) => {
-      const ids = f.process_type_ids ?? [];
-      return ids.length === 0 || ids.includes(processTypeId);
-    });
-  }, [v4?.facilities, processTypeId]);
+    if (!processTypeId) return [];
+    return (partnersQ.data ?? []).filter((row) => (row.process_type_ids ?? []).includes(processTypeId));
+  }, [partnersQ.data, processTypeId]);
 
   const rollsQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'rollsV4Process', side, search] as const,
@@ -95,16 +100,23 @@ export function MmProcSendModalV4({
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
-    enabled: open && Boolean(factoryId) && !(preselectedRollIds && preselectedRollIds.length > 0),
+    enabled: open && Boolean(factoryId),
   });
 
   const rollRows = rollsQ.data ?? [];
   const lockedIds = preselectedRollIds && preselectedRollIds.length > 0;
   const activeIds = lockedIds ? preselectedRollIds : picked;
 
+  useEffect(() => {
+    if (!open) return;
+    const chosen = rollRows.filter((roll) => activeIds.includes(roll.roll_id));
+    const colours = [...new Set(chosen.map((roll) => String(roll.style?.colorway_name || '').trim()).filter(Boolean))];
+    if (colours.length === 1) setTargetColor(colours[0]);
+  }, [open, rollRows, activeIds]);
+
   const submit = async () => {
     if (!unitFacilityId) {
-      showNotification('Select a processing unit', 'error');
+      showNotification('Select a process vendor', 'error');
       return;
     }
     if (!processTypeId) {
@@ -136,10 +148,50 @@ export function MmProcSendModalV4({
         parent_challan_id: reprocess ? parentChallanId ?? null : null,
         reprocess_reason: reprocess ? reprocessReason.trim() : null,
         remarks: remarks.trim() || null,
+        target_color: targetColor.trim() || null,
       });
       if (res.ok === false) throw new Error(res.message);
       showNotification(`Challan ${res.data.challan_no} sent`, 'success');
-      onSent(res.data.id, res.data.challan_no);
+      const unit = units.find((row) => row.id === unitFacilityId);
+      if (unit && unit.name.trim().toLowerCase() !== 'in-house') {
+        const sentRolls = rollRows.filter((roll) => activeIds.includes(roll.roll_id));
+        setPrintDoc({
+          kind: 'mill',
+          title: 'Process challan',
+          movement: 'Mill to processing',
+          factoryName: '',
+          factoryCode: '',
+          challanNo: res.data.challan_no,
+          referenceNo: unitRefNo.trim(),
+          sentAt: sentAt || null,
+          fromLocation: side === 'mill' ? 'Mill' : 'Warehouse',
+          toLocation: unit.name,
+          styleName: '',
+          styleRef: '',
+          buyerName: '',
+          poNumber: '',
+          colorName: '',
+          fabricName: sentRolls[0]?.fabric_type_name || '',
+          fabricCategory: '',
+          uom: sentRolls[0]?.uom ?? null,
+          remarks: remarks.trim(),
+          fields: [],
+          rolls: sentRolls.map((roll) => ({
+            id: roll.roll_id,
+            unit_code: roll.roll_code,
+            length_m: roll.length_m ?? null,
+            weight_kg: roll.weight_kg ?? null,
+            shade: roll.shade ?? null,
+            lot_no: roll.lot_no ?? null,
+            batch_no: roll.batch_no ?? null,
+            attributes: roll.attributes ?? null,
+            mill_snapshot: null,
+          })),
+        });
+        setPendingSent({ id: res.data.id, challanNo: res.data.challan_no });
+      } else {
+        onSent(res.data.id, res.data.challan_no);
+      }
     } catch (e) {
       showNotification(e instanceof Error ? e.message : 'Send failed', 'error');
     } finally {
@@ -166,15 +218,16 @@ export function MmProcSendModalV4({
             options={processTypes.map((t) => ({ value: t.id, label: t.name }))}
           />
           <SelectDropdown
-            label="Processing unit"
+            label="Process vendor"
             value={unitFacilityId}
             onChange={setUnitFacilityId}
-            options={units.map((u) => ({
-              value: u.id,
-              label: `${u.name || u.code}${u.ownership === 'external' ? ' (External)' : ''}`,
-            }))}
+            options={[
+              { value: '', label: processTypeId ? 'Select a process vendor' : 'Pick a process first' },
+              ...units.map((u) => ({ value: u.id, label: u.name })),
+            ]}
           />
           <Input label="Unit ref no" value={unitRefNo} onChange={(e) => setUnitRefNo(e.target.value)} />
+          <Input label="Target colour" value={targetColor} onChange={(e) => setTargetColor(e.target.value)} />
           <LabeledDatePicker label="Sent date" value={sentAt} onChange={setSentAt} />
         </div>
 
@@ -215,6 +268,15 @@ export function MmProcSendModalV4({
                 <p className="px-3 py-6 text-center text-[11px] text-slate-400">No rolls available</p>
               ) : (
                 <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-left text-[9px] font-semibold uppercase text-slate-500">
+                      <th className="px-2 py-1.5" />
+                      <th className="px-2 py-1.5">Roll</th>
+                      <th className="px-2 py-1.5">Form</th>
+                      <th className="px-2 py-1.5">Fabric</th>
+                      <th className="px-2 py-1.5 text-right">Length m</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {rollRows.map((roll) => {
                       const on = picked.includes(roll.roll_id);
@@ -232,6 +294,7 @@ export function MmProcSendModalV4({
                             />
                           </td>
                           <td className="px-2 py-1.5 font-medium">{roll.roll_code}</td>
+                          <td className="px-2 py-1.5">{unitFormOptionLabel(roll.unit_form || 'roll')}</td>
                           <td className="px-2 py-1.5 text-slate-500">{roll.fabric_type_name || '—'}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums">
                             {roll.length_m != null ? Number(roll.length_m).toFixed(1) : '—'}
@@ -246,15 +309,32 @@ export function MmProcSendModalV4({
           </div>
         ) : null}
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <DesktopWriteGate>
-            <Button type="button" size="sm" disabled={busy} onClick={() => void submit()}>
-              {busy ? 'Sending…' : 'Send'}
+        {printDoc ? (
+          <div className="flex justify-end">
+            <Button type="button" size="sm" variant="secondary" onClick={requestPrint}>
+              Print challan
             </Button>
-          </DesktopWriteGate>
+          </div>
+        ) : null}
+        <MmChallanPrintDocument doc={printDoc} />
+
+        <div className="flex justify-end gap-2 pt-1">
+          {pendingSent ? (
+            <Button type="button" size="sm" onClick={() => onSent(pendingSent.id, pendingSent.challanNo)}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={onClose}>
+                Cancel
+              </Button>
+              <DesktopWriteGate>
+                <Button type="button" size="sm" disabled={busy} onClick={() => void submit()}>
+                  {busy ? 'Sending…' : 'Send'}
+                </Button>
+              </DesktopWriteGate>
+            </>
+          )}
         </div>
       </div>
     </Modal>

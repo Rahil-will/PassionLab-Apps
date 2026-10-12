@@ -20,38 +20,30 @@ import {
   inboundWhen,
 } from '../lib/inboundDisplay';
 import { formatQtyM, formatWhen } from '../lib/mmRollDraft';
+import { unitFormCountText, unitFormLabel } from '../lib/mmUnitForm';
 
 const thCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
-const thFirstCls =
-  'pl-6 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const thCenterCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
-const thRollsCls =
-  'px-2 py-2 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 text-center whitespace-nowrap';
-const thQtyCls =
-  'px-2 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
+const thRecvCls =
+  'px-2 py-2 text-[10px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 text-center whitespace-nowrap';
 const thPassCls =
   'px-2 py-2 text-[10px] font-semibold text-emerald-800 uppercase tracking-wide border-b border-slate-200 bg-emerald-50 text-center whitespace-nowrap';
 const tdCls = 'px-2.5 py-2 text-[11px] text-slate-700 border-b border-slate-100';
-const tdFirstCls = 'pl-6 pr-2.5 py-2 text-[11px] text-slate-700 border-b border-slate-100';
-const tdRollsCls = 'px-2 py-2 text-center border-b border-slate-100 bg-yellow-50';
-const tdQtyCls = 'px-2 py-2 text-center border-b border-slate-100 bg-green-50';
+const tdRecvCls = 'px-2 py-2 text-center border-b border-slate-100 bg-blue-50/60';
 const tdPassCls = 'px-2 py-2 text-center border-b border-slate-100 bg-emerald-50/70';
 const previewTh =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const previewThCenter =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
 const previewThRolls =
-  'px-2 py-1.5 text-[9px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 text-center whitespace-nowrap';
+  'px-2 py-1.5 text-[9px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 text-center whitespace-nowrap';
 const previewThQty =
-  'px-2 py-1.5 text-[9px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
+  'px-2 py-1.5 text-[9px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 text-center whitespace-nowrap';
 const previewTd = 'px-2 py-1.5 text-[9px] text-slate-700 border-b border-slate-100';
-const previewThFirst =
-  'pl-6 pr-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
-const previewTdFirst = 'pl-6 pr-2 py-1.5 text-[9px] text-slate-700 border-b border-slate-100';
-const previewTdRolls = 'px-2 py-1.5 text-center border-b border-slate-100 bg-yellow-50 text-[9px] text-slate-700 tabular-nums';
-const previewTdQty = 'px-2 py-1.5 text-center border-b border-slate-100 bg-green-50 text-[9px] text-slate-700 tabular-nums';
+const previewTdRolls = 'px-2 py-1.5 text-center border-b border-slate-100 bg-blue-50/60 text-[9px] text-slate-700 tabular-nums';
+const previewTdQty = 'px-2 py-1.5 text-center border-b border-slate-100 bg-blue-50/60 text-[9px] text-slate-700 tabular-nums';
 
 function fabricName(row: MmInChallanHeader): string {
   const name = (row.fabric_name || '').trim();
@@ -69,21 +61,26 @@ function TwoLine({ primary, secondary }: { primary: string; secondary?: string |
   );
 }
 
+function formWord(row: MmInChallanHeader, count = 2): string {
+  return unitFormLabel(row.unit_form, count);
+}
+
 function inboundRollBadge(row: MmInChallanHeader): string {
   const total = Number(row.roll_count || 0);
+  const form = row.unit_form || 'roll';
   if (
     (row.status === 'partial' || row.status === 'short_closed')
     && typeof row.received_roll_count === 'number'
   ) {
-    return `${row.received_roll_count}/${total}`;
+    return `${row.received_roll_count}/${total} ${formWord(row, total)}`;
   }
-  return fmtRolls(total);
+  return unitsLabel(total, form);
 }
 
-function fmtRolls(count: number | null | undefined): string {
+function unitsLabel(count: number | null | undefined, form: string | null | undefined): string {
   const n = Number(count);
   if (!Number.isFinite(n) || n <= 0) return '—';
-  return String(n);
+  return unitFormCountText({ [form || 'roll']: n });
 }
 
 function InboundActionCell({
@@ -210,7 +207,7 @@ export function MmInboundChallanTable({
           </colgroup>
           <thead>
             <tr>
-              <th className={previewThFirst}>Date</th>
+              <th className={previewTh}>Date</th>
               <th className={previewTh}>Challan</th>
               <th className={previewTh}>Challan ref</th>
               <th className={previewTh}>Style</th>
@@ -219,15 +216,15 @@ export function MmInboundChallanTable({
               <th className={previewTh}>Fabric</th>
               <th className={previewTh}>Category</th>
               <th className={previewTh}>Source</th>
-              <th className={previewThRolls}>Rolls</th>
               <th className={previewThQty}>Qty</th>
+              <th className={previewThRolls}>Rolls / laps</th>
               <th className={previewThCenter}>Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => open(row)}>
-                <td className={`${previewTdFirst} whitespace-nowrap`}>{formatWhen(inboundWhen(row))}</td>
+                <td className={`${previewTd} whitespace-nowrap`}>{formatWhen(inboundWhen(row))}</td>
                 <td className={`${previewTd} truncate font-semibold text-slate-800`}>{row.challan_no}</td>
                 <td className={`${previewTd} truncate text-slate-500`}>{row.reference_no || '—'}</td>
                 <td className={`${previewTd} truncate`}>{inboundStyleDisplayName(row)}</td>
@@ -236,8 +233,8 @@ export function MmInboundChallanTable({
                 <td className={`${previewTd} truncate`}>{fabricName(row)}</td>
                 <td className={`${previewTd} truncate`}>{inboundFabricCategory(row)}</td>
                 <td className={`${previewTd} truncate`}>{inboundSourceLabel(row)}</td>
-                <td className={previewTdRolls}>{inboundRollBadge(row)}</td>
                 <td className={previewTdQty}>{formatQtyM(row.qty, row.uom)}</td>
+                <td className={previewTdRolls}>{inboundRollBadge(row)}</td>
                 <td className={`${previewTd} text-center`}>
                   <InboundActionCell row={row} busyId={busyId} hideReceive={millOrigin} onView={view} onReceive={(r, e) => void receive(r, e)} />
                 </td>
@@ -265,16 +262,16 @@ export function MmInboundChallanTable({
           <col style={{ width: '14%' }} />
           {testing ? <col style={{ width: '7%' }} /> : null}
           {millOrigin ? <col style={{ width: '7%' }} /> : null}
-          <col style={{ width: '6%' }} />
           <col style={{ width: '7%' }} />
-          <col style={{ width: '6%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '7%' }} />
           <col style={{ width: '7%' }} />
           <col style={{ width: '8%' }} />
           <col style={{ width: '3.75rem' }} />
         </colgroup>
         <thead>
           <tr>
-            <th className={thFirstCls}>Date</th>
+            <th className={thCls}>Date</th>
             <th className={thCls}>{testing ? 'GRN / Challan' : 'Challan'}</th>
             <th className={thCls}>Challan ref</th>
             <th className={thCls}>Style</th>
@@ -283,10 +280,10 @@ export function MmInboundChallanTable({
             <th className={thCls}>Fabric</th>
             {testing ? <th className={thCls}>Source</th> : null}
             {millOrigin ? <th className={thCenterCls}>Kind</th> : null}
-            <th className={thRollsCls}>Received rolls</th>
-            <th className={thRollsCls}>Received qty</th>
-            <th className={thPassCls}>Passed rolls</th>
+            <th className={thRecvCls}>Received qty</th>
+            <th className={thRecvCls}>Rolls / laps</th>
             <th className={thPassCls}>Passed qty</th>
+            <th className={thPassCls}>Rolls / laps</th>
             <th className={thCenterCls}>Status</th>
             <th className={thCenterCls}>Action</th>
           </tr>
@@ -296,7 +293,7 @@ export function MmInboundChallanTable({
             const category = inboundFabricCategory(row);
             return (
               <tr key={row.id} className="hover:bg-slate-50/80 cursor-pointer" onClick={() => open(row)}>
-                <td className={`${tdFirstCls} whitespace-nowrap text-slate-600`}>{formatWhen(inboundWhen(row))}</td>
+                <td className={`${tdCls} whitespace-nowrap text-slate-600`}>{formatWhen(inboundWhen(row))}</td>
                 <td className={`${tdCls} min-w-0`}>
                   <TwoLine primary={row.challan_no} secondary={testing ? inboundDocKind(row) : null} />
                 </td>
@@ -317,22 +314,22 @@ export function MmInboundChallanTable({
                     </span>
                   </td>
                 ) : null}
-                <td className={tdRollsCls}>
-                  <span className="block text-[11px] font-semibold text-yellow-900 tabular-nums">{inboundRollBadge(row)}</span>
-                </td>
-                <td className={tdRollsCls}>
-                  <span className="block text-[11px] font-semibold text-yellow-900 tabular-nums">
+                <td className={tdRecvCls}>
+                  <span className="block text-[11px] font-semibold text-blue-900 tabular-nums">
                     {formatQtyM(row.qty, row.uom)}
                   </span>
                 </td>
-                <td className={tdPassCls}>
-                  <span className="block text-[11px] font-semibold text-emerald-900 tabular-nums">
-                    {fmtRolls(inboundPassedRolls(row))}
-                  </span>
+                <td className={tdRecvCls}>
+                  <span className="block text-[11px] font-semibold text-blue-900 tabular-nums">{inboundRollBadge(row)}</span>
                 </td>
                 <td className={tdPassCls}>
                   <span className="block text-[11px] font-semibold text-emerald-900 tabular-nums">
                     {formatQtyM(row.passed_qty, row.uom)}
+                  </span>
+                </td>
+                <td className={tdPassCls}>
+                  <span className="block text-[11px] font-semibold text-emerald-900 tabular-nums">
+                    {unitsLabel(inboundPassedRolls(row), row.unit_form)}
                   </span>
                 </td>
                 <td className={`${tdCls} text-center`}>
@@ -345,7 +342,7 @@ export function MmInboundChallanTable({
             );
           })}
           <tr aria-hidden>
-            <td colSpan={testing || millOrigin ? 14 : 13} className="h-10 border-0 p-0" />
+            <td colSpan={(testing ? 1 : 0) + (millOrigin ? 1 : 0) + 13} className="h-10 border-0 p-0" />
           </tr>
         </tbody>
       </table>

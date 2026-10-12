@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense, Component, ReactNode } from 'react';
+import React, { useEffect, Suspense, Component, ReactNode, type ComponentType } from 'react';
 import { Layout } from './components/Layout';
 import { RequireRole } from './components/RequireRole';
 import { useNavigationStore, useNotificationStore } from './stores';
@@ -14,15 +14,26 @@ import { useSettingsBootstrap } from './lib/queries/settings';
 import { prefetchFactoryListData } from './lib/prefetchFactoryData';
 import { useFactoryDataBootstrap } from './hooks/useFactoryDataBootstrap';
 import { useAuthSessionSync } from './hooks/useAuthSessionSync';
-import { canAccessRoute, type RouteAccessContext } from './lib/routeAccess';
+import { canAccessRoute, mmFeatureDeniedLabel, type RouteAccessContext } from './lib/routeAccess';
 import { getAllManifests } from './core/modules/registry';
-import { ModuleGate } from './core/modules/ModuleGate';
+import { ModuleGate, ModuleNotEnabled } from './core/modules/ModuleGate';
+import { useMmMaterialFeatures } from './modules/material/lib/useMmFeature';
 import { useFactoryModules } from './core/modules/useModuleEnabled';
 import type { ModuleKey } from './core/modules/types';
 
+const modulePageCache = new Map<string, React.LazyExoticComponent<ComponentType>>();
+
+function modulePage(path: string, load: () => Promise<{ default: ComponentType }>) {
+  let page = modulePageCache.get(path);
+  if (!page) {
+    page = React.lazy(load);
+    modulePageCache.set(path, page);
+  }
+  return page;
+}
+
 const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const CreateOrderMaster = React.lazy(() => import('./pages/production/CreateOrderMaster').then(m => ({ default: m.CreateOrderMaster })));
-const CreateOrderColor = React.lazy(() => import('./pages/production/CreateOrderColor').then(m => ({ default: m.CreateOrderColor })));
 const StatusTracker = React.lazy(() => import('./pages/production/StatusTracker').then(m => ({ default: m.StatusTracker })));
 const FloorDayBoard = React.lazy(() => import('./pages/production/FloorDayBoard').then(m => ({ default: m.FloorDayBoard })));
 const Settings = React.lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
@@ -87,6 +98,9 @@ const App: React.FC = () => {
   const [authReady, setAuthReady] = React.useState(false);
   const modulesQuery = useFactoryModules();
 
+  const materialOn = Boolean(modulesQuery.data?.find((row) => row.module_key === 'material')?.enabled);
+  const materialFeatures = useMmMaterialFeatures(isAuthenticated && materialOn);
+
   const accessCtx = React.useMemo<RouteAccessContext>(() => {
     const modulesEnabled: Partial<Record<string, boolean>> = {};
     for (const row of modulesQuery.data ?? []) {
@@ -95,8 +109,9 @@ const App: React.FC = () => {
     return {
       modulesEnabled,
       assignedApps: userProfile?.assignedApps ?? [],
+      mmFeatures: materialFeatures.data,
     };
-  }, [modulesQuery.data, userProfile?.assignedApps]);
+  }, [modulesQuery.data, userProfile?.assignedApps, materialFeatures.data]);
 
   useSettingsBootstrap(
     factoryId,
@@ -123,11 +138,14 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated, factoryId, currentRoute]);
 
+  const featureDeniedLabel = mmFeatureDeniedLabel(userProfile?.userRole, currentRoute, accessCtx);
+
   useEffect(() => {
     const role = userProfile?.userRole;
-    if (!role || canAccessRoute(role, currentRoute, accessCtx)) return;
+    if (!role || featureDeniedLabel) return;
+    if (canAccessRoute(role, currentRoute, accessCtx)) return;
     navigate(RoutePath.DASHBOARD);
-  }, [userProfile?.userRole, userProfile?.assignedApps, currentRoute, navigate, accessCtx]);
+  }, [userProfile?.userRole, userProfile?.assignedApps, currentRoute, navigate, accessCtx, featureDeniedLabel]);
 
   if (!authReady) {
     return <PageLoader />;
@@ -139,13 +157,15 @@ const App: React.FC = () => {
 
   const role = userProfile?.userRole;
   const guardedRoute =
-    role && !canAccessRoute(role, currentRoute, accessCtx) ? RoutePath.DASHBOARD : currentRoute;
+    featureDeniedLabel || !role || canAccessRoute(role, currentRoute, accessCtx)
+      ? currentRoute
+      : RoutePath.DASHBOARD;
 
   const renderModulePage = () => {
     for (const manifest of getAllManifests()) {
       for (const def of manifest.routes) {
         if (guardedRoute === def.path || guardedRoute.startsWith(`${def.path}/`)) {
-          const LazyPage = React.lazy(def.component);
+          const LazyPage = modulePage(def.path, def.component);
           return (
             <ModuleGate moduleKey={manifest.key as ModuleKey}>
               <LazyPage />
@@ -158,6 +178,7 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    if (featureDeniedLabel) return <ModuleNotEnabled label={featureDeniedLabel} />;
     const modulePage = renderModulePage();
     if (modulePage) return modulePage;
 
@@ -170,8 +191,9 @@ const App: React.FC = () => {
     if (guardedRoute.startsWith('#/planning-detail')) {
       return <ProductionPlanning />;
     }
+    // Colour-details page retired — inline colour matrix on Create Order.
     if (guardedRoute === RoutePath.CREATE_ORDER_COLOR || guardedRoute.startsWith(`${RoutePath.CREATE_ORDER_COLOR}?`)) {
-      return <CreateOrderColor />;
+      return <CreateOrderMaster key={routeParams.id ?? 'new'} />;
     }
     if (guardedRoute === RoutePath.CREATE_ORDER || guardedRoute.startsWith(`${RoutePath.CREATE_ORDER}?`)) {
       return <CreateOrderMaster key={routeParams.id ?? 'new'} />;

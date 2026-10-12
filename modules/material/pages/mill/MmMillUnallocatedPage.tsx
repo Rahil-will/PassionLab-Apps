@@ -17,17 +17,14 @@ const thFirstCls =
   'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const thCenterCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
-const thQtyCls =
-  'px-2 py-2 text-[10px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 text-center whitespace-nowrap';
-const thProdCls =
-  'px-2 py-2 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 text-center whitespace-nowrap';
-const thDispCls =
-  'px-2 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
-const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
-const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
-const tdQtyCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-blue-50/60';
-const tdProdCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
-const tdDispCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-green-50';
+const thQtyCls = thCenterCls;
+const thProdCls = thCenterCls;
+const thDispCls = thCenterCls;
+const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
+const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
+const tdQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 max-w-0 overflow-hidden';
+const tdProdCls = tdQtyCls;
+const tdDispCls = tdQtyCls;
 
 function fmtQty(value: number | null | undefined): string {
   const n = Number(value);
@@ -95,7 +92,7 @@ export default function MmMillUnallocatedPage() {
           </DesktopWriteGate>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] table-fixed border-collapse">
+          <table className="w-full table-fixed border-collapse">
             <colgroup>
               <col style={{ width: '10%' }} />
               <col style={{ width: '14%' }} />
@@ -109,7 +106,7 @@ export default function MmMillUnallocatedPage() {
               <col style={{ width: '8%' }} />
               <col style={{ width: '5%' }} />
             </colgroup>
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
                 <th className={thFirstCls}>Batch</th>
                 <th className={thCls}>Fabric ref</th>

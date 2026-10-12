@@ -13,11 +13,21 @@ import {
 import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
 import { useMmConfigBundle, useRefreshMmConfig } from '../lib/useMmConfigBundle';
 import { mmDeleteFabricType, mmSaveFabricType } from '../lib/mmRpc';
+import { listFabricConstructions, saveFabricConstruction, type MmFabricConstruction } from '../lib/mmFabricRpc';
 import { MmTableSaveButton } from '../components/MmTableSaveButton';
 
 export interface MmFabricTypesHandle {
   save: () => Promise<boolean>;
   isDirty: () => boolean;
+}
+
+interface DraftConstruction {
+  localId: string;
+  id: string | null;
+  name: string;
+  seq: number;
+  is_active: boolean;
+  used: number;
 }
 
 interface DraftType {
@@ -26,7 +36,7 @@ interface DraftType {
   rowVersion: number;
   name: string;
   remarks: string;
-  requiresShadeBand: boolean;
+  constructions: DraftConstruction[];
 }
 
 /** Fabric types (Knit / Woven / …). Edits stay local until the page Save. */
@@ -42,27 +52,76 @@ const MmFabricTypesPage = forwardRef<
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [shadeRequired, setShadeRequired] = useState(false);
+  const [constructionText, setConstructionText] = useState('');
+  const [constructionRows, setConstructionRows] = useState<MmFabricConstruction[] | null>(null);
   const [editingLocalId, setEditingLocalId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const savedTypes = useMemo<DraftType[]>(
-    () =>
-      (data?.types ?? [])
-        .filter((t) => t.is_active !== false)
-        .map((t) => ({
-          localId: String(t.id),
-          id: String(t.id),
-          rowVersion: Number(t.row_version ?? 1),
-          name: String(t.name),
-          remarks: t.remarks != null ? String(t.remarks) : '',
-          requiresShadeBand: t.requires_shade_band === true,
-        })),
-    [data?.types],
-  );
+  const savedTypes = useMemo<DraftType[]>(() => {
+    const byType = new Map<string, DraftConstruction[]>();
+    for (const row of constructionRows ?? []) {
+      const list = byType.get(row.fabric_type_id) ?? [];
+      list.push({
+        localId: row.id,
+        id: row.id,
+        name: row.name,
+        seq: row.seq,
+        is_active: row.is_active,
+        used: row.used_on_fabrics ?? 0,
+      });
+      byType.set(row.fabric_type_id, list);
+    }
+    return (data?.types ?? [])
+      .filter((t) => t.is_active !== false)
+      .map((t) => ({
+        localId: String(t.id),
+        id: String(t.id),
+        rowVersion: Number(t.row_version ?? 1),
+        name: String(t.name),
+        remarks: t.remarks != null ? String(t.remarks) : '',
+        constructions: (byType.get(String(t.id)) ?? []).sort((a, b) => a.seq - b.seq),
+      }));
+  }, [data?.types, constructionRows]);
 
   const rows = draft ?? savedTypes;
-  const formDirty = Boolean(name.trim() || remarks.trim());
+  const formDirty = Boolean(name.trim() || remarks.trim() || constructionText.trim());
+
+  useEffect(() => {
+    let cancel = false;
+    void listFabricConstructions(null, true).then((res) => {
+      if (cancel) return;
+      setConstructionRows(res.ok === false ? [] : (res.data.rows ?? []));
+    });
+    return () => { cancel = true; };
+  }, [data]);
+
+  function constructionsFromText(text: string, existing: DraftConstruction[]): DraftConstruction[] {
+    const names = text.split(/[\n,]/).map((part) => part.trim()).filter(Boolean);
+    const used = new Set<string>();
+    return names.map((itemName, index) => {
+      const prev = existing.find((row) => (
+        Boolean(row.id)
+        && !used.has(row.id as string)
+        && row.name.trim().toLowerCase() === itemName.toLowerCase()
+      ));
+      if (prev?.id) used.add(prev.id);
+      return {
+        localId: prev?.localId ?? `tmp_${crypto.randomUUID()}`,
+        id: prev?.id ?? null,
+        name: itemName,
+        seq: index + 1,
+        is_active: true,
+        used: prev?.used ?? 0,
+      };
+    });
+  }
+
+  const resetForm = () => {
+    setName('');
+    setRemarks('');
+    setConstructionText('');
+    setEditingLocalId(null);
+  };
 
   useEffect(() => {
     onDirtyChange?.(
@@ -72,14 +131,7 @@ const MmFabricTypesPage = forwardRef<
     );
   }, [draft, savedTypes, removedIds, formDirty, onDirtyChange]);
 
-  const resetForm = () => {
-    setName('');
-    setRemarks('');
-    setShadeRequired(false);
-    setEditingLocalId(null);
-  };
-
-  const applyRows = (next: DraftType[], nextRemoved = removedIds) => {
+  const applyRows = (next: DraftType[]) => {
     setDraft(next);
   };
 
@@ -93,7 +145,7 @@ const MmFabricTypesPage = forwardRef<
     if (editingLocalId) {
       applyRows(rows.map((r) => (
         r.localId === editingLocalId
-          ? { ...r, name: trimmed, remarks: remarks.trim(), requiresShadeBand: shadeRequired }
+          ? { ...r, name: trimmed, remarks: remarks.trim(), constructions: constructionsFromText(constructionText, r.constructions) }
           : r
       )));
     } else {
@@ -105,7 +157,7 @@ const MmFabricTypesPage = forwardRef<
           rowVersion: 1,
           name: trimmed,
           remarks: remarks.trim(),
-          requiresShadeBand: shadeRequired,
+          constructions: constructionsFromText(constructionText, []),
         },
       ]);
     }
@@ -115,7 +167,7 @@ const MmFabricTypesPage = forwardRef<
   const removeRow = (row: DraftType) => {
     const nextRemoved = row.id ? [...removedIds, row.id] : removedIds;
     setRemovedIds(nextRemoved);
-    applyRows(rows.filter((r) => r.localId !== row.localId), nextRemoved);
+    applyRows(rows.filter((r) => r.localId !== row.localId));
     if (editingLocalId === row.localId) resetForm();
   };
 
@@ -128,7 +180,7 @@ const MmFabricTypesPage = forwardRef<
       if (!data) return false;
       let pending = draft ?? savedTypes;
       const pendingName = name.trim();
-      if (!pendingName && remarks.trim()) {
+      if (!pendingName && (remarks.trim() || constructionText.trim())) {
         showNotification('Enter a type name before saving', 'error');
         return false;
       }
@@ -140,7 +192,7 @@ const MmFabricTypesPage = forwardRef<
         if (editingLocalId) {
           pending = pending.map((r) => (
             r.localId === editingLocalId
-              ? { ...r, name: pendingName, remarks: remarks.trim(), requiresShadeBand: shadeRequired }
+              ? { ...r, name: pendingName, remarks: remarks.trim(), constructions: constructionsFromText(constructionText, r.constructions) }
               : r
           ));
         } else {
@@ -152,7 +204,7 @@ const MmFabricTypesPage = forwardRef<
               rowVersion: 1,
               name: pendingName,
               remarks: remarks.trim(),
-              requiresShadeBand: shadeRequired,
+              constructions: constructionsFromText(constructionText, []),
             },
           ];
         }
@@ -166,19 +218,19 @@ const MmFabricTypesPage = forwardRef<
         }
         for (const row of pending) {
           const original = savedTypes.find((t) => t.id === row.id);
-          if (row.id) {
-            if (
-              original
-              && original.name === row.name
-              && original.remarks === row.remarks
-              && original.requiresShadeBand === row.requiresShadeBand
-            ) continue;
+          let typeId = row.id;
+          const typeUnchanged = Boolean(
+            typeId
+            && original
+            && original.name === row.name
+            && original.remarks === row.remarks,
+          );
+          if (typeId && !typeUnchanged) {
             const res = await mmSaveFabricType({
-              id: row.id,
+              id: typeId,
               name: row.name,
               remarks: row.remarks,
               row_version: row.rowVersion,
-              requires_shade_band: row.requiresShadeBand,
             });
             if (res.ok === false) throw new Error(res.message);
             const savedRow = res.data as { row_version?: unknown } | null;
@@ -188,22 +240,51 @@ const MmFabricTypesPage = forwardRef<
               );
               setDraft(pending);
             }
-          } else {
+          } else if (!typeId) {
             const res = await mmSaveFabricType({
               name: row.name,
               remarks: row.remarks,
-              requires_shade_band: row.requiresShadeBand,
             });
             if (res.ok === false) throw new Error(res.message);
             const savedRow = res.data as { id?: unknown; row_version?: unknown } | null;
             if (savedRow?.id != null) {
+              typeId = String(savedRow.id);
               pending = pending.map((r) =>
                 r.localId === row.localId
-                  ? { ...r, id: String(savedRow.id), rowVersion: Number(savedRow.row_version ?? 1) }
+                  ? { ...r, id: typeId, rowVersion: Number(savedRow.row_version ?? 1) }
                   : r,
               );
               setDraft(pending);
             }
+          }
+          if (!typeId) continue;
+          const named = row.constructions
+            .map((item, index) => ({ ...item, name: item.name.trim(), seq: index + 1 }))
+            .filter((item) => item.name);
+          const previous = original?.constructions ?? [];
+          for (const item of named) {
+            const prev = previous.find((c) => c.id && c.id === item.id);
+            if (prev && prev.name === item.name && prev.seq === item.seq && prev.is_active) continue;
+            const res = await saveFabricConstruction({
+              ...(item.id ? { id: item.id } : { fabric_type_id: typeId }),
+              name: item.name,
+              seq: item.seq,
+              is_active: true,
+            });
+            if (res.ok === false) throw new Error(res.message);
+          }
+          for (const prev of previous) {
+            if (!prev.id || !prev.is_active) continue;
+            if (named.some((item) => item.id === prev.id)) continue;
+            if (prev.used > 0 && !window.confirm(`${prev.name} is used on fabrics. It will be hidden from pickers.`)) continue;
+            const res = await saveFabricConstruction({
+              id: prev.id,
+              fabric_type_id: typeId,
+              name: prev.name,
+              seq: prev.seq,
+              is_active: false,
+            });
+            if (res.ok === false) throw new Error(res.message);
           }
         }
         setDraft(null);
@@ -220,9 +301,9 @@ const MmFabricTypesPage = forwardRef<
         setSaving(false);
       }
     },
-  }), [draft, savedTypes, removedIds, formDirty, name, remarks, shadeRequired, editingLocalId, data, refresh, showNotification, onDirtyChange]);
+  }), [draft, savedTypes, removedIds, formDirty, name, remarks, constructionText, editingLocalId, data, refresh, showNotification, onDirtyChange]);
 
-  if (isLoading) {
+  if (isLoading || constructionRows === null) {
     return (
       <div className="flex items-center justify-center min-h-[240px]">
         <Loader2 size={24} className="animate-spin text-slate-400" />
@@ -270,15 +351,17 @@ const MmFabricTypesPage = forwardRef<
                 className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-500 resize-y min-h-[6.5rem] max-h-40 text-[11px]"
               />
             </div>
-            <label className="flex items-start gap-2 text-[11px] text-slate-700">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={shadeRequired}
-                onChange={(e) => setShadeRequired(e.target.checked)}
+            <div>
+              <label className="block text-[10px] font-semibold text-slate-600 mb-1">Constructions</label>
+              <textarea
+                rows={Math.max(3, constructionText.split('\n').filter((line) => line.trim()).length || 3)}
+                value={constructionText}
+                onChange={(e) => setConstructionText(e.target.value)}
+                placeholder={'Single jersey\nRib\nInterlock'}
+                className="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-4 focus:ring-primary-100 focus:border-primary-500 resize-y text-[11px] leading-5"
               />
-              <span>Warehouse can assign a shade band on this type. It is a label only. It does not block a store challan or a lay.</span>
-            </label>
+              <p className="mt-1 text-[9px] text-slate-400">One construction per line.</p>
+            </div>
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 variant="primary"
@@ -322,7 +405,7 @@ const MmFabricTypesPage = forwardRef<
             emptyMessage="No fabric types yet."
             headerAction={<MmTableSaveButton />}
           >
-            <CatalogTable headers={['S.No', 'Type', 'Remarks', 'Band', '']}>
+            <CatalogTable headers={['S.No', 'Type', 'Constructions', 'Remarks', '']}>
               {rows.map((row, idx) => (
                 <CatalogTableRow
                   key={row.localId}
@@ -330,7 +413,9 @@ const MmFabricTypesPage = forwardRef<
                     setEditingLocalId(row.localId);
                     setName(row.name);
                     setRemarks(row.remarks);
-                    setShadeRequired(row.requiresShadeBand);
+                    setConstructionText(
+                      row.constructions.filter((item) => item.is_active).map((item) => item.name).join('\n'),
+                    );
                   }}
                   selected={editingLocalId === row.localId}
                 >
@@ -341,11 +426,11 @@ const MmFabricTypesPage = forwardRef<
                       <span className="ml-2 text-[9px] font-semibold uppercase text-amber-600">New</span>
                     ) : null}
                   </CatalogTableCell>
+                  <CatalogTableCell className="text-[10px] leading-tight text-slate-500 whitespace-normal">
+                    {row.constructions.filter((item) => item.is_active).map((item) => item.name).join(', ') || '—'}
+                  </CatalogTableCell>
                   <CatalogTableCell className="text-slate-500 truncate max-w-[10rem]">
                     {row.remarks.trim() || '—'}
-                  </CatalogTableCell>
-                  <CatalogTableCell className="text-slate-600">
-                    {row.requiresShadeBand ? 'Required' : '—'}
                   </CatalogTableCell>
                   <CatalogTableCell>
                     <DesktopWriteGate>

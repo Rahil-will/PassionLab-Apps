@@ -548,6 +548,7 @@ export const StyleColorDetails: React.FC = () => {
                                 adjustedQty={totalPlannedQty}
                                 showCaption={false}
                                 readOnly
+                                allColorways={order.colorways}
                             />
                         </Card>
                     )}

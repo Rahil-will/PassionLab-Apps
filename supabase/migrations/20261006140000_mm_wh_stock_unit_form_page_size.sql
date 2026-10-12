@@ -33,7 +33,7 @@ BEGIN
         '        u.shade,' || chr(10) ||
         '        u.tested_shade,' || chr(10) ||
         '        u.lot_no,' || chr(10) ||
-        '        COALESCE((SELECT r.unit_form FROM public.mm_rolls r WHERE r.stock_unit_id = u.id ORDER BY r.created_at DESC NULLS LAST LIMIT 1), ''roll'') AS unit_form,'
+        '        COALESCE((SELECT r.unit_form FROM public.mm_rolls r WHERE r.id = u.roll_id), ''roll'') AS unit_form,'
       );
     ELSE
       RAISE EXCEPTION 'wh stock unit_form select hits %', v_hits;
@@ -47,7 +47,7 @@ BEGIN
         v_old,
         '        u.shade,' || chr(10) ||
         '        u.lot_no,' || chr(10) ||
-        '        COALESCE((SELECT r.unit_form FROM public.mm_rolls r WHERE r.stock_unit_id = u.id ORDER BY r.created_at DESC NULLS LAST LIMIT 1), ''roll'') AS unit_form,'
+        '        COALESCE((SELECT r.unit_form FROM public.mm_rolls r WHERE r.id = u.roll_id), ''roll'') AS unit_form,'
       );
     ELSE
       RAISE EXCEPTION 'wh stock unit_form select (no tested_shade) hits %', v_hits;

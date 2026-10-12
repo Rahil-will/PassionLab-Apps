@@ -21,7 +21,10 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ titleOverride, subtitleO
 
   const trail = buildBreadcrumbTrail(currentRoute, titleOverride || pageMeta?.title || undefined);
   const current = trail[trail.length - 1];
-  const pageSubtitle = subtitleOverride ?? pageMeta?.subtitle ?? entry?.subtitle;
+  // Prefer routeMap subtitle on navigate (same speed as title). Page override only when still on that route.
+  const liveSubtitle =
+    pageMeta?.route === currentRoute ? pageMeta?.subtitle : null;
+  const pageSubtitle = subtitleOverride ?? liveSubtitle ?? entry?.subtitle;
 
   return (
     <div className="bg-gray-100 rounded-l-xl shadow-md border border-slate-200 px-6 py-4 mb-3 flex-shrink-0 min-h-[60px]">

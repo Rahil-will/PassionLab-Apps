@@ -1683,7 +1683,7 @@ export default function MmWarehouseStylePage() {
                   <th className={thCenterCls}>Rolls</th>
                   <th className={thCenterCls}>Qty</th>
                   <th className={thCls}>To</th>
-                  <th className={thCls}>Status</th>
+                  <th className={thCenterCls}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -1712,8 +1712,8 @@ export default function MmWarehouseStylePage() {
                     <td className={`${tdCls} text-center tabular-nums`}>{row.roll_count}</td>
                     <td className={`${tdCls} text-center tabular-nums`}>{formatQtyM(row.qty, row.uom)}</td>
                     <td className={`${tdCls} truncate`}>Cutting store</td>
-                    <td className={tdCls}>
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${storeDispatchStatusClass(row.status)}`}>
+                    <td className={`${tdCls} text-center`}>
+                      <span className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${storeDispatchStatusClass(row.status)}`}>
                         {storeDispatchStatusLabel(row.status)}
                       </span>
                     </td>

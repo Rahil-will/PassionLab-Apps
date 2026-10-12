@@ -65,6 +65,20 @@ export const mmSaveTypeRequirementFields = (typeId: string, fields: unknown[]) =
 export const mmSetFactoryFeature = (key: string, enabled: boolean) =>
   callRpc<{ in_house_mill: boolean }>('mm_set_factory_feature', { p_key: key, p_enabled: enabled });
 
+export type MmMaterialFeatureKey = 'fabric_warehouse' | 'fabric_mill' | 'trims';
+
+export type MmMaterialFeatures = {
+  fabric_warehouse: boolean;
+  fabric_mill: boolean;
+  trims: boolean;
+};
+
+export const mmGetMaterialFeatures = () =>
+  callRpc<MmMaterialFeatures>('mm_get_material_features');
+
+export const mmSetMaterialFeature = (key: MmMaterialFeatureKey, enabled: boolean) =>
+  callRpc<MmMaterialFeatures>('mm_set_material_feature', { p_key: key, p_enabled: enabled });
+
 export const mmGetOpsContext = () => callRpc<MmOpsContext>('mm_get_ops_context');
 
 export const mmGetOrderFabricLines = (orderId: string) =>
@@ -303,11 +317,6 @@ export const mmListProcessTypes = () =>
 export const mmListProcessVendors = () =>
   callRpc<MmProcessVendor[]>('mm_list_process_vendors');
 
-export const mmSaveProcessCatalog = (payload: {
-  types: Array<{ key: string; id: string | null; name: string; active: boolean; sort_order: number }>;
-  vendors: Array<{ id: string | null; name: string; active: boolean; type_keys: string[] }>;
-}) => callRpc('mm_save_process_catalog', { p_payload: payload });
-
 export const mmSendToProcess = (
   origin: 'mill' | 'warehouse',
   vendorId: string,
@@ -442,6 +451,23 @@ export const mmGetExpectedBoard = (
     p_offset: offset,
   });
 
+export const mmSaveUnallocatedVendorGrnV2 = (
+  fabricId: string,
+  supplierName: string,
+  uom: string,
+  colorRef: string,
+  lotNo: string,
+  rolls: MmRollWrite[],
+) =>
+  callRpc<{ id: string; challan_no: string; roll_count: number }>('mm_save_unallocated_vendor_grn_v2', {
+    p_fabric_id: fabricId,
+    p_supplier_name: supplierName,
+    p_uom: uom || '',
+    p_color_ref: colorRef || '',
+    p_lot_no: lotNo || '',
+    p_rolls: rolls,
+  });
+
 export const mmSaveUnallocatedVendorGrn = (
   fabricTypeId: string,
   supplierName: string,
@@ -456,6 +482,24 @@ export const mmSaveUnallocatedVendorGrn = (
     p_uom: uom || null,
     p_color_ref: colorRef || null,
     p_lot_no: lotNo || null,
+    p_rolls: rolls,
+  });
+
+export const mmSaveUnallocatedMillBatchV2 = (
+  fabricId: string,
+  header: { batch_no: string; mill_ref: string; production_date: string; remarks: string },
+  colorRef: string,
+  lotNo: string,
+  rolls: MmRollWrite[],
+) =>
+  callRpc<{ id: string; batch_no: string; roll_count: number }>('mm_save_unallocated_mill_batch_v2', {
+    p_fabric_id: fabricId,
+    p_batch_no: header.batch_no,
+    p_mill_ref: header.mill_ref || '',
+    p_production_date: header.production_date || '',
+    p_remarks: header.remarks || '',
+    p_color_ref: colorRef || '',
+    p_lot_no: lotNo || '',
     p_rolls: rolls,
   });
 
@@ -632,6 +676,8 @@ export interface MmInChallanHeader {
   required_m?: number | null;
   roll_count: number;
   received_roll_count?: number;
+  /** Dominant unit form on the challan: roll | lap | pieces */
+  unit_form?: string | null;
   qty?: number;
   uom?: string | null;
   tested_count: number;
@@ -821,6 +867,8 @@ export interface MmWarehouseFabricCell {
   color_name: string;
   fabric_line_id: string;
   fabric_type_id: string | null;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   fabric_name: string;
   fabric_type: string;
   fabric_category?: string | null;
@@ -844,6 +892,8 @@ export interface MmMillBatch {
   id: string;
   batch_no: string;
   mill_ref: string | null;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   fabric_ref_name?: string | null;
   color_ref?: string | null;
   production_date: string | null;
@@ -865,6 +915,8 @@ export interface MmMillLineRoll {
   shade: string | null;
   lot_no: string | null;
   color_ref?: string | null;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   fabric_ref_name?: string | null;
   attributes: Record<string, unknown> | null;
   mill_snapshot?: Record<string, unknown> | null;
@@ -897,6 +949,8 @@ export interface MmMillLine {
   color_name: string;
   fabric_name: string;
   fabric_type: string;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   fabric_category?: string | null;
   uom: string | null;
   test_fields: MmTestField[];
@@ -1160,6 +1214,10 @@ export interface MmExpectedRow {
   rolls_incoming: number;
   qty_received_m: number;
   rolls_received: number;
+  unit_form_received?: string | null;
+  qty_passed_m?: number;
+  rolls_passed?: number;
+  unit_form_passed?: string | null;
   qty_still_due_m: number;
   qty_uncovered_m: number;
   status: MmExpectedStatus;
@@ -1181,6 +1239,8 @@ export interface MmUnallocatedMillBatch {
   row_version?: number;
   fabric_type_id: string;
   fabric_type: string;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   roll_count: number;
   qty_m: number;
   at_mill_count: number;
@@ -1201,6 +1261,8 @@ export interface MmUnallocatedMillRoll {
   status: string;
   fabric_type_id: string;
   fabric_type: string;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   in_challan_id: string | null;
   challan_no?: string | null;
   challan_status?: string | null;
@@ -1388,6 +1450,8 @@ export interface MmWarehouseStockRow {
   fabric_name: string | null;
   fabric_type: string | null;
   fabric_type_id: string | null;
+  fabric_id?: string | null;
+  fabric_code?: string | null;
   in_challan_id: string | null;
   challan_no: string | null;
   challan_source: 'mill' | 'vendor' | null;

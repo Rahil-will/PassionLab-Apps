@@ -18,7 +18,7 @@ export function MmSegmentControl<T extends string>({
             key={opt.value}
             type="button"
             className={`px-3 py-1.5 text-[11px] font-semibold rounded-md whitespace-nowrap ${
-              on ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+              on ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'
             }`}
             onClick={() => onChange(opt.value)}
           >

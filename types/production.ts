@@ -22,6 +22,18 @@ export interface Material {
   trimCategory?: string;
   /** Type-specific fabric params (gsm, width, …). Stored in extras.paramValues. */
   paramValues?: Record<string, string>;
+  /** Fabric master SKU id (style fabric lines). */
+  fabricId?: string | null;
+  /** Contrast fabric colour; null = same as colorway name. */
+  fabricColor?: string | null;
+  /** Pantone / lab dip ref. */
+  fabricColorRef?: string | null;
+  /** Shared across colours for one style fabric line. */
+  lineKey?: string;
+  /** This colour's cons differs from the style line default. */
+  consOverridden?: boolean;
+  /** Display-only hydrated fabric master row; never sent on save. */
+  fabric?: import('../modules/material/lib/mmFabricRpc').MmFabric | null | undefined;
 }
 
 export interface ProductionProgress {

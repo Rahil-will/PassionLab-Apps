@@ -22,6 +22,7 @@ import {
   Menu,
   Warehouse,
   Scissors,
+  Layers,
 } from 'lucide-react';
 import { useNavigationStore, useDataStore } from '../stores';
 import { RoutePath } from '../types';
@@ -36,7 +37,7 @@ import { canAccessRoute, type RouteAccessContext } from '../lib/routeAccess';
 import { DesktopWriteProvider, DesktopWriteGate } from './DesktopWriteGate';
 import { getEntitledManifests } from '../core/modules/registry';
 import { useFactoryModules } from '../core/modules/useModuleEnabled';
-import { useInHouseMill } from '../modules/material/lib/useMmFactoryFeatures';
+import { useMmMaterialFeatures } from '../modules/material/lib/useMmFeature';
 import type { ModuleKey } from '../core/modules/types';
 
 interface SidebarItemProps {
@@ -200,6 +201,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const userRole = userProfile?.userRole ?? null;
   const modulesQuery = useFactoryModules();
+  const materialOn = Boolean(modulesQuery.data?.find((row) => row.module_key === 'material')?.enabled);
+  const materialFeatures = useMmMaterialFeatures(materialOn);
+
   const accessCtx: RouteAccessContext = useMemo(() => {
     const modulesEnabled: Partial<Record<string, boolean>> = {};
     for (const row of modulesQuery.data ?? []) {
@@ -208,11 +212,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     return {
       modulesEnabled,
       assignedApps: userProfile?.assignedApps ?? [],
+      mmFeatures: materialFeatures.data,
     };
-  }, [modulesQuery.data, userProfile?.assignedApps]);
+  }, [modulesQuery.data, userProfile?.assignedApps, materialFeatures.data]);
 
   const showNav = (route: RoutePath) => canAccessRoute(userRole, route, accessCtx);
-  const millOn = useInHouseMill(Boolean(accessCtx.modulesEnabled?.material));
 
   const moduleNavSections = useMemo(() => {
     const isEnabled = (key: ModuleKey) => Boolean(accessCtx.modulesEnabled?.[key]);
@@ -308,9 +312,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
           )}
 
-          {(showNav(RoutePath.MATERIAL_WAREHOUSE) || (showNav(RoutePath.MATERIAL_MILL) && millOn)) && Boolean(accessCtx.modulesEnabled?.material) && (
+          {(showNav(RoutePath.MATERIAL_FABRICS) || showNav(RoutePath.MATERIAL_WAREHOUSE) || showNav(RoutePath.MATERIAL_MILL)) && Boolean(accessCtx.modulesEnabled?.material) && (
           <div>
             <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>Material</p>
+            {showNav(RoutePath.MATERIAL_FABRICS) && (
+            <SidebarItem collapsed={collapsed}
+              id="fabric-master"
+              icon={Layers}
+              label="Fabric Master"
+              active={currentRoute.startsWith('#/material/fabrics')}
+              isOpen={false}
+              onToggle={() => {}}
+              onClick={() => handleNavRequest(RoutePath.MATERIAL_FABRICS)}
+              onNavRequest={handleNavRequest}
+            />
+            )}
             {showNav(RoutePath.MATERIAL_WAREHOUSE) && (
             <SidebarItem collapsed={collapsed}
               id="fabric-warehouse"
@@ -323,7 +339,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               onNavRequest={handleNavRequest}
             />
             )}
-            {showNav(RoutePath.MATERIAL_MILL) && millOn && (
+            {showNav(RoutePath.MATERIAL_MILL) && (
             <SidebarItem collapsed={collapsed}
               id="fabric-mill"
               icon={Scissors}

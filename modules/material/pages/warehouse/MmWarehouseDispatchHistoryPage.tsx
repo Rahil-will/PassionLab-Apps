@@ -223,8 +223,8 @@ export default function MmWarehouseDispatchHistoryPage() {
                       <span className="block text-[11px] font-semibold text-yellow-900 tabular-nums">{row.roll_count}</span>
                     </td>
                     <td className={`${tdCls} text-center tabular-nums font-semibold`}>{formatQtyM(row.qty, row.uom)}</td>
-                    <td className={tdCls}>
-                      <span className="inline-flex items-center gap-1.5">
+                    <td className={`${tdCls} text-center`}>
+                      <span className="inline-flex items-center justify-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${inboundStatusDot(row.status)}`} />
                         <span className={`text-[10px] font-bold ${inboundStatusText(row.status)}`}>{word}</span>
                       </span>

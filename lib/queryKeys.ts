@@ -20,6 +20,7 @@ export const queryKeys = {
   mmConfigBundle: (factoryId: string) => ['mm', factoryId, 'configBundle'] as const,
   mmV4Config: (factoryId: string) => ['mm', factoryId, 'v4Config'] as const,
   mmFactoryFeatures: (factoryId: string) => ['mm', factoryId, 'factoryFeatures'] as const,
+  mmMaterialFeatures: (factoryId: string) => ['mm', factoryId, 'materialFeatures'] as const,
   mmTrimParams: (factoryId: string) => ['mm', factoryId, 'trimParams'] as const,
   mmRequirementCatalog: (factoryId: string) => ['mm', factoryId, 'requirementCatalog'] as const,
   mmOps: (factoryId: string) => ['mm', factoryId, 'ops'] as const,

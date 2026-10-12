@@ -17,13 +17,27 @@ export interface MmDraftRoll {
 
 export const MAX_MILL_BATCH_ROLLS = 500;
 
+export function formatMillRollNo(n: number): string {
+  return `ROL-${String(n).padStart(3, '0')}`;
+}
+
+function rollNoSequence(raw: string): number {
+  const prefixed = raw.trim().match(/^rol-(\d+)$/i);
+  if (prefixed) {
+    const n = Number(prefixed[1]);
+    return Number.isInteger(n) ? n : 0;
+  }
+  const plain = Number(raw.trim());
+  return Number.isInteger(plain) && plain > 0 ? plain : 0;
+}
+
 export function nextRollNo(rows: MmDraftRoll[]): string {
   let max = 0;
   for (const row of rows) {
-    const n = Number(row.roll_no.trim());
-    if (Number.isInteger(n) && n > max) max = n;
+    const n = rollNoSequence(row.roll_no);
+    if (n > max) max = n;
   }
-  return String(max + 1);
+  return formatMillRollNo(max + 1);
 }
 
 export function blankDraftRoll(fields: MmTestField[] = [], rollNo = ''): MmDraftRoll {
@@ -75,6 +89,40 @@ export function qtyFieldLabel(_uom?: string | null): string {
   return 'Qty';
 }
 
+/** GSM and width columns from a fabric type's own field list. The attribute key is the field's key. */
+export function actualMeasureFields(
+  bundle: { test_fields?: Record<string, unknown>[]; requirement_fields?: Record<string, unknown>[] } | null | undefined,
+  typeId: string,
+): MmTestField[] {
+  if (!typeId || !bundle) return [];
+  const mapRows = (rows: Record<string, unknown>[] | undefined): MmTestField[] =>
+    (rows ?? [])
+      .filter((row) => String(row.type_id ?? '') === typeId && row.is_active !== false)
+      .map((row) => {
+        const label = String(row.label ?? '').trim();
+        const key = String(row.key ?? '').trim() || label;
+        return {
+          id: String(row.id ?? key),
+          key,
+          label: label || key,
+          data_type: String(row.data_type ?? 'decimal'),
+          options: (row.options as MmTestField['options']) ?? null,
+        };
+      })
+      .filter((field) => field.key);
+  const seen = new Set<string>();
+  const out: MmTestField[] = [];
+  for (const field of [...mapRows(bundle.test_fields), ...mapRows(bundle.requirement_fields)]) {
+    const token = `${normKey(field.key)} ${normKey(field.label)}`;
+    if (token.includes('shrink') || token.includes('form')) continue;
+    if (!token.includes('gsm') && !token.includes('width')) continue;
+    if (seen.has(field.key)) continue;
+    seen.add(field.key);
+    out.push(field);
+  }
+  return out;
+}
+
 export const FALLBACK_LENGTH_FIELD: MmTestField = {
   id: '__length_m',
   key: 'length_m',
@@ -95,15 +143,104 @@ export const FALLBACK_SHADE_FIELD: MmTestField = {
   options: null,
 };
 
-export function withLengthField(fields: MmTestField[] | null | undefined, uom?: string | null): MmTestField[] {
-  const list = (Array.isArray(fields) ? fields : []).filter((field) => fieldRole(field) !== 'shade');
+export function withLengthField(
+  fields: MmTestField[] | null | undefined,
+  uom?: string | null,
+  options?: { injectShade?: boolean },
+): MmTestField[] {
+  const injectShade = options?.injectShade !== false;
+  const list = (Array.isArray(fields) ? fields : []).filter((field) => (injectShade ? fieldRole(field) !== 'shade' : true));
   const withQty = list.some((field) => fieldRole(field) === 'length')
     ? list
     : [fallbackLengthField(uom), ...list];
+  if (!injectShade) return withQty;
   const qtyIdx = withQty.findIndex((field) => fieldRole(field) === 'length');
   const next = [...withQty];
   next.splice(Math.max(qtyIdx, 0) + 1, 0, FALLBACK_SHADE_FIELD);
   return next;
+}
+
+/** Shade bands A–E, each split 1–4: A1…A4, B1…B4, through E4. */
+export const LOT_TYPE_OPTIONS = (['A', 'B', 'C', 'D', 'E'] as const).flatMap((band) =>
+  [1, 2, 3, 4].map((step) => `${band}${step}`),
+);
+
+export const QC_DISPOSITIONS = [
+  { value: 'pass', label: 'Pass' },
+  { value: 'hold', label: 'Hold' },
+  { value: 'rework', label: 'Rework' },
+  { value: 'downgrade', label: 'Downgrade' },
+  { value: 'reject', label: 'Reject' },
+] as const;
+
+export const DEFAULT_MEASURE_TOLERANCE = '2.5';
+
+export type MmMeasureSpec = {
+  id: 'width' | 'gsm';
+  label: string;
+  targetKey: string;
+  tolKey: string;
+  actualKey: string;
+};
+
+export const MILL_ROLL_MEASURES: MmMeasureSpec[] = [
+  { id: 'width', label: 'Width', targetKey: 'target_width_in', tolKey: 'width_tol_pct', actualKey: 'actual_width_in' },
+  { id: 'gsm', label: 'GSM', targetKey: 'target_gsm', tolKey: 'gsm_tol_pct', actualKey: 'actual_gsm' },
+];
+
+export function measureOutOfSpec(target: string, actual: string, tolerance: string): boolean {
+  const spec = Number(target);
+  const measured = Number(actual);
+  if (!target.trim() || !actual.trim() || !Number.isFinite(spec) || !Number.isFinite(measured) || spec === 0) return false;
+  const pct = Number(tolerance);
+  const band = Number.isFinite(pct) ? Math.abs(pct) : Number(DEFAULT_MEASURE_TOLERANCE);
+  return (Math.abs(measured - spec) / Math.abs(spec)) * 100 > band;
+}
+
+export function rollOutOfSpec(row: MmDraftRoll, measures: MmMeasureSpec[] = MILL_ROLL_MEASURES): boolean {
+  return measures.some((measure) => measureOutOfSpec(
+    row.attributes[measure.targetKey] ?? '',
+    row.attributes[measure.actualKey] ?? '',
+    row.attributes[measure.tolKey] || DEFAULT_MEASURE_TOLERANCE,
+  ));
+}
+
+export function applyMeasureQc(row: MmDraftRoll, measures: MmMeasureSpec[] = MILL_ROLL_MEASURES): MmDraftRoll {
+  const out = rollOutOfSpec(row, measures);
+  const current = row.attributes.qc_status || 'pass';
+  const next = out
+    ? (current === 'pass' || current === '' ? 'hold' : current)
+    : (current === 'hold' ? 'pass' : current);
+  if (next === current && row.attributes.qc_status) return row;
+  return { ...row, attributes: { ...row.attributes, qc_status: next } };
+}
+
+/** Copy fabric targets onto every roll. Tolerance stays at ±2.5% until a roll overrides it. */
+export function stampMeasureTargets(
+  rows: MmDraftRoll[],
+  targets: Partial<Record<MmMeasureSpec['id'], string>>,
+): MmDraftRoll[] {
+  let changed = false;
+  const next = rows.map((row) => {
+    const attributes = { ...row.attributes };
+    let rowChanged = false;
+    for (const measure of MILL_ROLL_MEASURES) {
+      const target = targets[measure.id] ?? '';
+      if ((attributes[measure.targetKey] ?? '') !== target) {
+        attributes[measure.targetKey] = target;
+        rowChanged = true;
+      }
+      if (!(attributes[measure.tolKey] ?? '').trim()) {
+        attributes[measure.tolKey] = DEFAULT_MEASURE_TOLERANCE;
+        rowChanged = true;
+      }
+    }
+    const stamped = rowChanged ? { ...row, attributes } : row;
+    const withQc = applyMeasureQc(stamped);
+    if (withQc !== stamped || rowChanged) changed = true;
+    return withQc === stamped && !rowChanged ? row : withQc;
+  });
+  return changed ? next : rows;
 }
 
 /** Warehouse re-measure columns: mill type test fields except stock qty and shade. */

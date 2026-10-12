@@ -7,6 +7,7 @@ import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
+import { MmQcInspectModalV4 } from '../../components/MmQcInspectModalV4';
 import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
 import { MmSegmentControl } from '../../components/MmSegmentControl';
 import { queryKeys } from '../../../../lib/queryKeys';
@@ -72,7 +73,7 @@ export default function MmProcChallanDetailV4Page() {
   const [sameDrafts, setSameDrafts] = useState<Record<string, SameDraft>>({});
   const [reRollLineIds, setReRollLineIds] = useState<string[]>([]);
   const [reRollOutputs, setReRollOutputs] = useState<ReRollOutput[]>([
-    { unit_code: '', qty: '', qty_kg: '', shade: '', stage_code: '', unit_form: 'roll', width_form: 'open', grade: '', dye_lot: '' },
+    { unit_code: '', qty: '', qty_kg: '', shade: '', stage_code: '', unit_form: '', width_form: 'open', grade: '', dye_lot: '' },
   ]);
   const [writeOffId, setWriteOffId] = useState('');
   const [writeOffReason, setWriteOffReason] = useState('');
@@ -86,6 +87,9 @@ export default function MmProcChallanDetailV4Page() {
   const [voidReason, setVoidReason] = useState('');
   const [reprocessOpen, setReprocessOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const [returnedIds, setReturnedIds] = useState<string[]>([]);
+  const [returnQc, setReturnQc] = useState<'test' | 'inspect' | null>(null);
   const [lotNo, setLotNo] = useState('');
   const [lotMachineId, setLotMachineId] = useState('');
   const [lotLineIds, setLotLineIds] = useState<string[]>([]);
@@ -118,7 +122,13 @@ export default function MmProcChallanDetailV4Page() {
     name?: string;
     output_stage_code?: string | null;
     default_return_mode?: string | null;
+    output_unit_form?: 'roll' | 'lap' | null;
   };
+  const comesBackAs = processType.output_unit_form === 'roll'
+    ? 'Roll'
+    : processType.output_unit_form === 'lap'
+      ? 'Lap'
+      : 'Same as sent';
   const side = (String(challan.side ?? 'mill') === 'warehouse' ? 'warehouse' : 'mill') as MmV4ProcSide;
   const isInternal = unit.ownership !== 'external';
   const openLines = outLines.filter((l) => {
@@ -150,7 +160,7 @@ export default function MmProcChallanDetailV4Page() {
         shade: String(line.shade ?? ''),
         color_ref: String(line.color_ref ?? ''),
         stage_code: defaultStage,
-        unit_form: String(line.unit_form ?? unitForms[0] ?? 'roll'),
+        unit_form: String(line.unit_form ?? ''),
         width_form: String(line.width_form ?? widthForms[0] ?? 'open'),
         grade: String(line.grade ?? ''),
         dye_lot: String(line.dye_lot ?? ''),
@@ -257,6 +267,7 @@ export default function MmProcChallanDetailV4Page() {
       const res = await mmProcReturn(payload);
       if (res.ok === false) throw new Error(res.message);
       const codes = (res.data.outputs ?? []).map((o) => o.unit_code).join(', ');
+      setReturnedIds((res.data.outputs ?? []).map((o) => o.roll_id).filter(Boolean));
       showNotification(
         `Return ${res.data.return_no}${codes ? ` · ${codes}` : ''}`,
         'success',
@@ -323,14 +334,18 @@ export default function MmProcChallanDetailV4Page() {
               </Badge>
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              {unit.name || '—'} · {processType.name || '—'}
+              Vendor {unit.name || '—'} · {processType.name || '—'}
               {challan.unit_ref_no ? ` · ref ${String(challan.unit_ref_no)}` : ''}
+              {challan.target_color ? ` · Target colour ${String(challan.target_color)}` : ''}
             </p>
           </div>
           <DesktopWriteGate>
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
                 Test this challan
+              </Button>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setInspectOpen(true)}>
+                Inspect this challan
               </Button>
               <Button type="button" size="sm" variant="secondary" onClick={() => setReprocessOpen(true)}>
                 Reprocess
@@ -466,7 +481,12 @@ export default function MmProcChallanDetailV4Page() {
         {openLines.length > 0 ? (
           <div className="border border-slate-200 rounded-xl bg-white p-3 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-[12px] font-semibold text-slate-800">Record return</h3>
+              <div>
+                <h3 className="text-[12px] font-semibold text-slate-800">Record return</h3>
+                <p className="text-[10px] text-slate-500">
+                  Comes back as: {comesBackAs}
+                </p>
+              </div>
               <MmSegmentControl<MmV4ReturnMode>
                 value={returnMode}
                 onChange={setReturnMode}
@@ -687,7 +707,9 @@ export default function MmProcChallanDetailV4Page() {
                         qty_kg: '',
                         shade: '',
                         stage_code: defaultStage,
-                        unit_form: unitForms[0] ?? 'roll',
+                        unit_form: String(
+                          openLines.find((line) => reRollLineIds.includes(String(line.id ?? '')))?.unit_form ?? '',
+                        ),
                         width_form: widthForms[0] ?? 'open',
                         grade: '',
                         dye_lot: '',
@@ -801,14 +823,46 @@ export default function MmProcChallanDetailV4Page() {
         }}
       />
 
+      {returnedIds.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={() => setReturnQc('test')}>
+            Test returned rolls
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setReturnQc('inspect')}>
+            Inspect returned rolls
+          </Button>
+        </div>
+      ) : null}
+
       <MmQcTestModalV4
-        open={testOpen}
-        scopeKind="process_challan"
-        scopeId={id}
+        open={testOpen || returnQc === 'test'}
+        scopeKind={returnQc === 'test' ? 'rolls' : 'process_challan'}
+        scopeId={returnQc === 'test' ? null : id}
+        rollIds={returnQc === 'test' ? returnedIds : undefined}
         defaultSiteSide="processing"
-        onClose={() => setTestOpen(false)}
+        onClose={() => {
+          setTestOpen(false);
+          setReturnQc(null);
+        }}
         onSaved={() => {
           setTestOpen(false);
+          setReturnQc(null);
+          void refresh();
+        }}
+      />
+      <MmQcInspectModalV4
+        open={inspectOpen || returnQc === 'inspect'}
+        scopeKind={inspectOpen ? 'process_challan' : 'rolls'}
+        scopeId={inspectOpen ? id : null}
+        rollIds={inspectOpen ? undefined : returnedIds}
+        defaultSiteSide="processing"
+        onClose={() => {
+          setInspectOpen(false);
+          setReturnQc(null);
+        }}
+        onSaved={() => {
+          setInspectOpen(false);
+          setReturnQc(null);
           void refresh();
         }}
       />

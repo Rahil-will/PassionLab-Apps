@@ -43,20 +43,19 @@ function MillWhenCell({ iso }: { iso: string | null | undefined }) {
 }
 
 const thFirstCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center';
+  'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const thCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center';
-const thQtyCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 whitespace-nowrap text-center';
-const thAtQtyCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 whitespace-nowrap text-center';
-const thDispQtyCls =
-  'px-2.5 py-2.5 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 whitespace-nowrap text-center';
-const tdFirstCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
-const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
-const tdQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 bg-blue-50/40';
-const tdAtQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
-const tdDispQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 bg-green-50';
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
+const thCenterCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
+const thQtyCls = thCenterCls;
+const thAtQtyCls = thCenterCls;
+const thDispQtyCls = thCenterCls;
+const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-left max-w-0 overflow-hidden';
+const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-left max-w-0 overflow-hidden';
+const tdQtyCls = 'px-2.5 py-2.5 text-center border-b border-slate-100 max-w-0 overflow-hidden';
+const tdAtQtyCls = tdQtyCls;
+const tdDispQtyCls = tdQtyCls;
 
 export default function MmMillUnallocatedLinePage() {
   const params = useNavigationStore((s) => s.routeParams);
@@ -170,34 +169,6 @@ export default function MmMillUnallocatedLinePage() {
                   <Button
                     type="button"
                     size="sm"
-                    variant="secondary"
-                    disabled={atMillRolls.length === 0}
-                    onClick={() =>
-                      requestNavigate(RoutePath.MATERIAL_MILL_UNALLOCATED_LINE_ALLOCATE, {
-                        batchId,
-                        mode: 'testing',
-                      })
-                    }
-                  >
-                    Test
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={atMillRolls.length === 0}
-                    onClick={() =>
-                      requestNavigate(RoutePath.MATERIAL_MILL_UNALLOCATED_LINE_ALLOCATE, {
-                        batchId,
-                        mode: 'inspection',
-                      })
-                    }
-                  >
-                    4-point
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
                     disabled={atMillRolls.length === 0}
                     onClick={() =>
                       requestNavigate(RoutePath.MATERIAL_MILL_UNALLOCATED_DISPATCH, { batchId })
@@ -265,26 +236,24 @@ export default function MmMillUnallocatedLinePage() {
           <h4 className="text-[11px] font-semibold text-slate-800">Mill batches</h4>
           <p className="text-[10px] text-slate-400 mt-0.5">Open the batch to add rolls.</p>
         </div>
-        <div className="overflow-x-auto" style={{ minHeight: `${2.6 + 2 * 2.5}rem` }}>
+        <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: '4.5%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '7.944%' }} />
-              <col style={{ width: '12%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '6%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '7%' }} />
+              <col style={{ width: '9%' }} />
               <col style={{ width: '12%' }} />
             </colgroup>
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
-                <th className={thFirstCls}>S.No</th>
-                <th className={thCls}>Batch</th>
+                <th className={thFirstCls}>Batch</th>
                 <th className={thCls}>Ref</th>
                 <th className={thCls}>Date</th>
                 <th className={thQtyCls}>Qty</th>
@@ -293,7 +262,7 @@ export default function MmMillUnallocatedLinePage() {
                 <th className={thAtQtyCls}>At mill</th>
                 <th className={thDispQtyCls}>Disp. qty</th>
                 <th className={thDispQtyCls}>Disp. rolls</th>
-                <th className={thCls}>Status</th>
+                <th className={thCenterCls}>Status</th>
                 <th className={thCls}>Remarks</th>
               </tr>
             </thead>
@@ -305,8 +274,7 @@ export default function MmMillUnallocatedLinePage() {
                     requestNavigate(RoutePath.MATERIAL_MILL_UNALLOCATED_LINE_ALLOCATE, { batchId })
                   }
                 >
-                  <td className={`${tdFirstCls} text-slate-400 font-semibold tabular-nums`}>1</td>
-                  <td className={`${tdCls} font-semibold text-slate-800 truncate`}>{batch.batch_no}</td>
+                  <td className={`${tdFirstCls} font-semibold text-slate-800 truncate`}>{batch.batch_no}</td>
                   <td className={`${tdCls} truncate`}>{batch.mill_ref || '—'}</td>
                   <td className={`${tdCls} truncate`}>{millDateLabel(batch.production_date)}</td>
                   <td className={tdQtyCls}>
@@ -335,7 +303,7 @@ export default function MmMillUnallocatedLinePage() {
                       {dispatchedRolls.length}
                     </span>
                   </td>
-                  <td className={`${tdCls} text-center`}>
+                  <td className="px-2.5 py-2 text-center border-b border-slate-100">
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(batchStatus.key)}`} />
                       <span className={`text-[10px] font-bold ${millWordText(batchStatus.key)}`}>{batchStatus.label}</span>
@@ -345,8 +313,8 @@ export default function MmMillUnallocatedLinePage() {
                 </tr>
               ) : (
                 <tr>
-                  <td colSpan={12} className="border-b border-slate-100">
-                    <span className="block text-center text-[11px] text-slate-400 italic py-3">No mill batch.</span>
+                  <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    No mill batch.
                   </td>
                 </tr>
               )}
@@ -362,21 +330,30 @@ export default function MmMillUnallocatedLinePage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse">
-            <thead>
+            <colgroup>
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '14%' }} />
+            </colgroup>
+            <thead className="sticky top-0 z-10">
               <tr>
-                <th className={thFirstCls}>S.No</th>
-                <th className={thCls}>Dispatched</th>
+                <th className={thFirstCls}>Dispatched</th>
                 <th className={thCls}>Challan</th>
                 <th className={thCls}>Ref</th>
                 <th className={thCls}>To</th>
                 <th className={thDispQtyCls}>Rolls</th>
                 <th className={thDispQtyCls}>Qty</th>
-                <th className={thCls}>Status</th>
+                <th className={thCenterCls}>Status</th>
                 <th className={thCls}>Received</th>
               </tr>
             </thead>
             <tbody>
-              {dispatchedChallans.map((challan, idx) => {
+              {dispatchedChallans.map((challan) => {
                 const open = challan.id === openChallanId;
                 return (
                   <tr
@@ -384,8 +361,7 @@ export default function MmMillUnallocatedLinePage() {
                     className={`hover:bg-slate-50/80 cursor-pointer ${open ? 'bg-blue-50/70' : ''}`}
                     onClick={() => setOpenChallanId(open ? null : challan.id)}
                   >
-                    <td className={`${tdFirstCls} text-slate-400 font-semibold tabular-nums`}>{idx + 1}</td>
-                    <td className={`${tdCls} whitespace-nowrap`}><MillWhenCell iso={challan.sent_at} /></td>
+                    <td className={`${tdFirstCls} whitespace-nowrap`}><MillWhenCell iso={challan.sent_at} /></td>
                     <td className={`${tdCls} font-semibold text-slate-800 truncate`}>{challan.challan_no}</td>
                     <td className={`${tdCls} truncate`}>{challan.reference_no || '—'}</td>
                     <td className={`${tdCls} truncate`}>{challan.to_location || 'Warehouse'}</td>
@@ -397,7 +373,7 @@ export default function MmMillUnallocatedLinePage() {
                         {formatQtyM(challan.qty_m, 'm')}
                       </span>
                     </td>
-                    <td className={`${tdCls} text-center`}>
+                    <td className="px-2.5 py-2 text-center border-b border-slate-100">
                       <span className="inline-flex items-center justify-center gap-1.5">
                         <span className={`w-1.5 h-1.5 rounded-full ${inboundStatusDot(challan.status)}`} />
                         <span className={`text-[10px] font-bold ${inboundStatusText(challan.status)}`}>
@@ -411,8 +387,8 @@ export default function MmMillUnallocatedLinePage() {
               })}
               {dispatchedChallans.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="border-b border-slate-100">
-                    <span className="block text-center text-[11px] text-slate-400 italic py-3">No mill challans yet.</span>
+                  <td colSpan={8} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    No mill challans yet.
                   </td>
                 </tr>
               ) : null}

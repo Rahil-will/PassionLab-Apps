@@ -25,11 +25,3 @@ export function useMmFactoryFeatures(enabled = true) {
     staleTime: 30_000,
   });
 }
-
-/** Default ON when the row is missing so Fabric Mill stays visible after first enable. */
-export function useInHouseMill(moduleOn: boolean): boolean {
-  const { data } = useMmFactoryFeatures(moduleOn);
-  if (!moduleOn) return false;
-  if (data == null || data.in_house_mill == null) return true;
-  return data.in_house_mill;
-}

@@ -62,8 +62,8 @@ function specFieldsForKind(kind: string): { key: keyof MmV4MachineSpecs & string
 
 const MmMachinesPage = forwardRef<
   MmMachinesHandle,
-  { onDirtyChange?: (dirty: boolean) => void }
->(function MmMachinesPage({ onDirtyChange }, ref) {
+  { onDirtyChange?: (dirty: boolean) => void; lockedFacilityId?: string }
+>(function MmMachinesPage({ onDirtyChange, lockedFacilityId }, ref) {
   const { data, isLoading, error } = useMmV4Config();
   const refresh = useRefreshMmV4Config();
   const { showNotification } = useNotificationStore();
@@ -125,8 +125,9 @@ const MmMachinesPage = forwardRef<
       );
     }
     // Default machine kind alone must not count as unsaved.
-    return Boolean(facilityId || code.trim() || name.trim());
+    return Boolean((lockedFacilityId ? '' : facilityId) || code.trim() || name.trim());
   }, [
+    lockedFacilityId,
     editingLocalId,
     machines,
     facilityId,
@@ -147,12 +148,12 @@ const MmMachinesPage = forwardRef<
     onDirtyChange?.(dirty);
   }, [dirty, hydrated, onDirtyChange]);
 
-  const visible = machines.filter((m) => m.is_active);
+  const visible = machines.filter((m) => m.is_active && (!lockedFacilityId || m.facilityId === lockedFacilityId));
   const specFields = specFieldsForKind(machineKind);
 
   const resetForm = () => {
     setEditingLocalId(null);
-    setFacilityId('');
+    setFacilityId(lockedFacilityId ?? '');
     setMachineKind(machineKinds[0] ?? '');
     setCode('');
     setName('');
@@ -176,10 +177,12 @@ const MmMachinesPage = forwardRef<
     setSpecs({ ...row.specs });
   };
 
+  const chosenFacilityId = lockedFacilityId || facilityId;
+
   const submitForm = () => {
     const trimmedCode = code.trim();
-    if (!facilityId) {
-      showNotification('Select a facility', 'error');
+    if (!chosenFacilityId) {
+      showNotification('Select a mill', 'error');
       return;
     }
     if (!trimmedCode || !machineKind.trim()) {
@@ -187,7 +190,7 @@ const MmMachinesPage = forwardRef<
       return;
     }
     const payload = {
-      facilityId,
+      facilityId: chosenFacilityId,
       machine_kind: machineKind.trim(),
       code: trimmedCode,
       name: name.trim(),
@@ -224,9 +227,10 @@ const MmMachinesPage = forwardRef<
     save: async () => {
       let pending = machines;
       const trimmedCode = code.trim();
-      if (facilityId || trimmedCode || name.trim()) {
-        if (!facilityId) {
-          showNotification('Select a facility', 'error');
+      const saveFacilityId = lockedFacilityId || facilityId;
+      if (trimmedCode || name.trim() || (!lockedFacilityId && facilityId)) {
+        if (!saveFacilityId) {
+          showNotification('Select a mill', 'error');
           return false;
         }
         if (!trimmedCode || !machineKind.trim()) {
@@ -234,7 +238,7 @@ const MmMachinesPage = forwardRef<
           return false;
         }
         const payload = {
-          facilityId,
+          facilityId: saveFacilityId,
           machine_kind: machineKind.trim(),
           code: trimmedCode,
           name: name.trim(),
@@ -256,9 +260,9 @@ const MmMachinesPage = forwardRef<
         resetForm();
       }
 
-      for (const machine of pending.filter((m) => m.dirty || !m.id)) {
+      for (const machine of pending.filter((m) => (m.dirty || !m.id) && (!lockedFacilityId || m.facilityId === lockedFacilityId))) {
         if (!machine.facilityId || !machine.code.trim() || !machine.machine_kind.trim()) {
-          showNotification('Machine facility, code, and kind are required', 'error');
+          showNotification('Machine mill, code, and kind are required', 'error');
           return false;
         }
         const res = await mmSaveMachine({
@@ -290,6 +294,7 @@ const MmMachinesPage = forwardRef<
     isActive,
     specs,
     editingLocalId,
+    lockedFacilityId,
     refresh,
     showNotification,
   ]);
@@ -315,7 +320,7 @@ const MmMachinesPage = forwardRef<
       scrollable={false}
       leftScrollable
       rightScrollable
-      fillHeight
+      fillHeight={!lockedFacilityId}
       left={(
         <DesktopWriteGate>
           <div className="space-y-3">
@@ -325,23 +330,27 @@ const MmMachinesPage = forwardRef<
                 {editingLocalId ? 'Edit machine' : 'Add machine'}
               </h4>
             </div>
-            <SelectDropdown
-              label="Facility"
-              value={facilityId}
-              onChange={setFacilityId}
-              options={[
-                { value: '', label: 'Select in-house facility…' },
-                ...internalFacilities.map((f) => ({
-                  value: f.id,
-                  label: f.name || f.code || f.id,
-                })),
-              ]}
-            />
-            {internalFacilities.length === 0 ? (
-              <p className="text-[11px] text-slate-400">
-                Add an in-house facility first under Facilities.
-              </p>
-            ) : null}
+            {lockedFacilityId ? null : (
+              <>
+                <SelectDropdown
+                  label="Mill"
+                  value={facilityId}
+                  onChange={setFacilityId}
+                  options={[
+                    { value: '', label: 'Select mill…' },
+                    ...internalFacilities.map((f) => ({
+                      value: f.id,
+                      label: f.name || f.code || f.id,
+                    })),
+                  ]}
+                />
+                {internalFacilities.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">
+                    Add a mill under Settings → Material → Mills.
+                  </p>
+                ) : null}
+              </>
+            )}
             <SelectDropdown
               label="Kind"
               value={machineKind}
@@ -387,7 +396,7 @@ const MmMachinesPage = forwardRef<
                 variant="primary"
                 size="sm"
                 icon={editingLocalId ? Pencil : Plus}
-                disabled={!facilityId || !code.trim() || !machineKind.trim()}
+                disabled={!chosenFacilityId || !code.trim() || !machineKind.trim()}
                 onClick={submitForm}
                 className="w-full"
               >
@@ -420,12 +429,12 @@ const MmMachinesPage = forwardRef<
         <div className="h-full flex flex-col min-h-0">
           <CatalogTablePanel
             title="Machines"
-            subtitle="In-house machines only. Click a row to edit."
+            subtitle={lockedFacilityId ? 'Machines on this mill. Click a row to edit.' : 'In-house machines only. Click a row to edit.'}
             isEmpty={visible.length === 0}
-            emptyMessage="No machines yet."
+            emptyMessage={lockedFacilityId ? 'No machines on this mill yet.' : 'No machines yet.'}
             headerAction={<MmTableSaveButton />}
           >
-            <CatalogTable headers={['S.No', 'Code', 'Name', 'Facility', 'Kind', 'Active', '']}>
+            <CatalogTable headers={lockedFacilityId ? ['S.No', 'Code', 'Name', 'Kind', 'Active', ''] : ['S.No', 'Code', 'Name', 'Mill', 'Kind', 'Active', '']}>
               {visible.map((row, idx) => (
                 <CatalogTableRow
                   key={row.localId}
@@ -440,9 +449,11 @@ const MmMachinesPage = forwardRef<
                     ) : null}
                   </CatalogTableCell>
                   <CatalogTableCell className="text-slate-800 truncate">{row.name || '—'}</CatalogTableCell>
-                  <CatalogTableCell className="text-slate-600 truncate">
-                    {facilityNameById.get(row.facilityId) ?? '—'}
-                  </CatalogTableCell>
+                  {lockedFacilityId ? null : (
+                    <CatalogTableCell className="text-slate-600 truncate">
+                      {facilityNameById.get(row.facilityId) ?? '—'}
+                    </CatalogTableCell>
+                  )}
                   <CatalogTableCell className="text-slate-600">{row.machine_kind || '—'}</CatalogTableCell>
                   <CatalogTableCell className="text-slate-600">
                     {row.is_active ? 'Yes' : 'No'}

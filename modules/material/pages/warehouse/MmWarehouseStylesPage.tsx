@@ -83,6 +83,7 @@ const thCutCls =
   'px-2 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
 const tdPassCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-emerald-50';
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
+const tdCenterCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
 const tdReqCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-blue-50/60';
 const tdRecvCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
 const tdCutCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-green-50';
@@ -317,7 +318,12 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
                     </td>
                     <td className={`${tdCls} truncate`}>{cell.color_name}</td>
                     <td className={tdCls}>
-                      <span className="block font-medium text-slate-800 truncate">{cell.fabric_name}</span>
+                      <span className="block font-medium text-slate-800 truncate">
+                        {cell.fabric_code ? (
+                          <span className="font-mono text-[10px] font-semibold text-slate-500 mr-1">{cell.fabric_code}</span>
+                        ) : null}
+                        {cell.fabric_name}
+                      </span>
                       {typeCategory !== '—' ? (
                         <span className="block text-[10px] text-slate-400 truncate">{typeCategory}</span>
                       ) : null}

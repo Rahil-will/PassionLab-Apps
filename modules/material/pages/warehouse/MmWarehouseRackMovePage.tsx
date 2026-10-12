@@ -58,6 +58,8 @@ function RackSpoolIcon() {
 
 const thCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
+const thCenterCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap';
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
 
 export default function MmWarehouseRackMovePage() {
@@ -559,7 +561,7 @@ export default function MmWarehouseRackMovePage() {
                     <th className={thCls}>Challan / GRN</th>
                     <th className={thCls}>Batch</th>
                     <th className={thCls}>Qty (m)</th>
-                    <th className={thCls}>Status</th>
+                    <th className={thCenterCls}>Status</th>
                     <th className={thCls}>Received</th>
                   </tr>
                 </thead>
@@ -591,8 +593,8 @@ export default function MmWarehouseRackMovePage() {
                             ? '—'
                             : Number(roll.length_m).toLocaleString(undefined, { maximumFractionDigits: 1 })}
                         </td>
-                        <td className={tdCls}>
-                          <span className="inline-flex items-center gap-1.5">
+                        <td className={`${tdCls} text-center`}>
+                          <span className="inline-flex items-center justify-center gap-1.5">
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
                                 status.tone === 'rose'

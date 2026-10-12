@@ -5,6 +5,8 @@ import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { MmFabricSummaryCard } from '../../components/MmFabricSummaryCard';
+import { MmQcInspectModalV4 } from '../../components/MmQcInspectModalV4';
+import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
 import { MmChallanPrintDocument } from '../../components/MmChallanPrintDocument';
 import { inboundChallanPrintDoc } from '../../lib/mmChallanPrint';
 import { useMmChallanPrint } from '../../lib/useMmChallanPrint';
@@ -131,8 +133,11 @@ export default function MmWarehouseRollDetail() {
   const [busy, setBusy] = useState(false);
   const [rollQuery, setRollQuery] = useState('');
   const [filterBatch, setFilterBatch] = useState('');
+  const [filterShade, setFilterShade] = useState('');
   const [arrived, setArrived] = useState<Record<string, boolean>>({});
   const [closeReason, setCloseReason] = useState('');
+  const [testOpen, setTestOpen] = useState(false);
+  const [inspectOpen, setInspectOpen] = useState(false);
 
   const challan = data?.challan;
   const fields = data?.test_fields ?? [];
@@ -168,6 +173,7 @@ export default function MmWarehouseRollDetail() {
     }
     setRollQuery('');
     setFilterBatch('');
+    setFilterShade('');
     setCloseReason('');
   }, [data]);
 
@@ -243,12 +249,33 @@ export default function MmWarehouseRollDetail() {
     }
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [millRows]);
+  const shadeOptions = useMemo(() => {
+    const names = new Set<string>();
+    if (isMill) {
+      for (const row of millRows) {
+        const name = row.shade.trim();
+        if (name) names.add(name);
+      }
+    } else {
+      for (const row of vendorRows) {
+        const name = (row.values.shade ?? '').trim();
+        if (name) names.add(name);
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [isMill, millRows, vendorRows]);
   const visibleMill = millRows.filter((row) => {
     if (filterBatch && (row.batch_no ?? '') !== filterBatch) return false;
-    if (q && !(row.roll_no.toLowerCase().includes(q) || (row.batch_no ?? '').toLowerCase().includes(q))) return false;
+    if (filterShade && row.shade.trim() !== filterShade) return false;
+    if (q && !(row.roll_no.toLowerCase().includes(q) || (row.batch_no ?? '').toLowerCase().includes(q) || row.shade.toLowerCase().includes(q))) return false;
     return true;
   });
-  const visibleVendor = vendorRows.filter((row) => !q || row.unit_code.toLowerCase().includes(q));
+  const visibleVendor = vendorRows.filter((row) => {
+    const shade = (row.values.shade ?? '').trim();
+    if (filterShade && shade !== filterShade) return false;
+    if (q && !(row.unit_code.toLowerCase().includes(q) || shade.toLowerCase().includes(q))) return false;
+    return true;
+  });
   const millColSpan = (millOpen ? 4 : 3) + cols.length;
   const printDoc = useMemo(() => {
     if (!challan) return null;
@@ -345,16 +372,26 @@ export default function MmWarehouseRollDetail() {
                   <Button type="button" size="sm" variant="secondary" icon={Printer} onClick={requestPrint}>
                     Print
                   </Button>
-                  {millView ? null : millOpen ? (
+                  {!millView && millOpen ? (
                     <DesktopWriteGate>
                       <Button type="button" size="sm" disabled={busy} onClick={() => void receiveMill()}>
                         {busy ? 'Receiving…' : millPartial ? 'Receive ticked' : 'Receive'}
                       </Button>
                     </DesktopWriteGate>
                   ) : (
-                    <Button type="button" size="sm" variant="secondary" onClick={openTesting}>
-                      Test this challan
-                    </Button>
+                    <DesktopWriteGate>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={millView ? () => setTestOpen(true) : openTesting}
+                      >
+                        Test this challan
+                      </Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => setInspectOpen(true)}>
+                        Inspect this challan
+                      </Button>
+                    </DesktopWriteGate>
                   )}
                   <span
                     className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${millChallanStatusClass(challan.status)}`}
@@ -451,21 +488,33 @@ export default function MmWarehouseRollDetail() {
               <Search size={14} className="text-slate-400 shrink-0" />
               <input
                 className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-                placeholder="Search roll, batch..."
+                placeholder="Search roll, batch, shade..."
                 value={rollQuery}
                 onChange={(e) => setRollQuery(e.target.value)}
               />
             </div>
-            <SelectDropdown
-              value={filterBatch}
-              onChange={setFilterBatch}
-              options={[
-                { value: '', label: 'All batches' },
-                ...batchOptions.map((name) => ({ value: name, label: name })),
-              ]}
-              icon={Filter}
-              className="w-36"
-            />
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
+              <SelectDropdown
+                value={filterBatch}
+                onChange={setFilterBatch}
+                options={[
+                  { value: '', label: 'All batches' },
+                  ...batchOptions.map((name) => ({ value: name, label: name })),
+                ]}
+                icon={Filter}
+                className="w-36"
+              />
+              <SelectDropdown
+                value={filterShade}
+                onChange={setFilterShade}
+                options={[
+                  { value: '', label: 'All shades' },
+                  ...shadeOptions.map((name) => ({ value: name, label: name })),
+                ]}
+                icon={Filter}
+                className="w-36"
+              />
+            </div>
           </div>
           {millPartial ? (
             <div className="px-4 py-2 border-b border-amber-100 bg-amber-50 flex flex-col sm:flex-row sm:items-center gap-2">
@@ -578,16 +627,26 @@ export default function MmWarehouseRollDetail() {
 
       {challan && !isMill ? (
         <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 flex items-center bg-slate-50/50 gap-3">
+          <div className="px-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-3">
             <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
               <Search size={14} className="text-slate-400 shrink-0" />
               <input
                 className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-                placeholder="Search roll no..."
+                placeholder="Search roll no, shade..."
                 value={rollQuery}
                 onChange={(e) => setRollQuery(e.target.value)}
               />
             </div>
+            <SelectDropdown
+              value={filterShade}
+              onChange={setFilterShade}
+              options={[
+                { value: '', label: 'All shades' },
+                ...shadeOptions.map((name) => ({ value: name, label: name })),
+              ]}
+              icon={Filter}
+              className="w-36"
+            />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] table-fixed border-collapse">
@@ -646,6 +705,28 @@ export default function MmWarehouseRollDetail() {
           </div>
         </div>
       ) : null}
+      <MmQcTestModalV4
+        open={testOpen}
+        scopeKind="in_challan"
+        scopeId={id ?? null}
+        defaultSiteSide="mill"
+        onClose={() => setTestOpen(false)}
+        onSaved={() => {
+          setTestOpen(false);
+          void refetch();
+        }}
+      />
+      <MmQcInspectModalV4
+        open={inspectOpen}
+        scopeKind="in_challan"
+        scopeId={id ?? null}
+        defaultSiteSide={millView ? 'mill' : 'warehouse'}
+        onClose={() => setInspectOpen(false)}
+        onSaved={() => {
+          setInspectOpen(false);
+          void refetch();
+        }}
+      />
       <MmChallanPrintDocument doc={printDoc} />
     </PageShell>
   );

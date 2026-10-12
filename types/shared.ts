@@ -17,6 +17,9 @@ export type RoutePath =
   | "#/work-centers/process-flows"
   | "#/work-centers/material"
   | "#/material-management"
+  | "#/material/fabrics"
+  | "#/material/fabrics/:fabricId"
+  | "#/material/fabrics/setup"
   | "#/material/mill"
   | "#/material/mill/batches"
   | "#/material/mill/batches/new"
@@ -26,6 +29,7 @@ export type RoutePath =
   | "#/material/mill/styles"
   | "#/material/mill/history"
   | "#/material/mill/stock"
+  | "#/material/mill/process-send"
   | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId"
   | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/assign"
   | "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/dispatch"
@@ -54,6 +58,7 @@ export type RoutePath =
   | "#/material/warehouse/dispatch/:orderId/:colorwayId/:fabricLineId/send"
   | "#/material/warehouse/testing"
   | "#/material/warehouse/testing/:id"
+  | "#/material/warehouse/process-send"
   | "#/material/warehouse/stock"
   | "#/material/warehouse/returns"
   | "#/material/warehouse/returns/:id"
@@ -91,6 +96,9 @@ export const RoutePath = {
   WORK_CENTER_PROCESS_FLOWS: "#/work-centers/process-flows",
   WORK_CENTER_MATERIAL: "#/work-centers/material",
   MATERIAL_MANAGEMENT: "#/material-management",
+  MATERIAL_FABRICS: "#/material/fabrics",
+  MATERIAL_FABRIC_DETAIL: "#/material/fabrics/:fabricId",
+  MATERIAL_FABRICS_SETUP: "#/material/fabrics/setup",
   MATERIAL_MILL: "#/material/mill",
   MATERIAL_MILL_BATCHES: "#/material/mill/batches",
   MATERIAL_MILL_BATCH_NEW: "#/material/mill/batches/new",
@@ -99,6 +107,7 @@ export const RoutePath = {
   MATERIAL_MILL_STYLES: "#/material/mill/styles",
   MATERIAL_MILL_HISTORY: "#/material/mill/history",
   MATERIAL_MILL_STOCK: "#/material/mill/stock",
+  MATERIAL_MILL_PROCESS_SEND: "#/material/mill/process-send",
   MATERIAL_MILL_LINE: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId",
   MATERIAL_MILL_ASSIGN: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/assign",
   MATERIAL_MILL_DISPATCH: "#/material/mill/line/:orderId/:colorwayId/:fabricLineId/dispatch",

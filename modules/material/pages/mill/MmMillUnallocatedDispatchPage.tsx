@@ -19,11 +19,11 @@ function todayIso(): string {
 }
 
 const th =
-  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
 const thFirst =
-  'pl-6 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
-const td = 'px-2.5 py-2 text-[11px] text-slate-700 border-b border-slate-100';
-const tdFirst = 'pl-6 pr-2.5 py-2 text-[11px] text-slate-700 border-b border-slate-100';
+  'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
+const td = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
+const tdFirst = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
 
 export default function MmMillUnallocatedDispatchPage() {
   const params = useNavigationStore((s) => s.routeParams);
@@ -204,8 +204,8 @@ export default function MmMillUnallocatedDispatchPage() {
             <p className="px-4 py-10 text-center text-[11px] text-slate-400 italic">Select a batch.</p>
           ) : (
             <div className="flex-1 min-h-0 overflow-auto">
-              <table className="w-full min-w-[640px] text-left border-collapse">
-                <thead>
+              <table className="w-full table-fixed border-collapse">
+                <thead className="sticky top-0 z-10">
                   <tr>
                     <th className={`${thFirst} w-10`}>
                       <input
