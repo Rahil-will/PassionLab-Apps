@@ -7,7 +7,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Pencil, Search } from 'lucide-react';
-import { Badge, Button } from '../../../../components/ui';
+import { Badge, Button, SelectDropdown } from '../../../../components/ui';
+import { tokens } from '../../../../lib/designTokens';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
@@ -27,6 +28,7 @@ import {
   type MmFabricStockRoll,
 } from '../../lib/mmFabricRpc';
 import { mmWhListReceipts } from '../../lib/mmV4Rpc';
+import { dateLabel } from '../../lib/mmRollDraft';
 import { lastTestParts } from '../../lib/qcTolerance';
 import { useMmConfigRights } from '../../lib/useMmConfigRights';
 import { useMmV4Config } from '../../lib/useMmV4Config';
@@ -124,9 +126,49 @@ function groupByStageColour(rolls: MmFabricStockRoll[], stageOrder: Map<string, 
     });
 }
 
+export type RollChallan = { key: string; no: string; vendor: string; date: string | null };
+
+type ChallanGroup = RollChallan & { rolls: MmFabricStockRoll[]; colours: ColourGroup[] };
+
+function groupByStageChallanColour(
+  rolls: MmFabricStockRoll[],
+  stageOrder: Map<string, number>,
+  challanOf: (roll: MmFabricStockRoll) => RollChallan,
+): Array<StageGroup & { challans: ChallanGroup[] }> {
+  return groupByStageColour(rolls, stageOrder).map((stage) => {
+    const byChallan = new Map<string, ChallanGroup>();
+    for (const roll of stage.rolls) {
+      const info = challanOf(roll);
+      let group = byChallan.get(info.key);
+      if (!group) {
+        group = { ...info, rolls: [], colours: [] };
+        byChallan.set(info.key, group);
+      }
+      group.rolls.push(roll);
+    }
+    const challans = [...byChallan.values()]
+      .sort((a, b) => String(a.date ?? '').localeCompare(String(b.date ?? '')) || a.no.localeCompare(b.no))
+      .map((group) => {
+        const byColour = new Map<string, MmFabricStockRoll[]>();
+        for (const roll of group.rolls) {
+          const colour = rollColourName(roll);
+          const list = byColour.get(colour) ?? [];
+          list.push(roll);
+          byColour.set(colour, list);
+        }
+        return {
+          ...group,
+          colours: [...byColour.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([colour, list]) => ({ colour, rolls: [...list].sort((a, b) => String(a.roll_code).localeCompare(String(b.roll_code))) })),
+        };
+      });
+    return { ...stage, challans };
+  });
+}
+
 const th = 'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
 const td = 'px-2.5 py-2 text-[12px] text-slate-700 border-b border-slate-100';
-const selectCls = 'h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-700 focus:outline-none focus:border-blue-300';
 
 export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
   const factoryId = useNavigationStore((s) => s.factoryId);
@@ -137,7 +179,7 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
   const [where, setWhere] = useState<WhereFilter>('all');
   const [passportId, setPassportId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [openAlloc, setOpenAlloc] = useState<Record<string, boolean>>({ allocated: true, free: true });
+  const [openAlloc, setOpenAlloc] = useState<Record<string, boolean>>({});
   const [openStage, setOpenStage] = useState<Record<string, boolean>>({});
   const debouncedSearch = useDebouncedValue(search, 300);
 
@@ -205,22 +247,32 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
     },
     enabled: Boolean(factoryId && fabricId),
   });
-  const vendorOf = useMemo(() => {
-    const byId = new Map<string, string>();
-    const byGrn = new Map<string, string>();
+  const challanOf = useMemo(() => {
+    const byId = new Map<string, RollChallan>();
+    const byGrn = new Map<string, RollChallan>();
     for (const receipt of receiptsQ.data ?? []) {
-      const name = (receipt.from?.name || '').trim()
+      const vendorName = (receipt.from?.name || '').trim()
         || (receipt.source === 'process_return' ? 'Process return' : receipt.source === 'internal' ? 'Internal' : 'Vendor');
-      byId.set(receipt.id, name);
-      if (receipt.grn_no) byGrn.set(receipt.grn_no, name);
+      const info: RollChallan = {
+        key: receipt.id,
+        no: receipt.grn_no || '—',
+        vendor: vendorName,
+        date: receipt.received_at ?? null,
+      };
+      byId.set(receipt.id, info);
+      if (receipt.grn_no) byGrn.set(receipt.grn_no, info);
     }
-    return (roll: MmFabricStockRoll): string => {
+    return (roll: MmFabricStockRoll): RollChallan => {
       const id = roll.receipt_id || roll.in_challan_id || '';
-      if (id && byId.has(id)) return byId.get(id) as string;
-      if (roll.batch_no && byGrn.has(roll.batch_no)) return byGrn.get(roll.batch_no) as string;
-      return '—';
+      if (id && byId.has(id)) return byId.get(id) as RollChallan;
+      if (roll.batch_no && byGrn.has(roll.batch_no)) return byGrn.get(roll.batch_no) as RollChallan;
+      return { key: roll.batch_no || 'none', no: roll.batch_no || 'No challan', vendor: '—', date: null };
     };
   }, [receiptsQ.data]);
+  const vendorOf = useMemo(
+    () => (roll: MmFabricStockRoll): string => challanOf(roll).vendor,
+    [challanOf],
+  );
 
   const vendors = useMemo(
     () => [...new Set(allRolls.map((roll) => vendorOf(roll)))].sort((a, b) => a.localeCompare(b)),
@@ -252,14 +304,17 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
       if (where === 'at_processing' && roll.stock?.bucket !== 'at_processing') return false;
       if (where === 'issued' && roll.stock?.bucket !== 'issued') return false;
       if (term) {
-        const hay = [roll.roll_code, rollColourName(roll), roll.dye_lot, vendorOf(roll), bucketLabel(roll.stock?.bucket)].join(' ').toLowerCase();
+        const hay = [roll.roll_code, rollColourName(roll), roll.dye_lot, vendorOf(roll), challanOf(roll).no, bucketLabel(roll.stock?.bucket)].join(' ').toLowerCase();
         if (!hay.includes(term)) return false;
       }
       return true;
     });
-  }, [allRolls, debouncedSearch, selection, vendor, vendorOf, where]);
+  }, [allRolls, challanOf, debouncedSearch, selection, vendor, vendorOf, where]);
 
-  const grouped = useMemo(() => groupByStageColour(shownRolls, stageOrder), [shownRolls, stageOrder]);
+  const grouped = useMemo(
+    () => groupByStageChallanColour(shownRolls, stageOrder, challanOf),
+    [challanOf, shownRolls, stageOrder],
+  );
   const shownQty = useMemo(() => shownRolls.reduce((sum, roll) => sum + rollQtyNum(roll, qtyUnit), 0), [shownRolls, qtyUnit]);
 
   usePageHeader({
@@ -291,9 +346,9 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
         </div>
         <div className="px-4 py-3 flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[12px] text-slate-500">{fabric?.code || '—'}</p>
-            <p className="text-[16px] font-semibold text-slate-900 truncate">{fabric?.name || '—'}</p>
-            <p className="text-[12px] text-slate-600 mt-1">
+            <p className="font-mono text-slate-500" style={{ fontSize: tokens.fontSize.bodySmall }}>{fabric?.code || '—'}</p>
+            <p className="font-semibold text-slate-900 truncate" style={{ fontSize: tokens.fontSize.h2 }}>{fabric?.name || '—'}</p>
+            <p className="text-slate-600 mt-1" style={{ fontSize: tokens.fontSize.body }}>
               {[
                 fabric?.gsm != null ? `${fabric.gsm} GSM` : null,
                 widthText(fabric?.width_in ?? null, fabric?.width_form ?? null, units.widthUnit),
@@ -316,81 +371,113 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
             <p className="text-[12px] font-semibold text-slate-800">Stock split</p>
             <p className="text-[11px] text-slate-400">Allocated / unallocated · stage · colour</p>
           </div>
-          <div className="flex-1 min-h-0 overflow-auto py-1">
-            <TreeRow
-              selected={selection.kind === 'all'}
-              title="All stock"
-              meta={totals ? `${totals.rolls ?? 0} rolls` : `${allRolls.length} rolls`}
-              qty={totals ? fabricUomQty(fabric?.uom, totals.qty_kg, totals.qty_m, qtyUnit) : qtyOf(allRolls)}
+          <div className="flex-1 min-h-0 overflow-auto p-2 space-y-2">
+            <button
+              type="button"
               onClick={() => setSelection({ kind: 'all' })}
-            />
+              className={`w-full rounded-lg border px-3 py-2 text-left ${selection.kind === 'all' ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+            >
+              <span className="flex items-center gap-2">
+                <span className={`text-[12px] font-semibold ${selection.kind === 'all' ? 'text-blue-800' : 'text-slate-800'}`}>All stock</span>
+                <span className="ml-auto text-[11px] tabular-nums text-slate-500">{totals ? `${totals.rolls ?? 0} rolls` : `${allRolls.length} rolls`}</span>
+                <span className="text-[11px] tabular-nums font-semibold text-slate-700">{totals ? fabricUomQty(fabric?.uom, totals.qty_kg, totals.qty_m, qtyUnit) : qtyOf(allRolls)}</span>
+              </span>
+            </button>
             {tree.map((alloc) => {
-              const allocOpen = openAlloc[alloc.key] ?? true;
+              const allocOpen = openAlloc[alloc.key] ?? false;
+              const allocSelected = selection.kind !== 'all' && selection.allocated === alloc.allocated;
+              const headerTone = alloc.allocated
+                ? 'border-violet-200 bg-violet-50'
+                : 'border-emerald-200 bg-emerald-50';
               return (
-                <div key={alloc.key} className="mt-1 border-t border-slate-100 pt-1">
-                  <div className="flex items-center">
+                <section key={alloc.key} className={`rounded-lg border overflow-hidden ${allocSelected ? 'border-blue-300' : 'border-slate-200'}`}>
+                  <div className={`flex items-stretch ${headerTone}`}>
                     <button
                       type="button"
                       aria-label={allocOpen ? `Collapse ${alloc.label}` : `Expand ${alloc.label}`}
-                      className="pl-2 pr-1 py-1.5 text-slate-400 hover:text-slate-700"
+                      className="px-2 text-slate-500 hover:text-slate-800"
                       onClick={() => setOpenAlloc((cur) => ({ ...cur, [alloc.key]: !allocOpen }))}
                     >
-                      <ChevronDown size={14} className={`transition-transform ${allocOpen ? '' : '-rotate-90'}`} />
+                      <ChevronDown size={15} className={`transition-transform ${allocOpen ? '' : '-rotate-90'}`} />
                     </button>
-                    <TreeRow
-                      selected={selection.kind === 'alloc' && selection.allocated === alloc.allocated}
-                      title={alloc.label}
-                      meta={`${alloc.rolls.length} rolls`}
-                      qty={qtyOf(alloc.rolls)}
+                    <button
+                      type="button"
+                      className="flex-1 min-w-0 py-2 pr-2 text-left"
                       onClick={() => setSelection({ kind: 'alloc', allocated: alloc.allocated })}
-                      flush
-                    />
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className={`text-[12px] font-semibold truncate ${selection.kind === 'alloc' && selection.allocated === alloc.allocated ? 'text-blue-800' : 'text-slate-800'}`}>{alloc.label}</span>
+                        <span className="ml-auto text-[11px] tabular-nums text-slate-500 whitespace-nowrap">{alloc.rolls.length} rolls</span>
+                        <span className="text-[11px] tabular-nums font-semibold text-slate-700 whitespace-nowrap">{qtyOf(alloc.rolls)}</span>
+                      </span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">{alloc.hint}</span>
+                    </button>
                   </div>
-                  {allocOpen ? alloc.stages.map((stage) => {
-                    const stageKey = `${alloc.key}:${stage.stageCode}`;
-                    const stageSelected = (selection.kind === 'stage' || selection.kind === 'colour')
-                      && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode;
-                    const stageOpen = openStage[stageKey] ?? stageSelected;
-                    return (
-                      <div key={stageKey}>
-                        <div className={`flex items-center ${stageSelected && selection.kind === 'stage' ? 'bg-blue-50' : ''}`}>
-                          <span className="w-5 shrink-0" />
-                          <button
-                            type="button"
-                            aria-label={stageOpen ? `Collapse ${stage.stageLabel}` : `Expand ${stage.stageLabel}`}
-                            className="pr-1 py-1.5 text-slate-400 hover:text-slate-700"
-                            onClick={() => setOpenStage((cur) => ({ ...cur, [stageKey]: !stageOpen }))}
-                          >
-                            <ChevronDown size={14} className={`transition-transform ${stageOpen ? '' : '-rotate-90'}`} />
-                          </button>
-                          <TreeRow
-                            selected={selection.kind === 'stage' && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode}
-                            title={stage.stageLabel}
-                            meta={`${stage.rolls.length}`}
-                            qty={qtyOf(stage.rolls)}
-                            badge={finishedStages.has(stage.stageCode) || stage.finished ? 'Finished' : undefined}
-                            onClick={() => setSelection({ kind: 'stage', allocated: alloc.allocated, stageCode: stage.stageCode })}
-                            flush
-                          />
-                        </div>
-                        {stageOpen ? stage.colours.map((colour) => (
-                          <TreeRow
-                            key={`${stageKey}:${colour.colour}`}
-                            selected={selection.kind === 'colour' && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode && selection.colour === colour.colour}
-                            title={colour.colour}
-                            meta={`${colour.rolls.length}`}
-                            qty={qtyOf(colour.rolls)}
-                            indent
-                            onClick={() => setSelection({ kind: 'colour', allocated: alloc.allocated, stageCode: stage.stageCode, colour: colour.colour })}
-                          />
-                        )) : null}
-                      </div>
-                    );
-                  }) : null}
-                </div>
+                  {allocOpen ? (
+                    <div className="py-1">
+                      {alloc.stages.length === 0 ? (
+                        <p className="px-3 py-1.5 text-[11px] text-slate-400">No rolls.</p>
+                      ) : alloc.stages.map((stage) => {
+                        const stageKey = `${alloc.key}:${stage.stageCode}`;
+                        const stageOpen = openStage[stageKey] ?? false;
+                        const stageSelected = (selection.kind === 'stage' || selection.kind === 'colour')
+                          && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode;
+                        return (
+                          <div key={stageKey} className="border-l-2 border-slate-100 ml-3">
+                            <div className={`flex items-stretch ${stageSelected && selection.kind === 'stage' ? 'bg-blue-50' : ''}`}>
+                              <button
+                                type="button"
+                                aria-label={stageOpen ? `Collapse ${stage.stageLabel}` : `Expand ${stage.stageLabel}`}
+                                className="pl-1 pr-1 text-slate-400 hover:text-slate-700"
+                                onClick={() => setOpenStage((cur) => ({ ...cur, [stageKey]: !stageOpen }))}
+                              >
+                                <ChevronDown size={14} className={`transition-transform ${stageOpen ? '' : '-rotate-90'}`} />
+                              </button>
+                              <button
+                                type="button"
+                                className="flex-1 min-w-0 py-1.5 pr-2 text-left"
+                                onClick={() => setSelection({ kind: 'stage', allocated: alloc.allocated, stageCode: stage.stageCode })}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <span className={`text-[12px] truncate ${stageSelected ? 'font-semibold text-blue-800' : 'text-slate-700'}`}>{stage.stageLabel}</span>
+                                  {finishedStages.has(stage.stageCode) || stage.finished ? (
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-[9px] font-semibold text-emerald-700 shrink-0">Finished</span>
+                                  ) : null}
+                                  <span className="ml-auto text-[11px] tabular-nums text-slate-500">{stage.rolls.length}</span>
+                                  <span className="text-[11px] tabular-nums text-slate-600 w-14 text-right">{qtyOf(stage.rolls)}</span>
+                                </span>
+                              </button>
+                            </div>
+                            {stageOpen ? (
+                              <div className="pb-1">
+                                {stage.colours.map((colour) => {
+                                  const colourSelected = selection.kind === 'colour' && selection.allocated === alloc.allocated
+                                    && selection.stageCode === stage.stageCode && selection.colour === colour.colour;
+                                  return (
+                                    <button
+                                      key={`${stageKey}:${colour.colour}`}
+                                      type="button"
+                                      onClick={() => setSelection({ kind: 'colour', allocated: alloc.allocated, stageCode: stage.stageCode, colour: colour.colour })}
+                                      className={`w-full py-1 pr-2 pl-9 flex items-center gap-2 text-left ${colourSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                                      <span className={`text-[11px] truncate ${colourSelected ? 'font-semibold text-blue-800' : 'text-slate-600'}`}>{colour.colour}</span>
+                                      <span className="ml-auto text-[11px] tabular-nums text-slate-400">{colour.rolls.length}</span>
+                                      <span className="text-[11px] tabular-nums text-slate-500 w-14 text-right">{qtyOf(colour.rolls)}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </section>
               );
             })}
-            {truncated ? <p className="px-3 py-2 text-[11px] text-amber-700">Showing the first 500 rolls.</p> : null}
+            {truncated ? <p className="px-1 py-1 text-[11px] text-amber-700">Showing the first 500 rolls.</p> : null}
           </div>
         </div>
 
@@ -405,16 +492,27 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <select className={selectCls} value={where} onChange={(e) => setWhere(e.target.value as WhereFilter)} aria-label="Where">
-              <option value="all">All places</option>
-              <option value="home">At home</option>
-              <option value="at_processing">At processing</option>
-              <option value="issued">Issued to cutting</option>
-            </select>
-            <select className={selectCls} value={vendor} onChange={(e) => setVendor(e.target.value)} aria-label="Vendor">
-              <option value="all">All vendors</option>
-              {vendors.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
+            <SelectDropdown
+              value={where}
+              onChange={(value) => setWhere(value as WhereFilter)}
+              options={[
+                { value: 'all', label: 'All places' },
+                { value: 'home', label: 'At home' },
+                { value: 'at_processing', label: 'At processing' },
+                { value: 'issued', label: 'Issued to cutting' },
+              ]}
+              className="w-44 shrink-0"
+            />
+            <SelectDropdown
+              value={vendor}
+              onChange={setVendor}
+              options={[
+                { value: 'all', label: 'All vendors' },
+                ...vendors.map((name) => ({ value: name, label: name })),
+              ]}
+              className="w-44 shrink-0"
+              searchable={vendors.length > 8}
+            />
             <span className="text-[12px] text-slate-500 tabular-nums whitespace-nowrap">
               {shownRolls.length} rolls · {formatStoredQty(shownQty, qtyUnit)}
             </span>
@@ -430,10 +528,11 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                 </button>
               </div>
             ) : (
-              <table className="w-full min-w-[900px] border-collapse">
+              <table className="w-full min-w-[1050px] border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr>
                     <th className={th}>Roll no</th>
+                    <th className={th}>Challan</th>
                     <th className={`${th} !text-center`}>Where</th>
                     <th className={th}>Qty</th>
                     <th className={th}>Colour</th>
@@ -447,12 +546,12 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                 <tbody>
                   {shownRolls.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-[12px] text-slate-400">No rolls match.</td>
+                      <td colSpan={10} className="px-4 py-8 text-center text-[12px] text-slate-400">No rolls match.</td>
                     </tr>
                   ) : grouped.map((stage) => (
                     <React.Fragment key={stage.stageCode || stage.stageLabel}>
                       <tr className="bg-slate-100/80">
-                        <td colSpan={9} className="px-2.5 py-1.5 text-[12px] font-semibold text-slate-800 border-b border-slate-200">
+                        <td colSpan={10} className="px-2.5 py-1.5 text-[12px] font-semibold text-slate-800 border-b border-slate-200">
                           {stage.stageLabel}
                           {finishedStages.has(stage.stageCode) || stage.finished ? (
                             <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 text-[10px] font-semibold text-emerald-700">Finished</span>
@@ -460,15 +559,25 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                           <span className="ml-2 font-normal text-slate-500">{stage.rolls.length} rolls · {qtyOf(stage.rolls)}</span>
                         </td>
                       </tr>
-                      {stage.colours.map((colour) => (
-                        <React.Fragment key={`${stage.stageCode}:${colour.colour}`}>
-                          <tr className="bg-slate-50">
-                            <td colSpan={9} className="px-2.5 py-1 pl-5 text-[11px] font-semibold text-slate-600 border-b border-slate-100">
-                              {colour.colour}
-                              <span className="ml-2 font-normal text-slate-400">{colour.rolls.length} rolls · {qtyOf(colour.rolls)}</span>
+                      {stage.challans.map((challan) => (
+                        <React.Fragment key={`${stage.stageCode}:${challan.key}`}>
+                          <tr className="bg-blue-50/70">
+                            <td colSpan={10} className="px-2.5 py-1 pl-5 text-[11px] font-semibold text-blue-900 border-b border-blue-100">
+                              Challan {challan.no}
+                              {challan.vendor !== '—' ? <span className="ml-2 font-normal text-blue-700">{challan.vendor}</span> : null}
+                              {challan.date ? <span className="ml-2 font-normal text-blue-500">{dateLabel(challan.date)}</span> : null}
+                              <span className="ml-2 font-normal text-blue-500">{challan.rolls.length} rolls · {qtyOf(challan.rolls)}</span>
                             </td>
                           </tr>
-                          {colour.rolls.map((roll) => {
+                          {challan.colours.map((colour) => (
+                            <React.Fragment key={`${stage.stageCode}:${challan.key}:${colour.colour}`}>
+                              <tr className="bg-slate-50">
+                                <td colSpan={10} className="px-2.5 py-1 pl-8 text-[11px] font-semibold text-slate-600 border-b border-slate-100">
+                                  {colour.colour}
+                                  <span className="ml-2 font-normal text-slate-400">{colour.rolls.length} rolls · {qtyOf(colour.rolls)}</span>
+                                </td>
+                              </tr>
+                              {colour.rolls.map((roll) => {
                             const test = lastTestParts(roll);
                             return (
                               <tr
@@ -477,6 +586,7 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                                 onClick={() => setPassportId(roll.roll_id)}
                               >
                                 <td className={`${td} font-mono font-semibold text-slate-800`}>{roll.roll_code || '—'}</td>
+                                <td className={td}>{challanOf(roll).no}</td>
                                 <td className={`${td} text-center`}>
                                   <MmStatusDot label={bucketLabel(roll.stock?.bucket)} />
                                 </td>
@@ -497,6 +607,8 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                               </tr>
                             );
                           })}
+                            </React.Fragment>
+                          ))}
                         </React.Fragment>
                       ))}
                     </React.Fragment>
@@ -536,40 +648,5 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: ke
       <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
       <p className="text-[16px] font-bold tabular-nums mt-0.5">{value}</p>
     </div>
-  );
-}
-
-function TreeRow({
-  selected,
-  title,
-  meta,
-  qty,
-  badge,
-  indent,
-  flush,
-  onClick,
-}: {
-  selected: boolean;
-  title: string;
-  meta: string;
-  qty: string;
-  badge?: string;
-  indent?: boolean;
-  flush?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 min-w-0 w-full py-1.5 pr-3 flex items-center gap-2 text-left ${flush ? 'pl-1' : indent ? 'pl-12' : 'pl-3'} ${selected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
-    >
-      <span className={`text-[12px] truncate ${selected ? 'font-semibold text-blue-800' : 'text-slate-700'}`}>{title}</span>
-      {badge ? (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 text-[9px] font-semibold text-emerald-700 shrink-0">{badge}</span>
-      ) : null}
-      <span className="ml-auto text-[11px] tabular-nums text-slate-500 whitespace-nowrap">{meta}</span>
-      <span className="text-[11px] tabular-nums text-slate-700 whitespace-nowrap w-16 text-right">{qty === '—' ? '' : qty}</span>
-    </button>
   );
 }
