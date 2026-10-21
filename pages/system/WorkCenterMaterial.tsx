@@ -18,6 +18,9 @@ import MmFabricTypesPage, {
 import MmFabricTestingPage, {
   type MmFabricTestingHandle,
 } from '../../modules/material/pages/MmFabricTestingPage';
+import MmInspectionRulesPage, {
+  type MmInspectionRulesHandle,
+} from '../../modules/material/pages/MmInspectionRulesPage';
 import MmTrimParamsPage, {
   type MmTrimParamsHandle,
 } from '../../modules/material/pages/MmTrimParamsPage';
@@ -52,6 +55,7 @@ type MaterialSection =
   | 'fabric-receiving-form'
   | 'categories'
   | 'test-fabric'
+  | 'inspection-rules'
   | 'trim-params'
   | 'racks'
   | 'processes'
@@ -74,6 +78,7 @@ const SECTION_TAB: Record<MaterialSection, MaterialTab> = {
   'fabric-receiving-form': 'fabric',
   categories: 'fabric',
   'test-fabric': 'fabric',
+  'inspection-rules': 'fabric',
   'fabric-stages': 'fabric',
   'fabric-vendors': 'fabric',
   'trim-params': 'trims',
@@ -97,6 +102,7 @@ const SECTIONS: { id: MaterialSection; label: string; hint: string }[] = [
   },
   { id: 'categories', label: 'Fabric categories', hint: 'Where it is used (shell, lining, pocketing).' },
   { id: 'test-fabric', label: 'Fabric testing parameters', hint: 'What to record when a roll is tested.' },
+  { id: 'inspection-rules', label: 'Fabric inspection rules', hint: 'How rolls are sampled and passed on 4-point inspection.' },
   {
     id: 'fabric-stages',
     label: 'Fabric stages',
@@ -132,6 +138,7 @@ const FABRIC_SECTIONS = new Set<MaterialSection>([
   'fabric-receiving-form',
   'categories',
   'test-fabric',
+  'inspection-rules',
   'fabric-stages',
   'fabric-vendors',
   'racks',
@@ -143,6 +150,7 @@ function resolveSection(raw: string | undefined): MaterialSection | null {
   if (raw === 'fabric-form' || raw === 'params' || raw === 'form-setup') return 'fabric-form';
   if (raw === 'fabric-receiving-form' || raw === 'receiving-form') return 'fabric-receiving-form';
   if (raw === 'test-fabric') return 'test-fabric';
+  if (raw === 'inspection-rules' || raw === 'fabric-inspection-rules') return 'inspection-rules';
   if (raw === 'trim-params') return 'trim-params';
   if (raw === 'categories') return 'categories';
   if (raw === 'racks') return 'racks';
@@ -189,6 +197,7 @@ export function WorkCenterMaterial() {
   const receiptFormRef = useRef<ReceiptFormSchemaEditorHandle>(null);
   const categoriesRef = useRef<MmFabricCategoriesHandle>(null);
   const testingRef = useRef<MmFabricTestingHandle>(null);
+  const inspectionRulesRef = useRef<MmInspectionRulesHandle>(null);
   const trimRef = useRef<MmTrimParamsHandle>(null);
   const racksRef = useRef<MmRackMasterHandle>(null);
   const processesRef = useRef<MmProcessesHandle>(null);
@@ -274,6 +283,7 @@ export function WorkCenterMaterial() {
       else if (section === 'fabric-receiving-form') ok = (await receiptFormRef.current?.save()) ?? false;
       else if (section === 'categories') ok = (await categoriesRef.current?.save()) ?? false;
       else if (section === 'test-fabric') ok = (await testingRef.current?.save()) ?? false;
+      else if (section === 'inspection-rules') ok = (await inspectionRulesRef.current?.save()) ?? false;
       else if (section === 'racks') ok = (await racksRef.current?.save()) ?? false;
       else if (section === 'processes') ok = (await processesRef.current?.save()) ?? false;
       else if (section === 'process-form') ok = (await processFormRef.current?.save()) ?? false;
@@ -433,6 +443,8 @@ export function WorkCenterMaterial() {
                   <MmFabricCategoriesPage ref={categoriesRef} onDirtyChange={markDirty} />
                 ) : section === 'test-fabric' ? (
                   <MmFabricTestingPage ref={testingRef} onDirtyChange={markDirty} />
+                ) : section === 'inspection-rules' ? (
+                  <MmInspectionRulesPage ref={inspectionRulesRef} onDirtyChange={markDirty} />
                 ) : section === 'racks' ? (
                   <MmRackMasterPage ref={racksRef} onDirtyChange={markDirty} />
                 ) : section === 'processes' ? (

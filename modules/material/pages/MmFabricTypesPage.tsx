@@ -46,8 +46,6 @@ interface DraftType {
   id: string | null;
   rowVersion: number;
   name: string;
-  fptMax: string;
-  samplePct: string;
   qtyUnits: string[];
   widthUnits: string[];
   constructions: DraftConstruction[];
@@ -233,8 +231,6 @@ const MmFabricTypesPage = forwardRef<
   const [draft, setDraft] = useState<DraftType[] | null>(null);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [name, setName] = useState('');
-  const [fptMax, setFptMax] = useState('');
-  const [samplePct, setSamplePct] = useState('100');
   const [qtyUnits, setQtyUnits] = useState<string[]>([]);
   const [widthUnits, setWidthUnits] = useState<string[]>([]);
   const [constructionText, setConstructionText] = useState('');
@@ -263,8 +259,6 @@ const MmFabricTypesPage = forwardRef<
         id: String(t.id),
         rowVersion: Number(t.row_version ?? 1),
         name: String(t.name),
-        fptMax: t.fpt_max_points != null && t.fpt_max_points !== '' ? String(t.fpt_max_points) : '',
-        samplePct: t.inspection_sample_pct != null && t.inspection_sample_pct !== '' ? String(t.inspection_sample_pct) : '100',
         qtyUnits: parseUnitCodeList(t.qty_units),
         widthUnits: parseUnitCodeList(t.width_units),
         constructions: (byType.get(String(t.id)) ?? []).sort((a, b) => a.seq - b.seq),
@@ -278,7 +272,7 @@ const MmFabricTypesPage = forwardRef<
   const unitsDirty = editingRow
     ? !sameUnitList(editingRow.qtyUnits, qtyUnits) || !sameUnitList(editingRow.widthUnits, widthUnits)
     : !sameUnitList(qtyUnits, defaultQty) || !sameUnitList(widthUnits, defaultWidth);
-  const formDirty = Boolean(name.trim() || fptMax.trim() || constructionText.trim() || unitsDirty || (editingRow ? samplePct !== editingRow.samplePct : samplePct !== '100'));
+  const formDirty = Boolean(name.trim() || constructionText.trim() || unitsDirty);
 
   useEffect(() => {
     if (editingLocalId) return;
@@ -327,18 +321,14 @@ const MmFabricTypesPage = forwardRef<
 
   const resetForm = () => {
     setName('');
-    setFptMax('');
-    setSamplePct('100');
     setQtyUnits(qtyOffer[0] ? [qtyOffer[0].code] : []);
     setWidthUnits(widthOffer[0] ? [widthOffer[0].code] : []);
     setConstructionText('');
     setEditingLocalId(null);
   };
 
-  const draftFromForm = (existing: DraftType | undefined, trimmed: string): Pick<DraftType, 'name' | 'fptMax' | 'samplePct' | 'qtyUnits' | 'widthUnits' | 'constructions'> => ({
+  const draftFromForm = (existing: DraftType | undefined, trimmed: string): Pick<DraftType, 'name' | 'qtyUnits' | 'widthUnits' | 'constructions'> => ({
     name: trimmed,
-    fptMax: fptMax.trim(),
-    samplePct,
     qtyUnits,
     widthUnits,
     constructions: constructionsFromText(constructionText, existing?.constructions ?? []),
@@ -399,7 +389,7 @@ const MmFabricTypesPage = forwardRef<
       if (!data) return false;
       let pending = draft ?? savedTypes;
       const pendingName = name.trim();
-      if (!pendingName && (fptMax.trim() || constructionText.trim() || unitsDirty || samplePct !== '100')) {
+      if (!pendingName && (constructionText.trim() || unitsDirty)) {
         showNotification('Enter a type name before saving', 'error');
         return false;
       }
@@ -440,8 +430,6 @@ const MmFabricTypesPage = forwardRef<
             typeId
             && original
             && original.name === row.name
-            && original.fptMax === row.fptMax
-            && original.samplePct === row.samplePct
             && sameUnitList(original.qtyUnits, row.qtyUnits)
             && sameUnitList(original.widthUnits, row.widthUnits),
           );
@@ -449,8 +437,6 @@ const MmFabricTypesPage = forwardRef<
             const res = await mmSaveFabricType({
               id: typeId,
               name: row.name,
-              fpt_max_points: row.fptMax.trim() === '' ? null : Number(row.fptMax),
-              inspection_sample_pct: Number(row.samplePct || 100),
               qty_units: row.qtyUnits,
               width_units: row.widthUnits,
               row_version: row.rowVersion,
@@ -466,8 +452,6 @@ const MmFabricTypesPage = forwardRef<
           } else if (!typeId) {
             const res = await mmSaveFabricType({
               name: row.name,
-              fpt_max_points: row.fptMax.trim() === '' ? null : Number(row.fptMax),
-              inspection_sample_pct: Number(row.samplePct || 100),
               qty_units: row.qtyUnits,
               width_units: row.widthUnits,
             });
@@ -527,7 +511,7 @@ const MmFabricTypesPage = forwardRef<
         setSaving(false);
       }
     },
-  }), [draft, savedTypes, removedIds, formDirty, name, fptMax, samplePct, qtyUnits, widthUnits, constructionText, editingLocalId, data, refresh, showNotification, onDirtyChange]);
+  }), [draft, savedTypes, removedIds, formDirty, name, qtyUnits, widthUnits, constructionText, editingLocalId, data, refresh, showNotification, onDirtyChange]);
 
   if (isLoading || constructionRows === null) {
     return (
@@ -582,24 +566,6 @@ const MmFabricTypesPage = forwardRef<
               onChange={setWidthUnits}
               onAddMore={() => setAddKind('width')}
             />
-            <Input
-              label="4 point max (points / 100 sq yd)"
-              type="number"
-              placeholder="Blank = factory default"
-              value={fptMax}
-              onChange={(e) => setFptMax(e.target.value)}
-            />
-            <SelectDropdown
-              label="Inspection sampling"
-              value={samplePct}
-              onChange={setSamplePct}
-              options={[
-                { value: '100', label: '100%' },
-                { value: '20', label: '20%' },
-                { value: '10', label: '10%' },
-                { value: '0', label: 'Not required' },
-              ]}
-            />
             <CommaSeparatedInput
               label="Constructions"
               value={constructionText}
@@ -652,8 +618,8 @@ const MmFabricTypesPage = forwardRef<
             headerAction={<MmTableSaveButton />}
           >
             <CatalogTable
-              headers={['S.No', 'Type', 'Qty UOM', 'Width UOM', '4pt max', 'Inspection sampling', 'Constructions', '']}
-              widths={[undefined, '10rem', '9rem', '9rem', '5rem', '8rem', undefined, '2rem']}
+              headers={['S.No', 'Type', 'Qty UOM', 'Width UOM', 'Constructions', '']}
+              widths={[undefined, '10rem', '9rem', '9rem', undefined, '2rem']}
             >
               {rows.map((row, idx) => (
                 <CatalogTableRow
@@ -661,8 +627,6 @@ const MmFabricTypesPage = forwardRef<
                   onClick={() => {
                     setEditingLocalId(row.localId);
                     setName(row.name);
-                    setFptMax(row.fptMax);
-                    setSamplePct(row.samplePct);
                     setQtyUnits(row.qtyUnits);
                     setWidthUnits(row.widthUnits);
                     setConstructionText(
@@ -684,8 +648,6 @@ const MmFabricTypesPage = forwardRef<
                   <CatalogTableCell className="text-slate-600">
                     <UnitListCell units={row.widthUnits} kind="width" />
                   </CatalogTableCell>
-                  <CatalogTableCell className="text-slate-600 tabular-nums">{row.fptMax.trim() || '—'}</CatalogTableCell>
-                  <CatalogTableCell className="text-slate-600 whitespace-nowrap">{row.samplePct === '0' ? 'Not required' : `${row.samplePct || '100'}%`}</CatalogTableCell>
                   <CatalogTableCell className="text-[10px] leading-tight text-slate-500 whitespace-normal">
                     {row.constructions.filter((item) => item.is_active).map((item) => item.name).join(', ') || '—'}
                   </CatalogTableCell>

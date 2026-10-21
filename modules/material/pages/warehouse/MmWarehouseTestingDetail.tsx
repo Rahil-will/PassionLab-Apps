@@ -25,7 +25,8 @@ import {
   type MmV4QcResult,
   type MmV4RollRow,
 } from '../../lib/mmV4Rpc';
-import { inspSessionStatusLabel, inspSessionTone, toggleSampleSelection } from '../../lib/inspAlloc';
+import { inspSessionStatusLabel, inspSessionTone, rollInspectionChip } from '../../lib/inspAlloc';
+import { inspBannerState, inspPastSessionLabel, toggleStagedSelection } from '../../lib/inspectionRules';
 
 function lastResult(roll: MmV4RollRow): string {
   return lastTestCaption(roll);
@@ -134,6 +135,7 @@ export default function MmWarehouseTestingDetail() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [decide, setDecide] = useState<'accept_deviation' | 'reject' | null>(null);
   const [decideReason, setDecideReason] = useState('');
+  const [needsDecision, setNeedsDecision] = useState<boolean | null>(null);
 
   const scopeQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'testingScope', scopeKind, id] as const,
@@ -158,6 +160,7 @@ export default function MmWarehouseTestingDetail() {
         setInspError(res.message); return;
       }
       setInspNotRequired(false); setInspError(null); setInspSession(res.data);
+      setNeedsDecision(res.data.needs_decision ?? null);
       setSelectedIds((res.data.rolls ?? []).filter((r) => r.selected).map((r) => r.roll.roll_id));
       const past = await mmInspListSessions(scopeKind, id);
       if (!cancel && past.ok !== false) {
@@ -172,6 +175,30 @@ export default function MmWarehouseTestingDetail() {
     () => (inspSession?.rolls ?? []).map((r) => r.roll),
     [inspSession],
   );
+  const inspSteps = useMemo<number[]>(
+    () => (inspSession?.steps && inspSession.steps.length > 0
+      ? inspSession.steps.map(Number)
+      : inspSession?.sample_pct != null ? [Number(inspSession.sample_pct)] : []),
+    [inspSession],
+  );
+  const inspStepNo = Number(inspSession?.step_no ?? 1) || 1;
+  const inspectedIds = useMemo<string[]>(
+    () => (inspSession?.rolls ?? [])
+      .filter((entry) => {
+        const insp = entry.inspection;
+        return Boolean(insp && (
+          insp.inspected_length != null || insp.cuttable_width != null
+          || insp.pts_1 != null || insp.pts_2 != null || insp.pts_3 != null || insp.pts_4 != null
+          || insp.result
+        ));
+      })
+      .map((entry) => entry.roll.roll_id),
+    [inspSession],
+  );
+  const inspOpen = inspSession?.status === 'draft' || inspSession?.status === 'escalated';
+  const inspBanner = inspSession ? inspBannerState(inspSession, { needsDecision }) : null;
+  const lotAvgOver = inspSession?.lot_avg_points != null && inspSession?.lot_avg_max_points != null
+    && Number(inspSession.lot_avg_points) > Number(inspSession.lot_avg_max_points);
   const rolls = inspecting ? inspRolls : scopeRolls;
   const fields = scopeQ.data?.fields ?? [];
   const widthUnit = parseWidthUnit(
@@ -236,6 +263,11 @@ export default function MmWarehouseTestingDetail() {
     for (const entry of inspSession.rolls ?? []) {
       const roll = entry.roll;
       const insp = entry.inspection;
+      nextCells[cellKey(roll.roll_id, 'insp_status')] = !entry.selected
+        ? 'Not sampled'
+        : insp?.result
+          ? String(insp.result)
+          : rollInspectionChip(roll).label;
       if (!insp) continue;
       if (insp.inspected_length != null) nextCells[cellKey(roll.roll_id, 'length')] = String(insp.inspected_length);
       if (insp.cuttable_width != null) {
@@ -261,8 +293,9 @@ export default function MmWarehouseTestingDetail() {
 
   const columns = useMemo<SheetColumn[]>(() => [
     ...(inspecting ? [
-      { key: 'sample', label: 'Sample', editable: inspSession?.status === 'draft', kind: 'check' as const, width: '4rem' },
+      { key: 'sample', label: 'Sample', editable: inspOpen, kind: 'check' as const, width: '4rem' },
       { key: 'roll', label: 'Roll', editable: false, width: '7rem' },
+      { key: 'insp_status', label: 'Inspection status', editable: false, width: '9rem' },
       { key: 'length', label: `Length (${qtyLabel(lengthUnit)})`, editable: true, width: '6rem' },
       { key: 'width', label: `Width (${widthLabel(widthUnit)})`, editable: true, width: '6rem' },
       { key: 'pts_1', label: '1 pt', editable: true, width: '4rem' },
@@ -303,13 +336,13 @@ export default function MmWarehouseTestingDetail() {
     },
     { key: 'remarks', label: 'Remarks', editable: true, width: '10rem' },
     ] satisfies SheetColumn[] : []),
-  ], [fields, inspecting, inspSession?.status, lengthUnit, qtyUnit, rolls, widthUnit]);
+  ], [fields, inspecting, inspOpen, lengthUnit, qtyUnit, widthUnit]);
 
   const save = async (): Promise<boolean> => {
     if (inspecting) {
       if (!inspSession) { showNotification(inspError || 'Inspection session is not open', 'error'); return false; }
       let invalid = '';
-      const rows = rolls.filter((roll) => selectedIds.includes(roll.roll_id)).flatMap((roll) => {
+      const rows = rolls.filter((roll) => selectedIds.includes(roll.roll_id) && !inspectedIds.includes(roll.roll_id)).flatMap((roll) => {
         const lengthRaw = (cells[cellKey(roll.roll_id, 'length')] ?? '').trim();
         const widthRaw = (cells[cellKey(roll.roll_id, 'width')] ?? '').trim();
         const points = ['pts_1', 'pts_2', 'pts_3', 'pts_4'].map((key) => (cells[cellKey(roll.roll_id, key)] ?? '').trim());
@@ -369,6 +402,7 @@ export default function MmWarehouseTestingDetail() {
         if (next) {
           inspSeededRef.current = '';
           setInspSession(next);
+          setNeedsDecision(next.needs_decision ?? (res.data?.needs_decision ?? null));
           setSelectedIds((next.rolls ?? []).filter((r) => r.selected).map((r) => r.roll.roll_id));
           const past = await mmInspListSessions(scopeKind, id);
           if (past.ok !== false) setInspPast(Array.isArray(past.data) ? past.data : (past.data.rows ?? []));
@@ -507,7 +541,7 @@ export default function MmWarehouseTestingDetail() {
     () => (inspSession?.rolls ?? []).filter((r) => r.selected).map((r) => r.roll.roll_id),
     [inspSession],
   );
-  const selectionDirty = inspecting && inspSession?.status === 'draft'
+  const selectionDirty = inspecting && inspOpen
     && JSON.stringify([...selectedIds].sort()) !== JSON.stringify([...sessionSelectedIds].sort());
 
   const saveSample = async () => {
@@ -545,7 +579,7 @@ export default function MmWarehouseTestingDetail() {
         const got = await mmInspGetSession(inspSession.id);
         if (got.ok !== false) { inspSeededRef.current = ''; setInspSession(got.data); }
       }
-      setDecide(null); setDecideReason('');
+      setDecide(null); setDecideReason(''); setNeedsDecision(null);
       showNotification(decide === 'reject' ? 'Lot rejected' : 'Deviation accepted', 'success');
       await scopeQ.refetch();
     } catch (error) {
@@ -604,19 +638,37 @@ export default function MmWarehouseTestingDetail() {
                 <p className="text-[12px] text-red-700">{inspError}</p>
               ) : inspSession ? (
                 <>
+                  {inspSteps.length > 0 ? (
+                    <span className="flex items-center gap-1 text-[11px] text-slate-500" aria-label="Inspection steps">
+                      {inspSteps.map((pct, i) => (
+                        <React.Fragment key={i}>
+                          {i > 0 ? <span className="text-slate-300">→</span> : null}
+                          <span className={i + 1 === inspStepNo ? 'font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5' : ''}>{pct}%</span>
+                        </React.Fragment>
+                      ))}
+                    </span>
+                  ) : null}
                   <p className="text-[12px] font-semibold text-slate-900">
-                    Sample {inspSession.sample_size ?? selectedIds.length} of {inspSession.total_rolls ?? rolls.length} rolls ({inspSession.sample_pct ?? 100}%)
+                    Sample {inspSession.sample_size ?? selectedIds.length} of {inspSession.total_rolls ?? rolls.length} rolls
                   </p>
                   <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${inspSessionTone(inspSession.status) === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : inspSessionTone(inspSession.status) === 'danger' ? 'bg-red-50 text-red-700 border-red-200' : inspSessionTone(inspSession.status) === 'warning' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                     {inspSessionStatusLabel(inspSession.status)}
                   </span>
                   <span className="text-[11px] text-slate-500">{selectedIds.length} selected · {inspSession.inspected_count ?? 0} inspected{inspSession.failed_count ? ` · ${inspSession.failed_count} failed` : ''}</span>
+                  {inspSession.lot_avg_points != null || inspSession.lot_avg_max_points != null ? (
+                    <span className={`text-[11px] font-semibold ${lotAvgOver ? 'text-red-700' : 'text-slate-600'}`}>
+                      Lot average {inspSession.lot_avg_points != null ? Number(inspSession.lot_avg_points).toFixed(1) : '—'} / max {inspSession.lot_avg_max_points ?? '—'}
+                    </span>
+                  ) : null}
+                  {inspSession.roll_max_points != null ? (
+                    <span className="text-[11px] text-slate-500">Roll max {inspSession.roll_max_points} pts</span>
+                  ) : null}
                   {selectionDirty ? (
                     <DesktopWriteGate>
                       <Button type="button" size="sm" variant="secondary" disabled={saving} onClick={() => void saveSample()}>Save sample</Button>
                     </DesktopWriteGate>
                   ) : null}
-                  {inspSession.status === 'escalated' ? (
+                  {inspBanner?.kind === 'needs_decision' ? (
                     <DesktopWriteGate>
                       <span className="flex gap-2">
                         <Button type="button" size="sm" variant="secondary" onClick={() => { setDecide('accept_deviation'); setDecideReason(''); }}>Accept deviation</Button>
@@ -629,24 +681,10 @@ export default function MmWarehouseTestingDetail() {
                 <p className="text-[12px] text-slate-400">Opening inspection session…</p>
               )}
             </div>
-            {inspSession?.status === 'escalated' ? (
-              <p className="px-4 py-2 text-[11px] font-semibold text-amber-800 bg-amber-50 border-t border-amber-100">
-                {inspSession.failed_count ?? 1} sampled roll failed — inspect all remaining rolls, or decide
+            {inspBanner && inspBanner.kind !== 'none' ? (
+              <p className={`px-4 py-2 text-[11px] font-semibold border-t ${inspBanner.tone === 'success' ? 'text-emerald-800 bg-emerald-50 border-emerald-100' : inspBanner.tone === 'danger' ? 'text-red-800 bg-red-50 border-red-100' : inspBanner.tone === 'warning' ? 'text-amber-800 bg-amber-50 border-amber-100' : 'text-slate-700 bg-slate-50 border-slate-100'}`}>
+                {inspBanner.text}
               </p>
-            ) : null}
-            {inspSession?.status === 'passed' ? (
-              <p className="px-4 py-2 text-[11px] font-semibold text-emerald-800 bg-emerald-50 border-t border-emerald-100">
-                Sample passed — all {inspSession.total_rolls ?? rolls.length} rolls cleared (sampled)
-              </p>
-            ) : null}
-            {inspSession?.status === 'passed_deviation' || inspSession?.status === 'accepted_deviation' ? (
-              <p className="px-4 py-2 text-[11px] font-semibold text-emerald-800 bg-emerald-50 border-t border-emerald-100">Deviation accepted — all rolls cleared (sampled)</p>
-            ) : null}
-            {inspSession?.status === 'rejected' ? (
-              <p className="px-4 py-2 text-[11px] font-semibold text-red-800 bg-red-50 border-t border-red-100">Lot rejected{inspSession.decision_reason ? ` — ${inspSession.decision_reason}` : ''}</p>
-            ) : null}
-            {inspSession?.status === 'closed' ? (
-              <p className="px-4 py-2 text-[11px] font-semibold text-slate-700 bg-slate-50 border-t border-slate-100">Inspection closed — each roll stands on its own result</p>
             ) : null}
           </Card>
         ) : null}
@@ -672,7 +710,8 @@ export default function MmWarehouseTestingDetail() {
               if (!inspecting) return false;
               const roll = rolls[row];
               if (!roll) return true;
-              if (key === 'sample') return inspSession?.status !== 'draft';
+              if (inspectedIds.includes(roll.roll_id)) return true;
+              if (key === 'sample') return !inspOpen;
               return !selectedIds.includes(roll.roll_id);
             }}
             rowClassName={(row) => (inspecting && rolls[row] && !selectedIds.includes(rolls[row].roll_id) ? 'bg-slate-50' : undefined)}
@@ -693,8 +732,8 @@ export default function MmWarehouseTestingDetail() {
               const roll = rolls[row];
               if (!roll) return;
               if (key === 'sample') {
-                if (!inspSession || inspSession.status !== 'draft') return;
-                const toggled = toggleSampleSelection(selectedIds, roll.roll_id, Number(inspSession.sample_size ?? selectedIds.length));
+                if (!inspSession || !inspOpen) return;
+                const toggled = toggleStagedSelection(selectedIds, roll.roll_id, Number(inspSession.sample_size ?? selectedIds.length), inspectedIds);
                 if (!toggled.ok) { showNotification(toggled.reason || 'Sample is full', 'error'); return; }
                 setSelectedIds(toggled.next);
                 return;
@@ -733,7 +772,7 @@ export default function MmWarehouseTestingDetail() {
                 <tbody>
                   {inspPast.map((session) => (
                     <tr key={session.id} className="text-[12px] text-slate-700 border-t border-slate-100">
-                      <td className="px-3 py-1.5">{inspSessionStatusLabel(session.status)}</td>
+                      <td className="px-3 py-1.5">{inspPastSessionLabel(session)}</td>
                       <td className="px-3 py-1.5">{session.sample_size ?? '—'} of {session.total_rolls ?? '—'} ({session.sample_pct ?? '—'}%)</td>
                       <td className="px-3 py-1.5">{session.inspected_count ?? '—'}</td>
                       <td className="px-3 py-1.5">{session.failed_count ?? '—'}</td>

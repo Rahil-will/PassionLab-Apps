@@ -1337,6 +1337,12 @@ export type MmInspSession = {
   escalated_at?: string | null;
   decision_reason?: string | null;
   decision?: string | null;
+  steps?: number[] | null;
+  step_no?: number | null;
+  roll_max_points?: number | null;
+  lot_avg_max_points?: number | null;
+  lot_avg_points?: number | null;
+  needs_decision?: boolean | null;
   rolls?: MmInspSessionRoll[];
   [key: string]: unknown;
 };
@@ -1364,6 +1370,28 @@ export const mmInspSaveSession = (sessionId: string, rows: MmV4QcInspectionRow[]
 
 export const mmInspDecide = (sessionId: string, decision: 'accept_deviation' | 'reject', reason: string) =>
   callRpc<MmInspSession>('mm_insp_decide', { p_session_id: sessionId, p_decision: decision, p_reason: reason });
+
+// ── Fabric inspection rules ──────────────────────────────────────────────────
+
+export type MmInspectionTypeRule = {
+  fabric_type_id: string;
+  fabric_type_name: string;
+  roll_max_points: number | null;
+  lot_avg_max_points: number | null;
+  inspection_required: boolean;
+  steps: number[] | null;
+};
+
+export type MmInspectionRules = {
+  steps: number[];
+  types: MmInspectionTypeRule[];
+};
+
+export const mmGetInspectionRules = () =>
+  callRpc<MmInspectionRules>('mm_get_inspection_rules');
+
+export const mmSaveInspectionRules = (row: { steps?: number[]; types?: MmInspectionTypeRule[] }) =>
+  callRpc<MmInspectionRules>('mm_save_inspection_rules', { p_row: row });
 
 // ── Allocation notes ─────────────────────────────────────────────────────────
 
