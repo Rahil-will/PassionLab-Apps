@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { receiptIdOf, rollIdOf } from '../../lib/mmIds';
 import { useQuery } from '@tanstack/react-query';
 import { Filter, Lock, Search } from 'lucide-react';
 import { Badge, Button, Card, Modal, SelectDropdown } from '../../../../components/ui';
@@ -149,7 +150,8 @@ function minuteKey(iso: string | null): string {
 
 function movementGroupKey(row: MmStockMovementRow): string {
   if (row.store_challan_id) return `store:${row.store_challan_id}:${row.action}`;
-  if (row.in_challan_id) return `in:${row.in_challan_id}:${row.action}:${minuteKey(row.txn_at)}`;
+  const receiptId = receiptIdOf(row);
+  if (receiptId) return `in:${receiptId}:${row.action}:${minuteKey(row.txn_at)}`;
   return `loc:${minuteKey(row.txn_at)}:${row.action}:${row.from_code ?? ''}:${row.to_code ?? ''}`;
 }
 
@@ -196,7 +198,7 @@ function groupMovements(rows: MmStockMovementRow[]): MovementGroup[] {
       document: docLabel(row.doc_source, row.doc_no),
       style: row.style_name || '—',
       rows: [row],
-      inChallanId: row.in_challan_id,
+      inChallanId: receiptIdOf(row),
       storeChallanId: row.store_challan_id,
       docSource: row.doc_source,
     });
@@ -310,7 +312,8 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
   const readinessByUnit = useMemo(() => {
     const map = new Map<string, MmV4RollRow>();
     for (const row of readinessQ.data ?? []) {
-      if (row.stock_unit_id) map.set(row.stock_unit_id, row);
+      const rid = rollIdOf(row);
+      if (rid) map.set(rid, row);
       map.set(row.roll_id, row);
       if (row.roll_code) map.set(row.roll_code, row);
     }
@@ -783,7 +786,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                         <td className={tdCls}>{row.shade || '—'}</td>
                         <td className={tdCls}>{row.tested_shade || '—'}</td>
                         <td className={`${tdCenterCls} tabular-nums`}>
-                          {row.points_per_100_sqyd == null ? '—' : Number(row.points_per_100_sqyd).toFixed(2)}
+                          {gate?.inspection?.points_per_100 == null ? '—' : Number(gate.inspection.points_per_100).toFixed(2)}
                         </td>
                         <td className={tdCenterCls}>
                           <Badge variant={statusBadgeVariant(gate?.test_status)}>

@@ -341,7 +341,7 @@ export default function MmWarehouseReceiptDetailPage() {
                     <td className={td}>{rollStageLabel(roll)}</td>
                     <td className={td}><span className={mark.className}>{mark.text}</span></td>
                     <td className={td}>{statusWithOrigin(roll.test_status, roll.last_test?.origin)}</td>
-                    <td className={td}><MmInspectionChip status={roll.inspection_status} inspection={roll.inspection} /></td>
+                    <td className={td}><MmInspectionChip inspection={roll.inspection} /></td>
                     <td className={td}>{spec ? <span className={spec.className}>{spec.text}</span> : '—'}</td>
                     <td className={td}>{bookedOrAllocated(roll)}</td>
                     <td className={td}>{locationText(roll)}</td>

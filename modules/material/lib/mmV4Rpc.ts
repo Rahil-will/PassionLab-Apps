@@ -38,10 +38,13 @@ export type MmV4InspectionStatus = 'NONE' | 'STALE' | 'FAILED' | 'PASS' | 'HOLD'
 
 export type MmRollPassportInspection = {
   status?: string | null;
+  points_per_100?: number | null;
+  result?: string | null;
   sampled?: boolean | null;
   not_required?: boolean | null;
   session_id?: string | null;
   session_status?: string | null;
+  inspected_at?: string | null;
   [key: string]: unknown;
 };
 export type MmV4CustodySide = 'processing' | 'warehouse' | 'none';
@@ -147,6 +150,7 @@ export type MmV4RollRow = {
   stage_label?: string | null;
   finished?: MmRollFinished | null;
   spec?: MmRollSpec | null;
+  /** @deprecated V5 P2 - equals the roll id during the switch, then removed. Use rollIdOf(). */
   stock_unit_id?: string | null;
   qty_available?: number | null;
   uom?: string | null;
@@ -184,8 +188,9 @@ export type MmV4RollRow = {
   gate?: { codes: string[]; overridden?: string[]; cut_ready?: boolean };
   location?: { id?: string; code?: string | null; name?: string | null } | null;
   /** Present when the roll row carries its warehouse receipt. */
-  in_challan_id?: string | null;
   receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id during the switch, then removed. Use receiptIdOf(). */
+  in_challan_id?: string | null;
   receipt_no?: string | null;
   process_status?: MmRollProcessStatus | null;
 };
@@ -503,14 +508,6 @@ export type MmV4QcInspectionRow = {
   result_override?: string | null;
   override_reason?: string | null;
   remarks?: string | null;
-};
-
-export type MmV4QcSaveInspections = {
-  site_side: MmV4QcSiteSide;
-  site_facility_id?: string | null;
-  inspected_at?: string | null;
-  origin?: MmV4QcOrigin;
-  rows: MmV4QcInspectionRow[];
 };
 
 export type MmV4QcQueueFilter = {
@@ -1012,17 +1009,6 @@ export type MmQcTestGridRow = {
   remarks?: string | null;
 };
 
-export const mmQcSaveInspections = (payload: MmV4QcSaveInspections) =>
-  callRpc<{
-    rows: Array<{
-      roll_id?: string | null;
-      inspection_id?: string | null;
-      result?: string | null;
-      points_per_100_sqyd?: number | null;
-      threshold?: number | null;
-    }>;
-  }>('mm_qc_save_inspections', { p_payload: payload });
-
 export const mmQcSaveTestGrid = (payload: {
   scope_kind: 'in_challan' | 'process_challan';
   scope_id: string;
@@ -1070,7 +1056,7 @@ export const mmQcRevokeCutAtRisk = (approvalId: string) =>
 export const mmQcGetRoll = (rollId: string) =>
   callRpc<{
     roll: MmV4RollRow;
-    passport: Record<string, unknown> & { inspection?: MmRollPassportInspection | null; inspection_status?: string | null; test_status?: string | null };
+    passport: Record<string, unknown> & { inspection?: MmRollPassportInspection | null; test_status?: string | null };
     tests: Array<Record<string, unknown>>;
     inspections: Array<Record<string, unknown>>;
     ancestors: Array<MmV4RollRow & { depth?: number }>;
@@ -1461,3 +1447,24 @@ export const mmGetAllocationNote = (id: string) =>
 
 export const mmCancelAllocationNote = (id: string, reason: string) =>
   callRpc<{ id: string; note_no?: string }>('mm_cancel_allocation_note', { p_id: id, p_reason: reason });
+
+// -- Roll history (V5 P2) ------------------------------------------------------
+
+import type { MmRollHistoryEntry } from './mmIds';
+export type { MmRollHistoryEntry } from './mmIds';
+
+/**
+ * Newest-first roll timeline. Returns null when the RPC is missing/errors
+ * (backend not switched yet) so callers can hide the section.
+ */
+export async function mmRollHistory(rollId: string): Promise<MmRollHistoryEntry[] | null> {
+  const { data, error } = await supabase.rpc('mm_roll_history' as never, { p_roll_id: rollId } as never);
+  if (error) return null;
+  const rows: unknown = Array.isArray(data)
+    ? data
+    : (data as { ok?: boolean; data?: unknown } | null)?.ok
+      ? (data as { data?: unknown }).data
+      : data;
+  if (!Array.isArray(rows)) return null;
+  return rows as MmRollHistoryEntry[];
+}

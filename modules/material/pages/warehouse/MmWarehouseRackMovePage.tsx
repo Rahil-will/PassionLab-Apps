@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { rollIdOf } from '../../lib/mmIds';
 import {
   ArrowRightLeft,
   ChevronRight,
@@ -192,7 +193,8 @@ export default function MmWarehouseRackMovePage() {
       const byUnit = new Map<string, string>();
       const byCode = new Map<string, string>();
       for (const roll of res.data.rows ?? []) {
-        if (roll.stock_unit_id) byUnit.set(roll.stock_unit_id, roll.roll_id);
+        const rid = rollIdOf(roll);
+        if (rid) byUnit.set(rid, roll.roll_id);
         if (roll.roll_code) byCode.set(roll.roll_code, roll.roll_id);
       }
       const ids = selectedAlloc.map((row) => byUnit.get(row.id) ?? byCode.get(row.unit_code) ?? '');

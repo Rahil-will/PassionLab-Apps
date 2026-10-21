@@ -1,4 +1,5 @@
 import type { MmLineRoll, MmRollWrite, MmTestField } from './mmRpc';
+import { receiptIdOf } from './mmIds';
 
 export type MmRollWorkStatus = 'new' | 'not_sent' | 'sent' | 'received';
 
@@ -90,7 +91,7 @@ export function qtyFieldLabel(_uom?: string | null): string {
 
 /** GSM and width columns from a fabric type's own field list. The attribute key is the field's key. */
 export function actualMeasureFields(
-  bundle: { test_fields?: Record<string, unknown>[]; requirement_fields?: Record<string, unknown>[] } | null | undefined,
+  bundle: { test_fields?: Record<string, unknown>[] } | null | undefined,
   typeId: string,
 ): MmTestField[] {
   if (!typeId || !bundle) return [];
@@ -111,7 +112,7 @@ export function actualMeasureFields(
       .filter((field) => field.key);
   const seen = new Set<string>();
   const out: MmTestField[] = [];
-  for (const field of [...mapRows(bundle.test_fields), ...mapRows(bundle.requirement_fields)]) {
+  for (const field of mapRows(bundle.test_fields)) {
     const token = `${normKey(field.key)} ${normKey(field.label)}`;
     if (token.includes('shrink') || token.includes('form')) continue;
     if (!token.includes('gsm') && !token.includes('width')) continue;
@@ -378,12 +379,14 @@ export function challanStatusLabel(status: string | null | undefined): string {
 
 export function rollWorkStatus(roll: {
   id?: string | null;
+  receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id. Use receiptIdOf(). */
   in_challan_id?: string | null;
   challan_status?: string | null;
   status?: string | null;
 }): MmRollWorkStatus {
   if (!roll.id) return 'new';
-  if (roll.status === 'draft' && !roll.in_challan_id) return 'not_sent';
+  if (roll.status === 'draft' && !receiptIdOf(roll)) return 'not_sent';
   if ((roll.challan_status ?? '') === 'received') return 'received';
   return 'sent';
 }
@@ -472,7 +475,7 @@ export function seedWarehouseFieldValues(
   return out;
 }
 
-/** Persist warehouse edits only. Unchanged copies and blanks stay off mm_warehouse_inspections. */
+/** Persist warehouse edits only. Unchanged copies and blanks stay off the inspection session. */
 export function warehouseMeasuredFieldValues(
   declaredSeeds: Record<string, string> | null | undefined,
   current: Record<string, string> | null | undefined,
@@ -616,16 +619,17 @@ export interface MmDispatchedChallanGroup {
 export function groupDispatchedChallans(rolls: MmLineRoll[], uom?: string | null): MmDispatchedChallanGroup[] {
   const byId = new Map<string, MmDispatchedChallanGroup>();
   for (const roll of rolls) {
-    if (!roll.in_challan_id) continue;
-    const existing = byId.get(roll.in_challan_id);
+    const receiptId = receiptIdOf(roll);
+    if (!receiptId) continue;
+    const existing = byId.get(receiptId);
     if (existing) {
       existing.rolls.push(roll);
       existing.roll_count += 1;
       existing.qty_m += declaredQty(roll, uom);
       continue;
     }
-    byId.set(roll.in_challan_id, {
-      id: roll.in_challan_id,
+    byId.set(receiptId, {
+      id: receiptId,
       challan_no: roll.challan_no ?? '—',
       status: roll.challan_status ?? 'pending',
       reference_no: roll.challan_reference_no ?? '',
@@ -770,6 +774,8 @@ export function lineRollToDraft(
     shade: string | null;
     lot_no: string | null;
     attributes: Record<string, unknown> | null;
+    receipt_id?: string | null;
+    /** @deprecated V5 P3 - alias of receipt_id. Use receiptIdOf(). */
     in_challan_id?: string | null;
     challan_status?: string | null;
     status?: string | null;

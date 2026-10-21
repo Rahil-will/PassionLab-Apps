@@ -372,5 +372,16 @@ test.describe('material management flow (factory abc)', () => {
       await expect(row).toBeVisible({ timeout: 30_000 });
       await expect(row.getByText(GSTIN)).toBeVisible({ timeout: 20_000 });
     });
+
+    await test.step('10. Roll passport: History shows the received event', async () => {
+      await page.goto('/#/material/fabrics');
+      await page.getByText('French Terry', { exact: true }).first().click();
+      const rollRow = page.locator('tr').filter({ hasText: rollCodes[0] }).first();
+      await expect(rollRow).toBeVisible({ timeout: 30_000 });
+      await rollRow.click();
+      await expect(page.getByText('Roll passport').or(page.getByText(rollCodes[0])).first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('History', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText('Received', { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    });
   });
 });

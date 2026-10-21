@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { rollIdOf } from '../../lib/mmIds';
 import { useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 import { Button, Card, Input, Modal } from '../../../../components/ui';
@@ -114,13 +115,13 @@ export default function MmWarehouseAllocationDetailPage() {
 
   const dispatch = async () => {
     if (!styleMaterialId) { showNotification('This note has no style line to dispatch against', 'error'); return; }
-    const unitIds = activeAllocate.map((line) => line.roll.stock_unit_id || line.roll.roll_id);
-    if (unitIds.length === 0) { showNotification('No active allocated rolls to dispatch', 'error'); return; }
+    const rollIds = activeAllocate.map((line) => rollIdOf(line.roll) ?? line.roll.roll_id);
+    if (rollIds.length === 0) { showNotification('No active allocated rolls to dispatch', 'error'); return; }
     setBusy(true);
     try {
-      const res = await mmCreateStoreChallan(styleMaterialId, unitIds, {});
+      const res = await mmCreateStoreChallan(styleMaterialId, rollIds, {});
       if (res.ok === false) throw new Error(res.message);
-      showNotification(`${res.data.challan_no} · ${unitIds.length} rolls dispatched to cutting`, 'success');
+      showNotification(`${res.data.challan_no} · ${rollIds.length} rolls dispatched to cutting`, 'success');
       setDispatchOpen(false);
       await noteQ.refetch();
       requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STORE_DETAIL, { id: res.data.id });

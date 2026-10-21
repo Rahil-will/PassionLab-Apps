@@ -9,11 +9,10 @@ const TONE: Record<string, string> = {
   default: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
-export function MmInspectionChip({ status, inspection }: {
-  status?: string | null;
+export function MmInspectionChip({ inspection }: {
   inspection?: MmRollPassportInspection | null;
 }) {
-  const chip = rollInspectionChip({ inspection_status: status, inspection });
+  const chip = rollInspectionChip({ inspection });
   if (chip.label === '—') return <span>—</span>;
   return (
     <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${TONE[chip.tone]}`}>

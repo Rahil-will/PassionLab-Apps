@@ -14,6 +14,7 @@ import {
   rollUnitId,
 } from './MmRollDamageActions';
 import { MmRollProcessMark } from './MmProcessStatus';
+import { MmRollHistorySection } from './MmRollHistorySection';
 import { rollInspectionChip } from '../lib/inspAlloc';
 import { unitFormOptionLabel } from '../lib/mmUnitForm';
 import { formatStoredQty, formatStoredWidth, unitBase, useFabricUnits } from '../lib/units';
@@ -86,9 +87,7 @@ export function MmRollPassportModalV4({
   const cutApprovals = passportQ.data?.cut_approvals ?? [];
 
   const latestTest = tests.find((t) => !t.voided_at && !t.superseded_by) ?? tests[0];
-  const latestInspection = inspections.find((i) => !i.voided_at) ?? inspections[0];
   const testOrigin = qcCaptureOriginLabel(latestTest?.origin);
-  const inspectionOrigin = qcCaptureOriginLabel(latestInspection?.origin);
   const latestTestId = String(tests.find((t) => !t.voided_at && !t.superseded_by)?.id ?? tests[0]?.id ?? '');
   const latestInspId = String(
     inspections.find((i) => !i.voided_at)?.id ?? inspections[0]?.id ?? '',
@@ -172,12 +171,12 @@ export function MmRollPassportModalV4({
                 {statusLine('Test', roll?.test_status ?? passport.test_status, testOrigin)}
               </Badge>
               <Badge variant={(() => {
-                const chip = rollInspectionChip({ inspection_status: roll?.inspection_status ?? passport.inspection_status, inspection: passport.inspection ?? roll?.inspection });
-                return chip.tone === 'success' ? 'success' : chip.tone === 'warning' ? 'warning' : chip.tone === 'danger' ? 'danger' : statusBadgeVariant(roll?.inspection_status);
+                const chip = rollInspectionChip({ inspection: roll?.inspection });
+                return chip.tone === 'success' ? 'success' : chip.tone === 'warning' ? 'warning' : chip.tone === 'danger' ? 'danger' : 'default';
               })()}>
                 {(() => {
-                  const chip = rollInspectionChip({ inspection_status: roll?.inspection_status ?? passport.inspection_status, inspection: passport.inspection ?? roll?.inspection });
-                  return chip.label === '—' ? statusLine('Insp', roll?.inspection_status ?? passport.inspection_status, inspectionOrigin) : `Insp ${chip.label}`;
+                  const chip = rollInspectionChip({ inspection: roll?.inspection });
+                  return chip.label === '—' ? 'Insp —' : `Insp ${chip.label}`;
                 })()}
               </Badge>
               {(roll?.missing_keys ?? []).map((key) => (
@@ -303,6 +302,8 @@ export function MmRollPassportModalV4({
                 </section>
               ) : null}
 
+              <MmRollHistorySection rollId={rollId} />
+
               <section className="border-t border-slate-100 pt-3">
                 <Input
                   label="Manager reason"
@@ -384,7 +385,7 @@ export function MmRollPassportModalV4({
           />
           <MmRejectedDispositionModal
             open={dispositionOpen}
-            unitIds={rollUnitId(roll) ? [rollUnitId(roll) as string] : []}
+            rollIds={rollUnitId(roll) ? [rollUnitId(roll) as string] : []}
             onClose={() => setDispositionOpen(false)}
             onDone={(message) => {
               showNotification(message, 'success');

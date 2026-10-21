@@ -5,6 +5,7 @@
  * Route: #/material/warehouse/fabrics/:fabricId
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { receiptIdOf } from '../../lib/mmIds';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Pencil, Search } from 'lucide-react';
 import { Badge, Button, SelectDropdown } from '../../../../components/ui';
@@ -263,7 +264,7 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
       if (receipt.grn_no) byGrn.set(receipt.grn_no, info);
     }
     return (roll: MmFabricStockRoll): RollChallan => {
-      const id = roll.receipt_id || roll.in_challan_id || '';
+      const id = receiptIdOf(roll) || '';
       if (id && byId.has(id)) return byId.get(id) as RollChallan;
       if (roll.batch_no && byGrn.has(roll.batch_no)) return byGrn.get(roll.batch_no) as RollChallan;
       return { key: roll.batch_no || 'none', no: roll.batch_no || 'No challan', vendor: '—', date: null };
@@ -603,7 +604,7 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                                     </span>
                                   )}
                                 </td>
-                                <td className={td}><MmInspectionChip status={roll.inspection_status} inspection={roll.inspection} /></td>
+                                <td className={td}><MmInspectionChip inspection={roll.inspection} /></td>
                               </tr>
                             );
                           })}

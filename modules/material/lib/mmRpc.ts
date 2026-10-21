@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase';
 export * from './mmV4Rpc';
 
 export type MmCutGateBlocked = {
+  /** @deprecated V5 P2 - equals the roll id during the switch, then removed. Use rollIdOf(). */
   stock_unit_id?: string | null;
   roll_id?: string | null;
   unit_code?: string | null;
@@ -65,9 +66,6 @@ export const mmDeleteTrimRequirementParam = (id: string) =>
 export const mmSaveTypeTestFields = (typeId: string, fields: unknown[]) =>
   callRpc('mm_save_type_test_fields', { p_type_id: typeId, p_fields: fields });
 
-export const mmSaveTypeRequirementFields = (typeId: string, fields: unknown[]) =>
-  callRpc('mm_save_type_requirement_fields', { p_type_id: typeId, p_fields: fields });
-
 export type MmMaterialFeatureKey = 'fabric_warehouse' | 'trims';
 
 export type MmMaterialFeatures = {
@@ -89,9 +87,9 @@ export const mmGetOrderFabricLines = (orderId: string) =>
 export const mmGetWarehouseBoard = (orderIds: string[]) =>
   callRpc<{ orders: MmWarehouseBoardOrder[] }>('mm_get_warehouse_board', { p_order_ids: orderIds });
 
-export const mmPutawayRolls = (unitIds: string[], locationId: string) =>
+export const mmPutawayRolls = (rollIds: string[], locationId: string) =>
   callRpc<{ count: number; location_id: string }>('mm_putaway_rolls', {
-    p_unit_ids: unitIds,
+    p_unit_ids: rollIds,
     p_location_id: locationId,
   });
 
@@ -146,11 +144,11 @@ export const mmGetFptSummary = (
     p_group_by: groupBy,
   });
 
-export const mmHoldRolls = (unitIds: string[], reason: string) =>
-  callRpc<{ rolls: number }>('mm_hold_rolls', { p_unit_ids: unitIds, p_reason: reason });
+export const mmHoldRolls = (rollIds: string[], reason: string) =>
+  callRpc<{ rolls: number }>('mm_hold_rolls', { p_unit_ids: rollIds, p_reason: reason });
 
-export const mmReleaseRolls = (unitIds: string[]) =>
-  callRpc<{ rolls: number }>('mm_release_rolls', { p_unit_ids: unitIds });
+export const mmReleaseRolls = (rollIds: string[]) =>
+  callRpc<{ rolls: number }>('mm_release_rolls', { p_unit_ids: rollIds });
 
 export const mmReportDamage = (payload: { roll_ids: string[]; reason: string; qty?: number }) =>
   callRpc<{
@@ -159,13 +157,13 @@ export const mmReportDamage = (payload: { roll_ids: string[]; reason: string; qt
   }>('mm_report_damage', { p_payload: payload });
 
 export const mmDispositionRejected = (
-  unitIds: string[],
+  rollIds: string[],
   action: 'return_to_supplier' | 'accept_deviation' | 'write_off',
   reason: string,
   reference?: string,
 ) =>
   callRpc<{ action: string; rolls: number; return_no?: string }>('mm_disposition_rejected', {
-    p_unit_ids: unitIds,
+    p_unit_ids: rollIds,
     p_action: action,
     p_reason: reason,
     p_reference: reference ?? null,
@@ -180,9 +178,9 @@ export const mmListEndBitReturns = () =>
 export const mmGetSupplierReturn = (id: string) =>
   callRpc<MmSupplierReturnDetail>('mm_get_supplier_return', { p_id: id });
 
-export const mmUpdateRoll = (unitId: string, patch: MmRollPatch, rowVersion: number) =>
+export const mmUpdateRoll = (rollId: string, patch: MmRollPatch, rowVersion: number) =>
   callRpc<{ id: string }>('mm_update_roll', {
-    p_unit_id: unitId,
+    p_unit_id: rollId,
     p_patch: patch,
     p_row_version: rowVersion,
   });
@@ -220,7 +218,7 @@ export const mmListStoreStock = (styleMaterialId: string | null = null) =>
 
 export const mmCreateStoreChallan = (
   styleMaterialId: string,
-  unitIds: string[],
+  rollIds: string[],
   header?: {
     challan_no?: string;
     reference_no?: string;
@@ -230,18 +228,21 @@ export const mmCreateStoreChallan = (
 ) =>
   callRpc<{ id: string; challan_no: string; status: string }>('mm_create_store_challan', {
     p_style_material_id: styleMaterialId,
-    p_unit_ids: unitIds,
+    p_unit_ids: rollIds,
     p_challan_no: header?.challan_no?.trim() ? header.challan_no.trim() : null,
     p_reference_no: header?.reference_no?.trim() ? header.reference_no.trim() : null,
     p_sent_at: header?.sent_at || null,
     p_remarks: header?.remarks?.trim() ? header.remarks.trim() : null,
   });
 
-export const mmSetShadeBands = (assignments: { unit_id: string; band: string }[]) =>
-  callRpc<{ updated: number }>('mm_set_shade_bands', { p_assignments: assignments });
+export const mmSetShadeBands = (assignments: { roll_id: string; band: string }[]) =>
+  // wire key unit_id kept until backend cleanup; the value is the roll id
+  callRpc<{ updated: number }>('mm_set_shade_bands', {
+    p_assignments: assignments.map((a) => ({ unit_id: a.roll_id, band: a.band })),
+  });
 
-export const mmMarkRollsConsumed = (unitIds: string[]) =>
-  callRpc<{ rolls: number }>('mm_mark_rolls_consumed', { p_unit_ids: unitIds });
+export const mmMarkRollsConsumed = (rollIds: string[]) =>
+  callRpc<{ rolls: number }>('mm_mark_rolls_consumed', { p_unit_ids: rollIds });
 
 export const mmGetWarehouseDispatchBoard = (orderId?: string | null) =>
   callRpc<MmWarehouseDispatchBoard>('mm_get_warehouse_dispatch_board', {
@@ -254,10 +255,10 @@ export const mmListStoreChallans = (status = '') =>
 export const mmGetStoreChallan = (id: string) =>
   callRpc<MmStoreChallanDetail>('mm_get_store_challan', { p_id: id });
 
-export const mmReceiveStoreChallan = (id: string, missingUnitIds: string[] = []) =>
+export const mmReceiveStoreChallan = (id: string, missingRollIds: string[] = []) =>
   callRpc<{ id: string; status: string; received_rolls: number; missing_rolls: number }>('mm_receive_store_challan', {
     p_id: id,
-    p_missing_unit_ids: missingUnitIds,
+    p_missing_unit_ids: missingRollIds,
   });
 
 export const mmGetStyleReconciliation = (orderId: string) =>
@@ -269,7 +270,6 @@ export const mmGetStyleReconciliation = (orderId: string) =>
 export interface MmConfigBundle {
   types: Record<string, unknown>[];
   test_fields: Record<string, unknown>[];
-  requirement_fields: Record<string, unknown>[];
   trim_params: Record<string, unknown>[];
   attribute_defs: Record<string, unknown>[];
 }
@@ -595,6 +595,8 @@ export interface MmLineRoll {
   fabric_ref_name?: string | null;
   attributes: Record<string, unknown> | null;
   status: string;
+  receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id during the switch, then removed. Use receiptIdOf(). */
   in_challan_id: string | null;
   challan_no: string | null;
   challan_status: string | null;
@@ -677,6 +679,8 @@ export interface MmRackOpsRoll {
   fabric_type: string;
   batch_no?: string | null;
   received_at?: string | null;
+  receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id during the switch, then removed. Use receiptIdOf(). */
   in_challan_id?: string | null;
   challan_no?: string | null;
   challan_source?: string | null;
@@ -760,6 +764,8 @@ export interface MmStyleWarehouseRoll {
   status: string;
   qc_result: string | null;
   points_per_100_sqyd?: number | null;
+  receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id during the switch, then removed. Use receiptIdOf(). */
   in_challan_id: string | null;
   store_challan_id: string | null;
   color_name: string;
@@ -1007,6 +1013,8 @@ export interface MmWarehouseStockRow {
   fabric_type_id: string | null;
   fabric_id?: string | null;
   fabric_code?: string | null;
+  receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id during the switch, then removed. Use receiptIdOf(). */
   in_challan_id: string | null;
   challan_no: string | null;
   challan_source: 'inhouse' | 'vendor' | null;
@@ -1051,6 +1059,8 @@ export interface MmStockMovementRow {
   doc_source: string | null;
   ref_table: string | null;
   ref_id: string | null;
+  receipt_id?: string | null;
+  /** @deprecated V5 P3 - alias of receipt_id during the switch, then removed. Use receiptIdOf(). */
   in_challan_id: string | null;
   store_challan_id: string | null;
 }

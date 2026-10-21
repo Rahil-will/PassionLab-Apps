@@ -117,6 +117,7 @@ export type MmFabricStockPosition = {
   colour: string | null;
   allocated: boolean;
   style_material_id: string | null;
+  /** @deprecated V5 P2 - equals the roll id during the switch, then removed. Use rollIdOf(). */
   stock_unit_id: string | null;
   out_line_id: string | null;
 };

@@ -183,7 +183,7 @@ export function MmWarehouseReadinessPanel() {
                       </Badge>
                     </td>
                     <td className={td}>
-                      <MmInspectionChip status={row.inspection_status} inspection={row.inspection} />
+                      <MmInspectionChip inspection={row.inspection} />
                     </td>
                     <td className={td}>
                       <div className="flex flex-wrap gap-1">

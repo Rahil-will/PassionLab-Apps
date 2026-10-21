@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { receiptIdOf } from '../../lib/mmIds';
 import {
   ChevronDown,
   ClipboardCheck,
@@ -223,7 +224,7 @@ function challanRowStatusClass(label: string, status: string): string {
 
 function rollMatchesChallan(row: MmStyleWarehouseRoll, challanId: string): boolean {
   if (!challanId) return true;
-  return row.in_challan_id === challanId || row.store_challan_id === challanId;
+  return receiptIdOf(row) === challanId || row.store_challan_id === challanId;
 }
 
 function isReceivedLockedRoll(row: MmStyleWarehouseRoll): boolean {
@@ -263,7 +264,7 @@ function challanRollQtys(rolls: MmStyleWarehouseRoll[]): Map<string, { passed: n
     const qty = Number(roll.length_m ?? 0);
     const passed = rollPassed(roll);
     const dispatched = rollDispatched(roll);
-    add(roll.in_challan_id, passed, dispatched, qty);
+    add(receiptIdOf(roll), passed, dispatched, qty);
     add(roll.store_challan_id, passed, dispatched, qty);
   }
   return map;
@@ -457,10 +458,11 @@ function rollChallanRef(
       status: hit?.status ?? '',
     };
   }
-  if (roll.in_challan_id) {
-    const hit = challans.find((row) => row.id === roll.in_challan_id);
+  const receiptId = receiptIdOf(roll);
+  if (receiptId) {
+    const hit = challans.find((row) => row.id === receiptId);
     return {
-      id: roll.in_challan_id,
+      id: receiptId,
       no: hit?.challan_no ?? 'Inbound',
       origin: hit?.origin ?? roll.source,
       kind: hit?.kind ?? 'inbound',
@@ -844,9 +846,10 @@ export default function MmWarehouseStylePage() {
       if (!isReceivedLockedRoll(row)) continue;
       if (colorFilter && row.color_name !== colorFilter) continue;
       if (fabricFilter && row.fabric_name !== fabricFilter) continue;
-      if (row.in_challan_id) {
-        const hit = challans.find((item) => item.id === row.in_challan_id);
-        seen.set(row.in_challan_id, hit?.challan_no ?? 'Inbound');
+      const receiptId = receiptIdOf(row);
+      if (receiptId) {
+        const hit = challans.find((item) => item.id === receiptId);
+        seen.set(receiptId, hit?.challan_no ?? 'Inbound');
       }
       if (row.store_challan_id) {
         const hit = challans.find((item) => item.id === row.store_challan_id);

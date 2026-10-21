@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { receiptIdOf } from '../lib/mmIds';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { Button, Input, Modal } from '../../../components/ui';
@@ -229,7 +230,7 @@ export function MmAllocateV4Modal({
       const finishedOk = roll.finished ? roll.finished.finished === true : stage?.can_cut === true && !greige;
       const cuttable = finishedOk && !needsColour;
       const classed: ClassedRoll = { ...roll, cuttable, greige, needsColour, stageLabel };
-      const key = roll.receipt_id || roll.in_challan_id || 'none';
+      const key = receiptIdOf(roll) || 'none';
       const list = grouped.get(key) ?? [];
       list.push(classed);
       grouped.set(key, list);

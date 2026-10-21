@@ -1,4 +1,5 @@
 import type { MmStyleWarehouseRoll, MmTestField } from './mmRpc';
+import { receiptIdOf } from './mmIds';
 import { lockedRollFieldText } from './mmRollDraft';
 
 export type RollGroupKey =
@@ -80,10 +81,10 @@ export function rollQcClass(result: string | null | undefined): string {
 
 export function inboundChallanInspected(
   challanId: string,
-  rolls: Array<{ in_challan_id: string | null; bucket: string; qc_result: string | null }>,
+  rolls: Array<{ receipt_id?: string | null; in_challan_id?: string | null; bucket: string; qc_result: string | null }>,
 ): boolean {
   const onChallan = rolls.filter(
-    (row) => row.in_challan_id === challanId && row.bucket !== 'transit',
+    (row) => receiptIdOf(row) === challanId && row.bucket !== 'transit',
   );
   return onChallan.length > 0 && onChallan.every((row) => row.qc_result === 'pass' || row.qc_result === 'fail');
 }

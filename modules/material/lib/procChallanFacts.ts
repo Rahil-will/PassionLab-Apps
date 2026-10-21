@@ -86,34 +86,26 @@ function countText(forms: string[]): string {
   return unitFormCountText(counts);
 }
 
-export async function loadProcChallanFacts(ids: string[]): Promise<Map<string, ProcChallanFacts>> {
-  const unique = [...new Set(ids.filter(Boolean))];
+export type ProcChallanFactsPayload = {
+  out_lines?: unknown;
+  returns?: unknown;
+  return_lines?: unknown;
+};
+
+/** Pure mapping from the mm_proc_challan_facts payload (or the legacy selects) to the facts map. */
+export function mapProcChallanFacts(
+  unique: string[],
+  payload: ProcChallanFactsPayload,
+): Map<string, ProcChallanFacts> {
   const map = new Map<string, ProcChallanFacts>();
-  if (unique.length === 0) return map;
-
-  const [outRes, returnRes, lineRes] = await Promise.all([
-    supabase
-      .from('mm_process_out_lines')
-      .select(`
-        challan_id, qty, uom, qty_kg, line_status,
-        roll:mm_rolls!mm_process_out_lines_roll_id_fkey (
-          unit_form,
-          fabric:mm_fabrics!mm_rolls_fabric_id_fkey (name),
-          fabric_type:mm_fabric_types!mm_rolls_fabric_type_id_fkey (name)
-        )
-      `)
-      .in('challan_id', unique),
-    supabase.from('mm_process_returns').select('challan_id, returned_at').in('challan_id', unique),
-    supabase.from('mm_process_return_lines').select('challan_id, qty, uom, qty_kg, unit_form').in('challan_id', unique),
-  ]);
-
-  const failed = outRes.error ?? returnRes.error ?? lineRes.error;
-  if (failed) throw new Error(failed.message);
+  const outRows = (Array.isArray(payload.out_lines) ? payload.out_lines : []) as Record<string, unknown>[];
+  const returnRows = (Array.isArray(payload.returns) ? payload.returns : []) as Array<{ challan_id?: unknown; returned_at?: unknown }>;
+  const lineRows = (Array.isArray(payload.return_lines) ? payload.return_lines : []) as Array<{ challan_id?: unknown; qty?: unknown; uom?: unknown; qty_kg?: unknown; unit_form?: unknown }>;
 
   const fabrics = new Map<string, Set<string>>();
   const sentQty = new Map<string, Array<{ qty: number; uom: string }>>();
   const sentForms = new Map<string, string[]>();
-  for (const raw of (outRes.data ?? []) as Record<string, unknown>[]) {
+  for (const raw of outRows) {
     if (String(raw.line_status ?? '').toLowerCase() === 'void') continue;
     const id = String(raw.challan_id ?? '');
     if (!id) continue;
@@ -137,18 +129,19 @@ export async function loadProcChallanFacts(ids: string[]): Promise<Map<string, P
   }
 
   const receivedAt = new Map<string, string>();
-  for (const row of returnRes.data ?? []) {
-    const id = String(row.challan_id);
+  for (const row of returnRows) {
+    const id = String(row.challan_id ?? '');
     const at = String(row.returned_at ?? '');
-    if (!at) continue;
+    if (!id || !at) continue;
     const prev = receivedAt.get(id);
     if (!prev || at > prev) receivedAt.set(id, at);
   }
 
   const receivedQty = new Map<string, Array<{ qty: number; uom: string }>>();
   const receivedForms = new Map<string, string[]>();
-  for (const row of lineRes.data ?? []) {
-    const id = String(row.challan_id);
+  for (const row of lineRows) {
+    const id = String(row.challan_id ?? '');
+    if (!id) continue;
     const qty = Number(row.qty);
     const kg = Number(row.qty_kg);
     const uom = String(row.uom ?? '').trim().toLowerCase();
@@ -173,4 +166,45 @@ export async function loadProcChallanFacts(ids: string[]): Promise<Map<string, P
     });
   }
   return map;
+}
+
+export async function loadProcChallanFacts(ids: string[]): Promise<Map<string, ProcChallanFacts>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const map = new Map<string, ProcChallanFacts>();
+  if (unique.length === 0) return map;
+
+  const rpcRes = await supabase.rpc('mm_proc_challan_facts' as never, { p_challan_ids: unique } as never);
+  if (!rpcRes.error && rpcRes.data) {
+    const raw = rpcRes.data as { ok?: boolean; data?: unknown } | ProcChallanFactsPayload;
+    const payload = (raw as { ok?: boolean; data?: unknown }).ok
+      ? ((raw as { data?: unknown }).data as ProcChallanFactsPayload)
+      : (raw as ProcChallanFactsPayload);
+    if (payload && typeof payload === 'object') return mapProcChallanFacts(unique, payload);
+  }
+
+  // TODO remove after V5 P3 - legacy direct selects, used only until mm_proc_challan_facts is deployed.
+  const [outRes, returnRes, lineRes] = await Promise.all([
+    supabase
+      .from('mm_process_out_lines')
+      .select(`
+        challan_id, qty, uom, qty_kg, line_status,
+        roll:mm_rolls!mm_process_out_lines_roll_id_fkey (
+          unit_form,
+          fabric:mm_fabrics!mm_rolls_fabric_id_fkey (name),
+          fabric_type:mm_fabric_types!mm_rolls_fabric_type_id_fkey (name)
+        )
+      `)
+      .in('challan_id', unique),
+    supabase.from('mm_process_returns').select('challan_id, returned_at').in('challan_id', unique),
+    supabase.from('mm_process_return_lines').select('challan_id, qty, uom, qty_kg, unit_form').in('challan_id', unique),
+  ]);
+
+  const failed = outRes.error ?? returnRes.error ?? lineRes.error;
+  if (failed) throw new Error(failed.message);
+
+  return mapProcChallanFacts(unique, {
+    out_lines: outRes.data ?? [],
+    returns: returnRes.data ?? [],
+    return_lines: lineRes.data ?? [],
+  });
 }

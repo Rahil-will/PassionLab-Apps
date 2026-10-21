@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { receiptIdOf } from '../../lib/mmIds';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList, Info, Package, Search } from 'lucide-react';
 import { Button, Card } from '../../../../components/ui';
@@ -232,7 +233,7 @@ export default function MmWarehouseStyleFabricAllocatePage() {
         bookable: !finishedOk && !booked,
         stageLabel,
       };
-      const key = roll.receipt_id || roll.in_challan_id || 'none';
+      const key = receiptIdOf(roll) || 'none';
       const list = grouped.get(key) ?? [];
       list.push(classed);
       grouped.set(key, list);

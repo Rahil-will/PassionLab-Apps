@@ -73,7 +73,7 @@ export function MmShadeBandsPanel({
       return;
     }
     setBusy(true);
-    const res = await mmSetShadeBands(selectedIds.map((id) => ({ unit_id: id, band: nextBand })));
+    const res = await mmSetShadeBands(selectedIds.map((id) => ({ roll_id: id, band: nextBand })));
     setBusy(false);
     if (res.ok === false) {
       showNotification(res.message, 'error');

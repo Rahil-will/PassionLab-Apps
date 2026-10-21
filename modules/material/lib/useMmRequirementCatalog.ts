@@ -57,33 +57,11 @@ function parseTypeChips(raw: unknown): string[] {
   return out;
 }
 
-function requirementFieldsOf(raw: unknown): MmRequirementFieldOption[] {
-  const list = Array.isArray(raw) ? raw : [];
-  const rows: MmRequirementFieldOption[] = [];
-  for (const item of list) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as { id?: unknown; type_id?: unknown; key?: unknown; label?: unknown; seq?: unknown; is_active?: unknown };
-    if (row.is_active !== true) continue;
-    const label = String(row.label ?? '').trim();
-    const key = String(row.key ?? '').trim() || label;
-    const mapped: MmRequirementFieldOption = {
-      id: String(row.id ?? ''),
-      type_id: String(row.type_id ?? ''),
-      key,
-      label: label || key,
-      seq: Number(row.seq ?? 0),
-    };
-    if (mapped.id && mapped.type_id && mapped.key) rows.push(mapped);
-  }
-  rows.sort((a, b) => a.seq - b.seq || a.label.localeCompare(b.label));
-  return rows;
-}
-
 async function fetchMmRequirementCatalog(factoryId: string): Promise<MmRequirementCatalog> {
   const [typesRes, trimsRes] = await Promise.all([
     supabase
       .from('mm_fabric_types')
-      .select('id, name, seq, is_active, requirement_fields, qty_units, width_units')
+      .select('id, name, seq, is_active, qty_units, width_units')
       .eq('factory_id', factoryId)
       .eq('is_active', true)
       .order('seq', { ascending: true })
@@ -111,9 +89,7 @@ async function fetchMmRequirementCatalog(factoryId: string): Promise<MmRequireme
         width_units: parseWidthUnitList(extra.width_units),
       };
     }).filter((row) => row.id && row.name),
-    requirementFields: requirementFieldsOf(types.flatMap((row) => (
-      Array.isArray(row.requirement_fields) ? row.requirement_fields : []
-    ))),
+    requirementFields: [],
     trimParams: (trimsRes.data ?? []).map((row) => ({
       id: String(row.id),
       category: String(row.category ?? '').trim(),

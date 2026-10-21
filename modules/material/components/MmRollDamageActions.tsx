@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import { Button, Input, Modal, SelectDropdown } from '../../../components/ui';
 import { mmDispositionRejected, mmReportDamage } from '../lib/mmRpc';
+import { rollIdOf } from '../lib/mmIds';
 
 type RollLike = {
   roll_id: string;
   roll_code?: string | null;
   uom?: string | null;
+  id?: string | null;
+  /** @deprecated V5 P2 - equals the roll id during the switch, then removed. */
   stock_unit_id?: string | null;
   qty_available?: number | null;
-  custody?: { side?: string | null; status?: string | null; stock_unit_id?: unknown } | null;
-  stock?: { bucket?: string | null; stock_unit_id?: string | null; uom?: string | null } | null;
+  custody?: { side?: string | null; status?: string | null; /** @deprecated */ stock_unit_id?: unknown } | null;
+  stock?: { bucket?: string | null; /** @deprecated */ stock_unit_id?: string | null; uom?: string | null } | null;
 };
 
+/** Roll id for damage/disposition payloads (was the stock-unit id pre-V5). */
 export function rollUnitId(roll: RollLike): string | null {
-  if (roll.stock_unit_id) return roll.stock_unit_id;
-  if (roll.stock?.stock_unit_id) return roll.stock.stock_unit_id;
-  const fromCustody = roll.custody?.stock_unit_id;
-  return typeof fromCustody === 'string' && fromCustody ? fromCustody : null;
+  return rollIdOf(roll);
 }
 
 export function rollCanReportDamage(roll: RollLike): boolean {
@@ -123,12 +124,12 @@ export function MmReportDamageModal({
 
 export function MmRejectedDispositionModal({
   open,
-  unitIds,
+  rollIds,
   onClose,
   onDone,
 }: {
   open: boolean;
-  unitIds: string[];
+  rollIds: string[];
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -151,7 +152,7 @@ export function MmRejectedDispositionModal({
       return;
     }
     setBusy(true);
-    const res = await mmDispositionRejected(unitIds, action, reason.trim(), reference.trim());
+    const res = await mmDispositionRejected(rollIds, action, reason.trim(), reference.trim());
     setBusy(false);
     if (res.ok === false) {
       setError(res.message);
@@ -184,7 +185,7 @@ export function MmRejectedDispositionModal({
         {error ? <p className="text-[11px] text-red-600">{error}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" size="sm" variant="secondary" onClick={close}>Cancel</Button>
-          <Button type="button" size="sm" disabled={busy || unitIds.length === 0} onClick={() => void save()}>
+          <Button type="button" size="sm" disabled={busy || rollIds.length === 0} onClick={() => void save()}>
             {busy ? 'Saving…' : 'Save'}
           </Button>
         </div>

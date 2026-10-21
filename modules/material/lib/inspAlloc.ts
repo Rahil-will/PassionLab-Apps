@@ -44,6 +44,8 @@ export function inspSessionTone(status: string | null | undefined): ChipTone {
 
 export type InspectionChipInput = {
   status?: string | null;
+  result?: string | null;
+  points_per_100?: number | null;
   sampled?: boolean | null;
   not_required?: boolean | null;
   session_id?: string | null;
@@ -62,18 +64,18 @@ export function inspectionChip(input: InspectionChipInput): { label: string; ton
   return { label: status.charAt(0) + status.slice(1).toLowerCase(), tone: status === 'STALE' ? 'warning' : 'default' };
 }
 
-/** Chip for a roll row / passport inspection object, tolerant of either shape. */
+/** Chip for a roll row - session inspection only (V5 P4, no legacy status fallback). */
 export function rollInspectionChip(roll: {
-  inspection_status?: string | null;
   inspection?: InspectionChipInput | null;
 } | null | undefined): { label: string; tone: ChipTone } {
   const insp = roll?.inspection;
+  if (!insp) return { label: '—', tone: 'default' };
   return inspectionChip({
-    status: insp?.status ?? roll?.inspection_status,
-    sampled: insp?.sampled,
-    not_required: insp?.not_required,
-    session_id: insp?.session_id,
-    session_status: insp?.session_status,
+    status: insp.status ?? insp.result,
+    sampled: insp.sampled,
+    not_required: insp.not_required,
+    session_id: insp.session_id,
+    session_status: insp.session_status,
   });
 }
 

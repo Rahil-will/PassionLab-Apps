@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { rollIdOf } from '../../lib/mmIds';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Search } from 'lucide-react';
 import { Badge, Button, Input, Modal } from '../../../../components/ui';
@@ -166,7 +167,7 @@ export default function MmWarehouseDispatchPage() {
   const readinessByUnit = useMemo(() => {
     const map = new Map<string, { cut_ready?: boolean; codes: string[]; stage?: string | null }>();
     for (const row of readinessQ.data ?? []) {
-      const unitKey = String(row.stock_unit_id || row.roll_id);
+      const unitKey = String(rollIdOf(row) ?? '');
       map.set(unitKey, {
         cut_ready: row.gate?.cut_ready,
         codes: row.gate?.codes ?? [],
@@ -183,7 +184,7 @@ export default function MmWarehouseDispatchPage() {
 
   const dispatchRolls = useMemo(() => centreRolls.map((roll) => {
     const gate = readinessByUnit.get(roll.id) ?? readinessByUnit.get(roll.unit_code);
-    const row = readinessQ.data?.find((item) => item.stock_unit_id === roll.id || item.roll_id === roll.id || item.roll_code === roll.unit_code);
+    const row = readinessQ.data?.find((item) => rollIdOf(item) === roll.id || item.roll_code === roll.unit_code);
     return {
       ...roll,
       stage_code: row?.stage_code ?? gate?.stage ?? null,
@@ -197,7 +198,7 @@ export default function MmWarehouseDispatchPage() {
   const blockedByUnit = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const row of blocked) {
-      const key = String(row.stock_unit_id || row.roll_id || '');
+      const key = String(rollIdOf(row) ?? '');
       if (key) map.set(key, row.codes);
       if (row.unit_code) map.set(row.unit_code, row.codes);
     }
@@ -210,7 +211,7 @@ export default function MmWarehouseDispatchPage() {
     for (const row of blocked) {
       const riskCodes = row.codes.filter(isCutAtRiskCode);
       if (riskCodes.length === 0) continue;
-      const id = String(row.roll_id || row.stock_unit_id || '');
+      const id = String(rollIdOf(row) ?? '');
       if (id) ids.push(id);
       for (const c of riskCodes) codes.add(c);
     }
