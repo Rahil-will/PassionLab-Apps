@@ -1,20 +1,20 @@
 /**
- * Fabric detail — groups on the left, rolls on the right.
- * Route: #/material/fabrics/:fabricId
+ * Fabric stock details — what is at home, at processing, allocated and free.
+ * Left: Allocated / Free → stage (collapsible) → colour.
+ * Right: rolls grouped by stage, then colour, with vendor / where filters.
+ * Route: #/material/warehouse/fabrics/:fabricId
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil, Search } from 'lucide-react';
+import { ChevronDown, Pencil, Search } from 'lucide-react';
 import { Badge, Button } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { useDebouncedValue } from '../../../../hooks/useDebouncedValue';
-import { tokens } from '../../../../lib/designTokens';
 import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore } from '../../../../stores';
 import { FabricFormDrawer } from '../../components/FabricFormDrawer';
-import { MmRollProcessMark } from '../../components/MmProcessStatus';
 import { MmRollPassportModalV4 } from '../../components/MmRollPassportModalV4';
 import { MmInspectionChip } from '../../components/MmInspectionChip';
 import { MmStatusDot } from '../../components/MmStatusDot';
@@ -24,11 +24,9 @@ import { fabricUomQty } from '../../lib/fabricStock';
 import {
   getFabricDetail,
   getFabricStockRolls,
-  type MmFabricDetailGroup,
   type MmFabricStockRoll,
-  type MmFabricStockRollFilter,
-  type MmStockBucket,
 } from '../../lib/mmFabricRpc';
+import { mmWhListReceipts } from '../../lib/mmV4Rpc';
 import { lastTestParts } from '../../lib/qcTolerance';
 import { useMmConfigRights } from '../../lib/useMmConfigRights';
 import { useMmV4Config } from '../../lib/useMmV4Config';
@@ -42,47 +40,17 @@ const BUCKET_LABELS: Record<string, string> = {
   issued: 'Issued to cutting',
 };
 
-type StageBlock = {
-  stage_code: string;
-  stage_label: string;
-  finished: boolean;
-  rows: MmFabricDetailGroup[];
-};
-
-type RollSelection =
+type Selection =
   | { kind: 'all' }
-  | { kind: 'stage'; stageCode: string }
-  | { kind: 'bucket'; stageCode: string; bucket: string }
-  | { kind: 'process'; stageCode: string; process: string };
+  | { kind: 'alloc'; allocated: boolean }
+  | { kind: 'stage'; allocated: boolean; stageCode: string }
+  | { kind: 'colour'; allocated: boolean; stageCode: string; colour: string };
+
+type WhereFilter = 'all' | 'home' | 'at_processing' | 'issued';
 
 function bucketLabel(bucket: string | null | undefined): string {
   if (!bucket) return '—';
   return BUCKET_LABELS[bucket] ?? bucket;
-}
-
-function stageBlocks(rows: MmFabricDetailGroup[]): StageBlock[] {
-  const order: string[] = [];
-  const map = new Map<string, StageBlock>();
-  for (const row of rows) {
-    const key = row.stage_code;
-    let block = map.get(key);
-    if (!block) {
-      block = {
-        stage_code: key,
-        stage_label: row.stage_label || key,
-        finished: row.finished === true,
-        rows: [],
-      };
-      map.set(key, block);
-      order.push(key);
-    }
-    if (row.finished) block.finished = true;
-    block.rows.push(row);
-  }
-  return order.flatMap((key) => {
-    const block = map.get(key);
-    return block ? [block] : [];
-  });
 }
 
 function testBadgeVariant(result: string): 'success' | 'danger' | 'warning' | 'default' {
@@ -93,17 +61,26 @@ function testBadgeVariant(result: string): 'success' | 'danger' | 'warning' | 'd
   return 'default';
 }
 
-function rollQty(roll: MmFabricStockRoll, qtyUnit: string): string {
+function rollQtyNum(roll: MmFabricStockRoll, qtyUnit: string): number {
   const stored = unitBase(qtyUnit) === 'kg'
-    ? (roll.stock?.qty_kg ?? roll.stock?.qty)
-    : (roll.stock?.qty_m ?? roll.stock?.qty);
-  return formatStoredQty(stored == null ? null : Number(stored), qtyUnit);
+    ? (roll.stock?.qty_kg ?? roll.weight_kg ?? roll.stock?.qty)
+    : (roll.stock?.qty_m ?? roll.length_m ?? roll.stock?.qty);
+  const n = Number(stored ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function rollQty(roll: MmFabricStockRoll, qtyUnit: string): string {
+  return formatStoredQty(rollQtyNum(roll, qtyUnit), qtyUnit);
+}
+
+function rollColourName(roll: MmFabricStockRoll): string {
+  return (roll.stock?.colour || roll.color || roll.color_ref || '').trim() || 'No colour';
 }
 
 function allocatedText(roll: MmFabricStockRoll): string {
   if (!roll.stock?.allocated) return '—';
   const name = (roll.style?.style_name || roll.style?.style_ref || '').trim();
-  return name || '—';
+  return name || 'Allocated';
 }
 
 function widthText(widthIn: number | null, widthForm: string | null, unit: string): string {
@@ -113,22 +90,64 @@ function widthText(widthIn: number | null, widthForm: string | null, unit: strin
   return form ? `${width} ${form}` : width;
 }
 
+type StageGroup = { stageCode: string; stageLabel: string; finished: boolean; rolls: MmFabricStockRoll[] };
+type ColourGroup = { colour: string; rolls: MmFabricStockRoll[] };
+
+function groupByStageColour(rolls: MmFabricStockRoll[], stageOrder: Map<string, number>): Array<StageGroup & { colours: ColourGroup[] }> {
+  const byStage = new Map<string, StageGroup>();
+  for (const roll of rolls) {
+    const code = roll.stage_code || '';
+    let group = byStage.get(code);
+    if (!group) {
+      group = { stageCode: code, stageLabel: roll.stage_label || code || '—', finished: roll.finished?.finished === true, rolls: [] };
+      byStage.set(code, group);
+    }
+    if (roll.finished?.finished) group.finished = true;
+    group.rolls.push(roll);
+  }
+  return [...byStage.values()]
+    .sort((a, b) => (stageOrder.get(a.stageCode) ?? 99) - (stageOrder.get(b.stageCode) ?? 99) || a.stageLabel.localeCompare(b.stageLabel))
+    .map((group) => {
+      const byColour = new Map<string, MmFabricStockRoll[]>();
+      for (const roll of group.rolls) {
+        const colour = rollColourName(roll);
+        const list = byColour.get(colour) ?? [];
+        list.push(roll);
+        byColour.set(colour, list);
+      }
+      return {
+        ...group,
+        colours: [...byColour.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([colour, list]) => ({ colour, rolls: list })),
+      };
+    });
+}
+
 const th = 'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
-const td = 'px-2.5 py-2 text-[11px] text-slate-700 border-b border-slate-100';
+const td = 'px-2.5 py-2 text-[12px] text-slate-700 border-b border-slate-100';
+const selectCls = 'h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-700 focus:outline-none focus:border-blue-300';
 
 export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const isConfig = useMmConfigRights();
-  const [selection, setSelection] = useState<RollSelection>({ kind: 'all' });
+  const [selection, setSelection] = useState<Selection>({ kind: 'all' });
   const [search, setSearch] = useState('');
+  const [vendor, setVendor] = useState('all');
+  const [where, setWhere] = useState<WhereFilter>('all');
   const [passportId, setPassportId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [openAlloc, setOpenAlloc] = useState<Record<string, boolean>>({ allocated: true, free: true });
+  const [openStage, setOpenStage] = useState<Record<string, boolean>>({});
   const debouncedSearch = useDebouncedValue(search, 300);
 
   useEffect(() => {
     setSelection({ kind: 'all' });
     setSearch('');
+    setVendor('all');
+    setWhere('all');
     setEditOpen(false);
+    setOpenStage({});
   }, [fabricId]);
 
   const detailQ = useQuery({
@@ -145,76 +164,111 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
   const units = useFabricUnits(fabric);
   const qtyUnit = units.qtyUnit;
   const v4 = useMmV4Config();
-  const blocks = useMemo(() => {
-    const built = stageBlocks(detailQ.data?.groups ?? []);
-    const stages = v4.data?.stages;
-    if (!stages) return built;
-    const inactive = new Set(stages.filter((stage) => stage.is_active === false).map((stage) => stage.code));
-    return built.filter((block) => !inactive.has(block.stage_code));
+
+  const stageOrder = useMemo(() => {
+    const map = new Map<string, number>();
+    (v4.data?.stages ?? []).forEach((stage, index) => map.set(stage.code, index));
+    (detailQ.data?.groups ?? []).forEach((group, index) => {
+      if (!map.has(group.stage_code)) map.set(group.stage_code, 100 + index);
+    });
+    return map;
   }, [detailQ.data?.groups, v4.data?.stages]);
 
-  const atProcessQ = useQuery({
-    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'fabricAtProcess', fabricId] as const,
-    queryFn: async () => {
-      const res = await getFabricStockRolls({ fabric_id: fabricId, bucket: 'at_processing', limit: 500 });
-      if (res.ok === false) throw new Error(res.message);
-      return res.data.rows ?? [];
-    },
-    enabled: Boolean(factoryId && fabricId),
-  });
+  const finishedStages = useMemo(() => {
+    const set = new Set<string>();
+    for (const group of detailQ.data?.groups ?? []) if (group.finished) set.add(group.stage_code);
+    for (const stage of v4.data?.stages ?? []) if (stage.can_cut) set.add(stage.code);
+    return set;
+  }, [detailQ.data?.groups, v4.data?.stages]);
 
-  const processGroups = useMemo(() => {
-    const map = new Map<string, { stageCode: string; process: string; count: number }>();
-    for (const roll of atProcessQ.data ?? []) {
-      const status = roll.process_status;
-      if (!status || status.state !== 'at_process') continue;
-      const process = (status.process || 'Process').trim();
-      const stageCode = roll.stage_code || '';
-      const key = `${stageCode}:${process}`;
-      const current = map.get(key) ?? { stageCode, process, count: 0 };
-      current.count += 1;
-      map.set(key, current);
-    }
-    return [...map.values()];
-  }, [atProcessQ.data]);
-
-  const rollFilter = useMemo<MmFabricStockRollFilter>(() => {
-    const filter: MmFabricStockRollFilter = { fabric_id: fabricId, limit: 500 };
-    if (selection.kind === 'stage' || selection.kind === 'bucket' || selection.kind === 'process') {
-      filter.stage_code = selection.stageCode;
-    }
-    if (selection.kind === 'process') filter.bucket = 'at_processing';
-    if (selection.kind === 'bucket' && selection.bucket in BUCKET_LABELS) {
-      filter.bucket = selection.bucket as MmStockBucket;
-    }
-    const term = debouncedSearch.trim();
-    if (term) filter.search = term;
-    return filter;
-  }, [fabricId, selection, debouncedSearch]);
-
+  // All rolls for this fabric in one fetch: the tree, filters and table all
+  // read from it, so the split always matches the rolls shown.
   const rollsQ = useQuery({
-    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'fabricDetailRolls', rollFilter] as const,
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'fabricDetailRollsAll', fabricId] as const,
     queryFn: async () => {
-      const res = await getFabricStockRolls(rollFilter);
+      const res = await getFabricStockRolls({ fabric_id: fabricId, limit: 500 });
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
     enabled: Boolean(factoryId && fabricId) && detailQ.isSuccess,
   });
+  const allRolls = useMemo(() => rollsQ.data ?? [], [rollsQ.data]);
+  const truncated = allRolls.length >= 500;
+
+  // Vendor per roll, from its receipt (receipts carry the "from" party).
+  const receiptsQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'fabricDetailReceipts', fabricId] as const,
+    queryFn: async () => {
+      const res = await mmWhListReceipts({ limit: 200 });
+      if (res.ok === false) return [];
+      return (res.data.rows ?? []).filter((row) => row.fabric?.id === fabricId);
+    },
+    enabled: Boolean(factoryId && fabricId),
+  });
+  const vendorOf = useMemo(() => {
+    const byId = new Map<string, string>();
+    const byGrn = new Map<string, string>();
+    for (const receipt of receiptsQ.data ?? []) {
+      const name = (receipt.from?.name || '').trim()
+        || (receipt.source === 'process_return' ? 'Process return' : receipt.source === 'internal' ? 'Internal' : 'Vendor');
+      byId.set(receipt.id, name);
+      if (receipt.grn_no) byGrn.set(receipt.grn_no, name);
+    }
+    return (roll: MmFabricStockRoll): string => {
+      const id = roll.receipt_id || roll.in_challan_id || '';
+      if (id && byId.has(id)) return byId.get(id) as string;
+      if (roll.batch_no && byGrn.has(roll.batch_no)) return byGrn.get(roll.batch_no) as string;
+      return '—';
+    };
+  }, [receiptsQ.data]);
+
+  const vendors = useMemo(
+    () => [...new Set(allRolls.map((roll) => vendorOf(roll)))].sort((a, b) => a.localeCompare(b)),
+    [allRolls, vendorOf],
+  );
+
+  const tree = useMemo(() => {
+    const build = (allocated: boolean) => {
+      const rolls = allRolls.filter((roll) => Boolean(roll.stock?.allocated) === allocated);
+      return { rolls, stages: groupByStageColour(rolls, stageOrder) };
+    };
+    return [
+      { key: 'allocated' as const, allocated: true, label: 'Allocated', hint: 'On a style — not free to use', ...build(true) },
+      { key: 'free' as const, allocated: false, label: 'Unallocated', hint: 'Free stock', ...build(false) },
+    ];
+  }, [allRolls, stageOrder]);
 
   const shownRolls = useMemo(() => {
-    const rows = rollsQ.data ?? [];
-    if (selection.kind !== 'process') return rows;
-    return rows.filter((roll) => roll.process_status?.state === 'at_process' && roll.process_status.process === selection.process);
-  }, [rollsQ.data, selection]);
+    const term = debouncedSearch.trim().toLowerCase();
+    return allRolls.filter((roll) => {
+      if (selection.kind === 'alloc' && Boolean(roll.stock?.allocated) !== selection.allocated) return false;
+      if ((selection.kind === 'stage' || selection.kind === 'colour')) {
+        if (Boolean(roll.stock?.allocated) !== selection.allocated) return false;
+        if ((roll.stage_code || '') !== selection.stageCode) return false;
+      }
+      if (selection.kind === 'colour' && rollColourName(roll) !== selection.colour) return false;
+      if (vendor !== 'all' && vendorOf(roll) !== vendor) return false;
+      if (where === 'home' && (roll.stock?.bucket === 'at_processing' || roll.stock?.bucket === 'issued')) return false;
+      if (where === 'at_processing' && roll.stock?.bucket !== 'at_processing') return false;
+      if (where === 'issued' && roll.stock?.bucket !== 'issued') return false;
+      if (term) {
+        const hay = [roll.roll_code, rollColourName(roll), roll.dye_lot, vendorOf(roll), bucketLabel(roll.stock?.bucket)].join(' ').toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [allRolls, debouncedSearch, selection, vendor, vendorOf, where]);
+
+  const grouped = useMemo(() => groupByStageColour(shownRolls, stageOrder), [shownRolls, stageOrder]);
+  const shownQty = useMemo(() => shownRolls.reduce((sum, roll) => sum + rollQtyNum(roll, qtyUnit), 0), [shownRolls, qtyUnit]);
 
   usePageHeader({
-    title: 'Fabric Master',
-    subtitle: 'Fabric quality',
+    title: 'Fabric stock details',
+    subtitle: 'What is at home, at processing, allocated and free — by stage and colour.',
   });
 
   const totals = detailQ.data?.totals;
-  const allSelected = selection.kind === 'all';
+  const qtyOf = (rolls: MmFabricStockRoll[]) => formatStoredQty(rolls.reduce((sum, roll) => sum + rollQtyNum(roll, qtyUnit), 0), qtyUnit);
 
   return (
     <PageShell
@@ -226,7 +280,7 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
     >
       <div className="rounded-xl border border-slate-200 bg-white shrink-0 overflow-hidden">
         <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
-          <h2 className="font-semibold text-slate-800" style={{ fontSize: tokens.fontSize.h2 }}>Fabric</h2>
+          <h2 className="text-[12px] font-semibold text-slate-800">Fabric stock details</h2>
           {isConfig ? (
             <DesktopWriteGate>
               <Button type="button" size="sm" variant="secondary" icon={Pencil} onClick={() => setEditOpen(true)}>
@@ -237,9 +291,9 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
         </div>
         <div className="px-4 py-3 flex flex-col lg:flex-row lg:items-center gap-4">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-slate-500" style={{ fontSize: tokens.fontSize.bodySmall }}>{fabric?.code || '—'}</p>
-            <p className="font-semibold text-slate-900 truncate" style={{ fontSize: tokens.fontSize.h2 }}>{fabric?.name || '—'}</p>
-            <p className="text-slate-600 mt-1" style={{ fontSize: tokens.fontSize.body }}>
+            <p className="font-mono text-[12px] text-slate-500">{fabric?.code || '—'}</p>
+            <p className="text-[16px] font-semibold text-slate-900 truncate">{fabric?.name || '—'}</p>
+            <p className="text-[12px] text-slate-600 mt-1">
               {[
                 fabric?.gsm != null ? `${fabric.gsm} GSM` : null,
                 widthText(fabric?.width_in ?? null, fabric?.width_form ?? null, units.widthUnit),
@@ -249,117 +303,143 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 shrink-0">
-            <Metric label="Rolls" value={totals ? String(totals.rolls ?? 0) : '—'} />
-            <Metric label={qtyLabel(qtyUnit)} value={totals ? fabricUomQty(fabric?.uom, totals.qty_kg, totals.qty_m, qtyUnit) : '—'} />
-            <Metric label="On-hand rolls" value={totals?.on_hand_rolls != null ? String(totals.on_hand_rolls) : '—'} />
+            <Metric label="Rolls" value={totals ? String(totals.rolls ?? 0) : '—'} tone="blue" />
+            <Metric label={qtyLabel(qtyUnit)} value={totals ? fabricUomQty(fabric?.uom, totals.qty_kg, totals.qty_m, qtyUnit) : '—'} tone="green" />
+            <Metric label="On-hand rolls" value={totals?.on_hand_rolls != null ? String(totals.on_hand_rolls) : '—'} tone="violet" />
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 mt-3 grid grid-cols-1 lg:grid-cols-[30%_minmax(0,1fr)] gap-3">
+      <div className="flex-1 min-h-0 mt-3 grid grid-cols-1 lg:grid-cols-[17rem_minmax(0,1fr)] gap-3">
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-0">
-          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/50 font-semibold text-slate-800" style={{ fontSize: tokens.fontSize.h2 }}>Groups</div>
+          <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/50">
+            <p className="text-[12px] font-semibold text-slate-800">Stock split</p>
+            <p className="text-[11px] text-slate-400">Allocated / unallocated · stage · colour</p>
+          </div>
           <div className="flex-1 min-h-0 overflow-auto py-1">
-            <GroupButton
-              selected={allSelected}
-              title="All"
-              meta={totals ? `${totals.rolls ?? 0} rolls` : ''}
-              qty={totals ? fabricUomQty(fabric?.uom, totals.qty_kg, totals.qty_m, qtyUnit) : ''}
+            <TreeRow
+              selected={selection.kind === 'all'}
+              title="All stock"
+              meta={totals ? `${totals.rolls ?? 0} rolls` : `${allRolls.length} rolls`}
+              qty={totals ? fabricUomQty(fabric?.uom, totals.qty_kg, totals.qty_m, qtyUnit) : qtyOf(allRolls)}
               onClick={() => setSelection({ kind: 'all' })}
             />
-            {blocks.map((block) => {
-              const stageOn = selection.kind === 'stage' && selection.stageCode === block.stage_code;
+            {tree.map((alloc) => {
+              const allocOpen = openAlloc[alloc.key] ?? true;
               return (
-                <div key={block.stage_code} className="mt-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelection({ kind: 'stage', stageCode: block.stage_code })}
-                    className={`w-full px-3 py-2 flex items-center gap-2 text-left ${stageOn ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
-                  >
-                    <span className={`font-semibold truncate ${stageOn ? 'text-blue-800' : 'text-slate-800'}`} style={{ fontSize: tokens.fontSize.body }}>
-                      {block.stage_label}
-                    </span>
-                    {block.finished ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 text-[9px] font-semibold text-emerald-700 shrink-0">
-                        Finished
-                      </span>
-                    ) : null}
-                  </button>
-                  {block.rows.map((row) => {
-                    const on = selection.kind === 'bucket'
-                      && selection.stageCode === row.stage_code
-                      && selection.bucket === row.bucket;
-                    const subs = row.bucket === 'at_processing'
-                      ? processGroups.filter((item) => item.stageCode === row.stage_code)
-                      : [];
+                <div key={alloc.key} className="mt-1 border-t border-slate-100 pt-1">
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      aria-label={allocOpen ? `Collapse ${alloc.label}` : `Expand ${alloc.label}`}
+                      className="pl-2 pr-1 py-1.5 text-slate-400 hover:text-slate-700"
+                      onClick={() => setOpenAlloc((cur) => ({ ...cur, [alloc.key]: !allocOpen }))}
+                    >
+                      <ChevronDown size={14} className={`transition-transform ${allocOpen ? '' : '-rotate-90'}`} />
+                    </button>
+                    <TreeRow
+                      selected={selection.kind === 'alloc' && selection.allocated === alloc.allocated}
+                      title={alloc.label}
+                      meta={`${alloc.rolls.length} rolls`}
+                      qty={qtyOf(alloc.rolls)}
+                      onClick={() => setSelection({ kind: 'alloc', allocated: alloc.allocated })}
+                      flush
+                    />
+                  </div>
+                  {allocOpen ? alloc.stages.map((stage) => {
+                    const stageKey = `${alloc.key}:${stage.stageCode}`;
+                    const stageSelected = (selection.kind === 'stage' || selection.kind === 'colour')
+                      && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode;
+                    const stageOpen = openStage[stageKey] ?? stageSelected;
                     return (
-                      <React.Fragment key={`${row.stage_code}:${row.bucket}`}>
-                        <GroupButton
-                          selected={on}
-                          title={bucketLabel(row.bucket)}
-                          meta={`${row.rolls ?? 0} rolls`}
-                          qty={fabricUomQty(fabric?.uom, row.qty_kg, row.qty_m, qtyUnit)}
-                          indent
-                          onClick={() => setSelection({ kind: 'bucket', stageCode: row.stage_code, bucket: row.bucket })}
-                        />
-                        {subs.map((sub) => {
-                          const subOn = selection.kind === 'process'
-                            && selection.stageCode === row.stage_code
-                            && selection.process === sub.process;
-                          return (
-                            <button
-                              key={`${row.stage_code}:${sub.process}`}
-                              type="button"
-                              onClick={() => setSelection({ kind: 'process', stageCode: row.stage_code, process: sub.process })}
-                              className={`w-full py-1 pr-3 pl-10 flex items-center gap-2 text-left ${subOn ? 'bg-amber-50' : 'hover:bg-slate-50'}`}
-                            >
-                              <span className={`truncate ${subOn ? 'font-semibold text-amber-800' : 'text-slate-600'}`} style={{ fontSize: tokens.fontSize.bodySmall }}>
-                                At {sub.process}
-                              </span>
-                              <span className="ml-auto text-[10px] tabular-nums text-slate-500">{sub.count}</span>
-                            </button>
-                          );
-                        })}
-                      </React.Fragment>
+                      <div key={stageKey}>
+                        <div className={`flex items-center ${stageSelected && selection.kind === 'stage' ? 'bg-blue-50' : ''}`}>
+                          <span className="w-5 shrink-0" />
+                          <button
+                            type="button"
+                            aria-label={stageOpen ? `Collapse ${stage.stageLabel}` : `Expand ${stage.stageLabel}`}
+                            className="pr-1 py-1.5 text-slate-400 hover:text-slate-700"
+                            onClick={() => setOpenStage((cur) => ({ ...cur, [stageKey]: !stageOpen }))}
+                          >
+                            <ChevronDown size={14} className={`transition-transform ${stageOpen ? '' : '-rotate-90'}`} />
+                          </button>
+                          <TreeRow
+                            selected={selection.kind === 'stage' && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode}
+                            title={stage.stageLabel}
+                            meta={`${stage.rolls.length}`}
+                            qty={qtyOf(stage.rolls)}
+                            badge={finishedStages.has(stage.stageCode) || stage.finished ? 'Finished' : undefined}
+                            onClick={() => setSelection({ kind: 'stage', allocated: alloc.allocated, stageCode: stage.stageCode })}
+                            flush
+                          />
+                        </div>
+                        {stageOpen ? stage.colours.map((colour) => (
+                          <TreeRow
+                            key={`${stageKey}:${colour.colour}`}
+                            selected={selection.kind === 'colour' && selection.allocated === alloc.allocated && selection.stageCode === stage.stageCode && selection.colour === colour.colour}
+                            title={colour.colour}
+                            meta={`${colour.rolls.length}`}
+                            qty={qtyOf(colour.rolls)}
+                            indent
+                            onClick={() => setSelection({ kind: 'colour', allocated: alloc.allocated, stageCode: stage.stageCode, colour: colour.colour })}
+                          />
+                        )) : null}
+                      </div>
                     );
-                  })}
+                  }) : null}
                 </div>
               );
             })}
+            {truncated ? <p className="px-3 py-2 text-[11px] text-amber-700">Showing the first 500 rolls.</p> : null}
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col min-h-0">
-          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
-            <Search size={14} className="text-slate-400 shrink-0" />
-            <input
-              className="text-[11px] bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-              placeholder="Roll no"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="px-3 py-2 border-b border-slate-100 flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 flex-1 min-w-[10rem]">
+              <Search size={14} className="text-slate-400 shrink-0" />
+              <input
+                className="text-[12px] bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
+                placeholder="Roll no, colour, dye lot, vendor"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select className={selectCls} value={where} onChange={(e) => setWhere(e.target.value as WhereFilter)} aria-label="Where">
+              <option value="all">All places</option>
+              <option value="home">At home</option>
+              <option value="at_processing">At processing</option>
+              <option value="issued">Issued to cutting</option>
+            </select>
+            <select className={selectCls} value={vendor} onChange={(e) => setVendor(e.target.value)} aria-label="Vendor">
+              <option value="all">All vendors</option>
+              {vendors.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            <span className="text-[12px] text-slate-500 tabular-nums whitespace-nowrap">
+              {shownRolls.length} rolls · {formatStoredQty(shownQty, qtyUnit)}
+            </span>
           </div>
           <div className="flex-1 min-h-0 overflow-auto">
             {rollsQ.isLoading ? (
-              <p className="px-4 py-8 text-[11px] text-slate-400">Loading…</p>
+              <p className="px-4 py-8 text-[12px] text-slate-400">Loading…</p>
             ) : rollsQ.isError ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-[11px] text-red-600">{rollsQ.error instanceof Error ? rollsQ.error.message : 'Could not load rolls'}</p>
-                <button type="button" className="mt-2 text-[11px] font-semibold text-blue-700" onClick={() => { void rollsQ.refetch(); }}>
+                <p className="text-[12px] text-red-600">{rollsQ.error instanceof Error ? rollsQ.error.message : 'Could not load rolls'}</p>
+                <button type="button" className="mt-2 text-[12px] font-semibold text-blue-700" onClick={() => { void rollsQ.refetch(); }}>
                   Retry
                 </button>
               </div>
             ) : (
-              <table className="w-full min-w-[860px] border-collapse">
+              <table className="w-full min-w-[900px] border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr>
                     <th className={th}>Roll no</th>
-                    <th className={th}>Stage</th>
-                    <th className={`${th} !text-center`}>Status</th>
+                    <th className={`${th} !text-center`}>Where</th>
                     <th className={th}>Qty</th>
                     <th className={th}>Colour</th>
                     <th className={th}>Dye lot</th>
-                    <th className={th}>Allocated</th>
+                    <th className={th}>Vendor</th>
+                    <th className={th}>Allocated to</th>
                     <th className={th}>Last test</th>
                     <th className={th}>Inspection</th>
                   </tr>
@@ -367,42 +447,60 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                 <tbody>
                   {shownRolls.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-[11px] text-slate-400">No rolls in this group.</td>
+                      <td colSpan={9} className="px-4 py-8 text-center text-[12px] text-slate-400">No rolls match.</td>
                     </tr>
-                  ) : shownRolls.map((roll) => {
-                    const test = lastTestParts(roll);
-                    return (
-                      <tr
-                        key={roll.roll_id}
-                        className="hover:bg-slate-50/80 cursor-pointer"
-                        onClick={() => setPassportId(roll.roll_id)}
-                      >
-                        <td className={`${td} font-mono font-semibold text-slate-800`}>{roll.roll_code || '—'}</td>
-                        <td className={td}>
-                          <span className="inline-flex flex-wrap items-center gap-1.5">
-                            <span>{roll.stage_label || roll.stage_code || '—'}</span>
-                            <MmRollProcessMark status={roll.process_status} />
-                          </span>
+                  ) : grouped.map((stage) => (
+                    <React.Fragment key={stage.stageCode || stage.stageLabel}>
+                      <tr className="bg-slate-100/80">
+                        <td colSpan={9} className="px-2.5 py-1.5 text-[12px] font-semibold text-slate-800 border-b border-slate-200">
+                          {stage.stageLabel}
+                          {finishedStages.has(stage.stageCode) || stage.finished ? (
+                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 text-[10px] font-semibold text-emerald-700">Finished</span>
+                          ) : null}
+                          <span className="ml-2 font-normal text-slate-500">{stage.rolls.length} rolls · {qtyOf(stage.rolls)}</span>
                         </td>
-                        <td className={`${td} text-center`}>
-                          <MmStatusDot label={bucketLabel(roll.stock?.bucket)} />
-                        </td>
-                        <td className={`${td} tabular-nums`}>{rollQty(roll, qtyUnit)}</td>
-                        <td className={td}>{roll.stock?.colour || '—'}</td>
-                        <td className={td}>{roll.dye_lot || '—'}</td>
-                        <td className={td}>{allocatedText(roll)}</td>
-                        <td className={td}>
-                          {test.result === '—' ? '—' : (
-                            <span className="inline-flex items-center gap-1">
-                              <Badge variant={testBadgeVariant(test.result)}>{test.result}</Badge>
-                              {test.tag ? <span className="text-[10px] text-slate-400">({test.tag})</span> : null}
-                            </span>
-                          )}
-                        </td>
-                        <td className={td}><MmInspectionChip status={roll.inspection_status} inspection={roll.inspection} /></td>
                       </tr>
-                    );
-                  })}
+                      {stage.colours.map((colour) => (
+                        <React.Fragment key={`${stage.stageCode}:${colour.colour}`}>
+                          <tr className="bg-slate-50">
+                            <td colSpan={9} className="px-2.5 py-1 pl-5 text-[11px] font-semibold text-slate-600 border-b border-slate-100">
+                              {colour.colour}
+                              <span className="ml-2 font-normal text-slate-400">{colour.rolls.length} rolls · {qtyOf(colour.rolls)}</span>
+                            </td>
+                          </tr>
+                          {colour.rolls.map((roll) => {
+                            const test = lastTestParts(roll);
+                            return (
+                              <tr
+                                key={roll.roll_id}
+                                className="hover:bg-slate-50/80 cursor-pointer"
+                                onClick={() => setPassportId(roll.roll_id)}
+                              >
+                                <td className={`${td} font-mono font-semibold text-slate-800`}>{roll.roll_code || '—'}</td>
+                                <td className={`${td} text-center`}>
+                                  <MmStatusDot label={bucketLabel(roll.stock?.bucket)} />
+                                </td>
+                                <td className={`${td} tabular-nums`}>{rollQty(roll, qtyUnit)}</td>
+                                <td className={td}>{rollColourName(roll)}</td>
+                                <td className={td}>{roll.dye_lot || '—'}</td>
+                                <td className={td}>{vendorOf(roll)}</td>
+                                <td className={td}>{allocatedText(roll)}</td>
+                                <td className={td}>
+                                  {test.result === '—' ? '—' : (
+                                    <span className="inline-flex items-center gap-1">
+                                      <Badge variant={testBadgeVariant(test.result)}>{test.result}</Badge>
+                                      {test.tag ? <span className="text-[10px] text-slate-400">({test.tag})</span> : null}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className={td}><MmInspectionChip status={roll.inspection_status} inspection={roll.inspection} /></td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </tbody>
               </table>
             )}
@@ -426,39 +524,52 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+const METRIC_TONES = {
+  blue: 'border-blue-200 bg-blue-50 text-blue-900',
+  green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+  violet: 'border-violet-200 bg-violet-50 text-violet-900',
+} as const;
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: keyof typeof METRIC_TONES }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 min-w-[6.5rem]">
-      <p className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: tokens.fontSize.h4 }}>{label}</p>
-      <p className="font-semibold text-slate-900 tabular-nums mt-0.5" style={{ fontSize: tokens.fontSize.metric }}>{value}</p>
+    <div className={`rounded-lg border px-3 py-2 min-w-[6.5rem] ${METRIC_TONES[tone]}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
+      <p className="text-[16px] font-bold tabular-nums mt-0.5">{value}</p>
     </div>
   );
 }
 
-function GroupButton({
+function TreeRow({
   selected,
   title,
   meta,
   qty,
+  badge,
   indent,
+  flush,
   onClick,
 }: {
   selected: boolean;
   title: string;
   meta: string;
   qty: string;
+  badge?: string;
   indent?: boolean;
+  flush?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full py-1.5 pr-3 flex items-center gap-2 text-left ${indent ? 'pl-7' : 'pl-3'} ${selected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+      className={`flex-1 min-w-0 w-full py-1.5 pr-3 flex items-center gap-2 text-left ${flush ? 'pl-1' : indent ? 'pl-12' : 'pl-3'} ${selected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
     >
-      <span className={`truncate ${selected ? 'font-semibold text-blue-800' : 'text-slate-700'}`} style={{ fontSize: tokens.fontSize.body }}>{title}</span>
-      <span className="ml-auto text-[10px] tabular-nums text-slate-500 whitespace-nowrap">{meta}</span>
-      <span className="text-[10px] tabular-nums text-slate-700 whitespace-nowrap w-16 text-right">{qty === '—' ? '' : qty}</span>
+      <span className={`text-[12px] truncate ${selected ? 'font-semibold text-blue-800' : 'text-slate-700'}`}>{title}</span>
+      {badge ? (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-emerald-200 bg-emerald-50 text-[9px] font-semibold text-emerald-700 shrink-0">{badge}</span>
+      ) : null}
+      <span className="ml-auto text-[11px] tabular-nums text-slate-500 whitespace-nowrap">{meta}</span>
+      <span className="text-[11px] tabular-nums text-slate-700 whitespace-nowrap w-16 text-right">{qty === '—' ? '' : qty}</span>
     </button>
   );
 }

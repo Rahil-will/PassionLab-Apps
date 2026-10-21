@@ -457,17 +457,17 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
   },
   [RoutePath.MATERIAL_WAREHOUSE_FABRICS]: {
     path: RoutePath.MATERIAL_WAREHOUSE_FABRICS,
-    displayName: 'Fabric view',
+    displayName: 'Stock view',
     parent: RoutePath.MATERIAL_WAREHOUSE,
     section: 'Material',
     subtitle: 'What we have, by fabric, including stock and general PO receipts.',
   },
   [RoutePath.MATERIAL_WAREHOUSE_FABRIC]: {
     path: RoutePath.MATERIAL_WAREHOUSE_FABRIC,
-    displayName: 'Fabric',
+    displayName: 'Fabric stock details',
     parent: RoutePath.MATERIAL_WAREHOUSE_FABRICS,
     section: 'Material',
-    subtitle: 'Rolls grouped by receipt.',
+    subtitle: 'What is at home, at processing, allocated and free — by stage and colour.',
     isParameterized: true,
   },
   [RoutePath.MATERIAL_WAREHOUSE_STOCK]: {

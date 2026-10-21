@@ -66,7 +66,8 @@ export default function MmWarehouseFabricsPage() {
   const debounced = useDebouncedValue(search, 300);
 
   usePageHeader({
-    subtitle: 'Fabric on hand, including stock and general PO receipts. Open a fabric for its receipts.',
+    title: 'Stock view',
+    subtitle: 'Fabric on hand, including stock and general PO receipts. Open a fabric for its stock details.',
   });
 
   const listQ = useQuery({
@@ -92,7 +93,7 @@ export default function MmWarehouseFabricsPage() {
       skeleton="table"
       className="w-full pb-20"
     >
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl w-full">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2 max-w-sm">
             <Search size={14} className="text-slate-400 shrink-0" />
@@ -104,8 +105,19 @@ export default function MmWarehouseFabricsPage() {
             />
           </div>
         </div>
-        <div className="overflow-auto">
-          <table className="w-full min-w-[1100px] border-collapse">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse">
+            <colgroup>
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th className={whTh}>Fabric</th>
