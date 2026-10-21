@@ -7,6 +7,18 @@ export function adminCredentials(): { email: string; password: string } | null {
   return { email, password };
 }
 
+/**
+ * Credentials for the material-flow suite: E2E_EMAIL / E2E_PASSWORD,
+ * falling back to the admin smoke credentials. Placeholder values count as missing.
+ */
+export function e2eCredentials(): { email: string; password: string } | null {
+  const email = process.env.E2E_EMAIL || process.env.VITE_TEST_ADMIN_EMAIL;
+  const password = process.env.E2E_PASSWORD || process.env.VITE_TEST_ADMIN_PASSWORD;
+  if (!email || !password) return null;
+  if (/your-|example\.com|placeholder/i.test(email) || /^your-password$/i.test(password)) return null;
+  return { email, password };
+}
+
 export function viewerCredentials(): { email: string; password: string } | null {
   const email = process.env.VITE_TEST_VIEWER_EMAIL;
   const password = process.env.VITE_TEST_VIEWER_PASSWORD;

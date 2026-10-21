@@ -43,6 +43,11 @@ export default defineConfig({
       name: 'smoke',
       testMatch: 'smoke/**/*.spec.ts',
     },
+    {
+      name: 'material',
+      testMatch: 'material/**/*.spec.ts',
+      use: { screenshot: 'only-on-failure' },
+    },
   ],
   webServer: {
     command: 'npm run dev -- --port 3000 --strictPort',
