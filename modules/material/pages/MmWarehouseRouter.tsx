@@ -27,6 +27,8 @@ import MmWarehouseProcessSendPage from './warehouse/MmWarehouseProcessSendPage';
 import MmProcChallanListV4Page from './process/MmProcChallanListV4Page';
 import MmProcChallanDetailV4Page from './process/MmProcChallanDetailV4Page';
 import MmQcQueuePage from './MmQcQueuePage';
+import MmWarehouseAllocationsPage from './warehouse/MmWarehouseAllocationsPage';
+import MmWarehouseAllocationDetailPage from './warehouse/MmWarehouseAllocationDetailPage';
 
 export default function MmWarehouseRouter() {
   const route = useNavigationStore((s) => s.currentRoute);
@@ -80,6 +82,8 @@ export default function MmWarehouseRouter() {
   if (route === RoutePath.MATERIAL_WAREHOUSE_RETURNS_DETAIL) return <MmWarehouseReturnDetail />;
   if (route === RoutePath.MATERIAL_WAREHOUSE_RETURNS) return <MmWarehouseReturnsPage />;
   if (route === RoutePath.MATERIAL_WAREHOUSE_END_BITS) return <MmWarehouseEndBitsPage />;
+  if (route === RoutePath.MATERIAL_WAREHOUSE_ALLOCATIONS) return <MmWarehouseAllocationsPage />;
+  if (route === RoutePath.MATERIAL_WAREHOUSE_ALLOCATION) return <MmWarehouseAllocationDetailPage />;
   if (route === RoutePath.MATERIAL_WAREHOUSE_MOVEMENTS) return <MmWarehouseStockPage view="movements" />;
   return <MmWarehouseLanding />;
 }

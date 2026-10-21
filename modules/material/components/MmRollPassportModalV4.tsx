@@ -14,6 +14,7 @@ import {
   rollUnitId,
 } from './MmRollDamageActions';
 import { MmRollProcessMark } from './MmProcessStatus';
+import { rollInspectionChip } from '../lib/inspAlloc';
 import { unitFormOptionLabel } from '../lib/mmUnitForm';
 import { formatStoredQty, formatStoredWidth, unitBase, useFabricUnits } from '../lib/units';
 
@@ -170,8 +171,14 @@ export function MmRollPassportModalV4({
               <Badge variant={statusBadgeVariant(roll?.test_status)}>
                 {statusLine('Test', roll?.test_status ?? passport.test_status, testOrigin)}
               </Badge>
-              <Badge variant={statusBadgeVariant(roll?.inspection_status)}>
-                {statusLine('Insp', roll?.inspection_status ?? passport.inspection_status, inspectionOrigin)}
+              <Badge variant={(() => {
+                const chip = rollInspectionChip({ inspection_status: roll?.inspection_status ?? passport.inspection_status, inspection: passport.inspection ?? roll?.inspection });
+                return chip.tone === 'success' ? 'success' : chip.tone === 'warning' ? 'warning' : chip.tone === 'danger' ? 'danger' : statusBadgeVariant(roll?.inspection_status);
+              })()}>
+                {(() => {
+                  const chip = rollInspectionChip({ inspection_status: roll?.inspection_status ?? passport.inspection_status, inspection: passport.inspection ?? roll?.inspection });
+                  return chip.label === '—' ? statusLine('Insp', roll?.inspection_status ?? passport.inspection_status, inspectionOrigin) : `Insp ${chip.label}`;
+                })()}
               </Badge>
               {(roll?.missing_keys ?? []).map((key) => (
                 <Badge key={key} variant="warning">

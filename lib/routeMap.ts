@@ -484,6 +484,21 @@ export const ROUTE_MAP: Record<string, RouteMapEntry> = {
     section: 'Material',
     subtitle: 'Time-wise roll counts. Open a row for the batch, or the challan when there is one.',
   },
+  [RoutePath.MATERIAL_WAREHOUSE_ALLOCATIONS]: {
+    path: RoutePath.MATERIAL_WAREHOUSE_ALLOCATIONS,
+    displayName: 'Allocations',
+    parent: RoutePath.MATERIAL_WAREHOUSE,
+    section: 'Material',
+    subtitle: 'Numbered allocation notes from allocate and book actions.',
+  },
+  [RoutePath.MATERIAL_WAREHOUSE_ALLOCATION]: {
+    path: RoutePath.MATERIAL_WAREHOUSE_ALLOCATION,
+    displayName: 'Allocation note',
+    parent: RoutePath.MATERIAL_WAREHOUSE_ALLOCATIONS,
+    section: 'Material',
+    subtitle: 'Rolls on this allocate / book note.',
+    isParameterized: true,
+  },
   [RoutePath.USER_MANAGEMENT]: {
     path: RoutePath.USER_MANAGEMENT,
     displayName: 'User Management',

@@ -16,7 +16,9 @@ import { dateTimeParts, formatQtyM } from '../../lib/mmRollDraft';
 import type { MmStyleWarehouseChallan } from '../../lib/mmRpc';
 import { useMmStyleWarehouse } from '../../lib/useMmOps';
 import { finishedText, rollColour, rollStageLabel } from '../../lib/rollColour';
+import { whTdQty, whTdRolls, whThQty, whThRolls } from './whTable';
 import {
+  mmListAllocationNotes,
   mmListRollsV4,
   mmStyleFabricPosition,
   mmUnallocateRollsV4,
@@ -107,6 +109,16 @@ export default function MmWarehouseStyleFabricPage() {
           return id === styleMaterialId || Boolean(row.style);
         }),
       };
+    },
+    enabled: Boolean(factoryId && styleMaterialId),
+  });
+
+  const notesQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'styleAllocNotes', styleMaterialId] as const,
+    queryFn: async () => {
+      const res = await mmListAllocationNotes({ style_material_id: styleMaterialId });
+      if (res.ok === false) return [];
+      return Array.isArray(res.data) ? res.data : (res.data.rows ?? []);
     },
     enabled: Boolean(factoryId && styleMaterialId),
   });
@@ -206,7 +218,7 @@ export default function MmWarehouseStyleFabricPage() {
                 </div>
               </DesktopWriteGate>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-3 gap-2.5">
               <Metric label="Required" value={fmtUomQty(line?.required, uom)} tone="blue" />
               <Metric label="Racked" value={fmtUomQty(qtyRacked, uom)} sub={`${rollsRacked} ${rollsRacked === 1 ? 'roll' : 'rolls'} waiting`} tone="yellow" />
               <Metric label="Booked" value={fmtUomQty(line?.booked?.qty, uom)} sub={`${line?.booked?.rolls ?? 0} rolls`} tone="violet" />
@@ -230,9 +242,26 @@ export default function MmWarehouseStyleFabricPage() {
         </Card>
       </div>
 
+      {(notesQ.data ?? []).length > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold text-slate-700">Allocation notes</span>
+          {(notesQ.data ?? []).map((note) => (
+            <button
+              key={note.id}
+              type="button"
+              className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800 hover:bg-blue-100"
+              onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_ALLOCATION, { id: note.id })}
+            >
+              {note.note_no} · {note.status}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <RollTable
         title="Booked greige"
         subtitle="Reserved for this style. The roll stays free until it is allocated."
+        uom={uom}
         rows={rollsQ.data?.booked ?? []}
         picked={bookedPick}
         onPick={setBookedPick}
@@ -244,6 +273,7 @@ export default function MmWarehouseStyleFabricPage() {
         <RollTable
           title="Allocated"
           subtitle="Finished rolls on this style line."
+          uom={uom}
           rows={rollsQ.data?.allocated ?? []}
           picked={allocPick}
           onPick={setAllocPick}
@@ -307,8 +337,8 @@ function DispatchedTable({
               <th className={th}>Dispatched</th>
               <th className={th}>Challan</th>
               <th className={th}>To</th>
-              <th className={th}>Rolls</th>
-              <th className={th}>Qty</th>
+              <th className={whThRolls}>Rolls</th>
+              <th className={whThQty}>Qty</th>
               <th className={th}>Status</th>
               <th className={th}>Received</th>
             </tr>
@@ -328,8 +358,8 @@ function DispatchedTable({
                 <td className={td}><WhenCell iso={challan.sent_at} /></td>
                 <td className={`${td} font-semibold text-slate-800`}>{challan.challan_no}</td>
                 <td className={td}>Cutting store</td>
-                <td className={`${td} font-semibold text-green-800 tabular-nums`}>{challan.roll_count}</td>
-                <td className={`${td} font-semibold text-green-800 tabular-nums`}>{formatQtyM(challan.qty, challan.uom ?? uom)}</td>
+                <td className={whTdRolls}>{challan.roll_count}</td>
+                <td className={whTdQty}>{formatQtyM(challan.qty, challan.uom ?? uom)}</td>
                 <td className={td}>
                   <span className="inline-flex items-center gap-1.5">
                     <span className={`w-1.5 h-1.5 rounded-full ${inboundStatusDot(challan.status)}`} />
@@ -372,6 +402,7 @@ function Metric({ label, value, sub, tone }: { label: string; value: string; sub
 function RollTable({
   title,
   subtitle,
+  uom,
   rows,
   picked,
   onPick,
@@ -381,6 +412,7 @@ function RollTable({
 }: {
   title: string;
   subtitle: string;
+  uom: 'kg' | 'm';
   rows: MmV4RollRow[];
   picked: Record<string, boolean>;
   onPick: (next: Record<string, boolean>) => void;
@@ -407,6 +439,7 @@ function RollTable({
             <tr>
               <th className={th} />
               <th className={th}>Roll</th>
+              <th className={whThQty}>Qty</th>
               <th className={th}>Stage</th>
               <th className={th}>Colour</th>
               <th className={th}>Finished</th>
@@ -415,10 +448,11 @@ function RollTable({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-[11px] text-slate-400">None.</td>
+                <td colSpan={6} className="px-4 py-6 text-center text-[11px] text-slate-400">None.</td>
               </tr>
             ) : rows.map((row) => {
               const mark = finishedText(row.finished);
+              const qty = uom === 'kg' ? row.weight_kg : row.length_m;
               return (
                 <tr key={row.roll_id}>
                   <td className={td}>
@@ -429,6 +463,7 @@ function RollTable({
                     />
                   </td>
                   <td className={`${td} font-semibold`}>{row.roll_code}</td>
+                  <td className={whTdQty}>{qty == null ? '—' : fmtUomQty(Number(qty), uom)}</td>
                   <td className={td}>{rollStageLabel(row)}</td>
                   <td className={td}>{rollColour(row)}</td>
                   <td className={td}><span className={mark.className}>{mark.text}</span></td>

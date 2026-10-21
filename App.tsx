@@ -252,6 +252,7 @@ const App: React.FC = () => {
             message={notification.message}
             type={notification.type}
             onClose={hideNotification}
+            action={notification.action}
           />
         )}
         <ErrorBoundary>

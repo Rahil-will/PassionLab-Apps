@@ -5,6 +5,8 @@ import { Button, Input, Modal } from '../../../components/ui';
 import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
 import { queryKeys } from '../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../stores';
+import { RoutePath } from '../../../types';
+import { allocateToast } from '../lib/inspAlloc';
 import { colourBlocksAllocate } from '../lib/rollColour';
 import { fmtNum } from '../lib/fabricStock';
 import { unitFormOptionLabel } from '../lib/mmUnitForm';
@@ -148,6 +150,7 @@ export function MmAllocateV4Modal({
   onDone: () => void;
 }) {
   const factoryId = useNavigationStore((s) => s.factoryId);
+  const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const { showNotification } = useNotificationStore();
   const { data: config, isLoading: configLoading } = useMmV4Config();
   const preset = Boolean(target && (target.style_material_id || target.colorway_material_id));
@@ -398,7 +401,12 @@ export function MmAllocateV4Modal({
       return;
     }
     const unit = check?.uom ? ` ${check.uom}` : '';
-    showNotification(`${res.data.count} rolls · ${fmtNum(res.data.qty)}${unit}`, 'success');
+    const note = res.data.note ?? null;
+    showNotification(
+      note?.note_no ? `${allocateToast(mode, res.data.count, note.note_no)} · ${fmtNum(res.data.qty)}${unit}` : `${res.data.count} rolls · ${fmtNum(res.data.qty)}${unit}`,
+      'success',
+      note?.id ? { label: 'View note', onClick: () => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_ALLOCATION, { id: note.id }) } : undefined,
+    );
     setActiveIds([]);
     setRows([]);
     setConfirming(false);

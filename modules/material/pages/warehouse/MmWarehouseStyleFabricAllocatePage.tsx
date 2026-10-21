@@ -14,6 +14,7 @@ import { colourBlocksAllocate, finishedText, rollColour, rollStageLabel, specChi
 import { formatQtyM } from '../../lib/mmRollDraft';
 import { useInvalidateMmOps } from '../../lib/useMmOps';
 import { useMmV4Config } from '../../lib/useMmV4Config';
+import { allocateToast } from '../../lib/inspAlloc';
 import {
   mmAllocateAutoPick,
   mmAllocateCheck,
@@ -393,9 +394,13 @@ export default function MmWarehouseStyleFabricAllocatePage() {
       return;
     }
     const qtyBit = `${fmtNum(res.data.qty)} ${uom}`.trim();
+    const note = res.data.note ?? null;
     showNotification(
-      mode === 'book' ? `Booked ${res.data.count} rolls · ${qtyBit}` : `${res.data.count} rolls · ${qtyBit}`,
+      note?.note_no
+        ? `${allocateToast(mode, res.data.count, note.note_no)} · ${qtyBit}`
+        : mode === 'book' ? `Booked ${res.data.count} rolls · ${qtyBit}` : `${res.data.count} rolls · ${qtyBit}`,
       'success',
+      note?.id ? { label: 'View note', onClick: () => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_ALLOCATION, { id: note.id }) } : undefined,
     );
     setActiveIds([]);
     setBatchIds([]);

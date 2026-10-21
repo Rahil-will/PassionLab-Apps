@@ -649,9 +649,10 @@ interface ToastProps {
   message: string;
   type?: 'success' | 'error';
   onClose: () => void;
+  action?: { label: string; onClick: () => void };
 }
 
-export const Toast: React.FC<ToastProps> = ({ message, type = 'success', onClose }) => (
+export const Toast: React.FC<ToastProps> = ({ message, type = 'success', onClose, action }) => (
   <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[150] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border animate-in slide-in-from-top-4 fade-in duration-300 ${type === 'success' ? 'bg-white border-emerald-200 text-emerald-900' : 'bg-white border-red-200 text-red-900'}`}>
     {type === 'success' ? (
       <div className="bg-emerald-100 p-1.5 rounded-full text-emerald-600"><CheckCircle2 size={18} /></div>
@@ -659,6 +660,9 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'success', onClose
       <div className="bg-red-100 p-1.5 rounded-full text-red-600"><AlertCircle size={18} /></div>
     )}
     <span className="font-bold" style={{ fontSize: tokens.fontSize.bodySmall }}>{message}</span>
+    {action ? (
+      <button type="button" onClick={() => { action.onClick(); onClose(); }} className="text-blue-700 font-semibold hover:underline" style={{ fontSize: tokens.fontSize.bodySmall }}>{action.label}</button>
+    ) : null}
     <button onClick={onClose} className="ml-4 text-slate-400 hover:text-slate-600"><X size={16}/></button>
   </div>
 );

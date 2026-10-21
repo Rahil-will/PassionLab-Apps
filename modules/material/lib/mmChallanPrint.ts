@@ -221,6 +221,17 @@ export function storeChallanPrintDoc(input: DocInput): MmChallanPrintDoc {
   );
 }
 
+export function allocationNotePrintDoc(input: DocInput): MmChallanPrintDoc {
+  return baseDoc(
+    'store',
+    'Allocation note',
+    'Warehouse allocation',
+    'Fabric warehouse',
+    'Cutting store',
+    input,
+  );
+}
+
 export function inboundChallanPrintDoc(
   input: DocInput & { source?: string | null; supplierName?: string | null },
 ): MmChallanPrintDoc {

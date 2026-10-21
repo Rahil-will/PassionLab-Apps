@@ -34,7 +34,16 @@ async function callRpc<T>(name: string, args: Record<string, unknown> = {}): Pro
 // ── Contract enums / shared shapes ──────────────────────────────────────────
 
 export type MmV4TestStatus = 'NONE' | 'STALE' | 'FAILED' | 'HOLD' | 'INCOMPLETE' | 'PASS';
-export type MmV4InspectionStatus = 'NONE' | 'STALE' | 'FAILED' | 'PASS';
+export type MmV4InspectionStatus = 'NONE' | 'STALE' | 'FAILED' | 'PASS' | 'HOLD';
+
+export type MmRollPassportInspection = {
+  status?: string | null;
+  sampled?: boolean | null;
+  not_required?: boolean | null;
+  session_id?: string | null;
+  session_status?: string | null;
+  [key: string]: unknown;
+};
 export type MmV4CustodySide = 'processing' | 'warehouse' | 'none';
 export type MmV4FacilityKind = 'process_unit' | 'warehouse' | 'vendor';
 export type MmV4Ownership = 'internal' | 'external';
@@ -160,7 +169,10 @@ export type MmV4RollRow = {
     result?: string | null;
     origin?: 'own' | 'vendor_certificate' | 'migrated' | null;
     tested_at?: string | null;
+    field_values?: Record<string, unknown> | null;
+    remarks?: string | null;
   } | null;
+  inspection?: MmRollPassportInspection | null;
   failed_test_id?: string | null;
   inspection_id?: string | null;
   failed_inspection_id?: string | null;
@@ -1058,7 +1070,7 @@ export const mmQcRevokeCutAtRisk = (approvalId: string) =>
 export const mmQcGetRoll = (rollId: string) =>
   callRpc<{
     roll: MmV4RollRow;
-    passport: Record<string, unknown>;
+    passport: Record<string, unknown> & { inspection?: MmRollPassportInspection | null; inspection_status?: string | null; test_status?: string | null };
     tests: Array<Record<string, unknown>>;
     inspections: Array<Record<string, unknown>>;
     ancestors: Array<MmV4RollRow & { depth?: number }>;
@@ -1231,6 +1243,14 @@ export const mmStyleFabricPosition = (filter: MmStyleFabricPositionFilter = {}) 
 export const mmAllocateCheck = (payload: MmAllocateTarget & { roll_ids: string[]; mode?: MmAllocateMode }) =>
   callRpc<MmAllocateCheck>('mm_allocate_check', { p_payload: payload });
 
+export type MmAllocNoteRef = {
+  id: string;
+  note_no: string;
+  status?: string | null;
+  counts?: Record<string, number> | null;
+  style?: Record<string, unknown> | null;
+};
+
 export const mmAllocateRollsV4 = (payload: MmAllocateTarget & {
   roll_ids: string[];
   confirm?: boolean;
@@ -1243,6 +1263,7 @@ export const mmAllocateRollsV4 = (payload: MmAllocateTarget & {
     position?: MmStyleFabricPositionRow;
     over_allocated?: boolean;
     warnings?: MmAllocateWarning[];
+    note?: MmAllocNoteRef | null;
   }>('mm_allocate_rolls_v4', { p_payload: payload });
 
 export const mmAllocateAutoPick = (
@@ -1269,10 +1290,146 @@ export const mmUnallocateRollsV4 = (rollIds: string[]) =>
   callRpc<{ count: number }>('mm_unallocate_rolls_v4', { p_payload: { roll_ids: rollIds } });
 
 export const mmBookRolls = (payload: MmAllocateTarget & { roll_ids: string[] }) =>
-  callRpc<{ count: number; qty: number; style_material_id: string; position?: MmStyleFabricPositionRow }>(
+  callRpc<{ count: number; qty: number; style_material_id: string; position?: MmStyleFabricPositionRow; note?: MmAllocNoteRef | null }>(
     'mm_book_rolls',
     { p_payload: payload },
   );
 
 export const mmUnbookRolls = (rollIds: string[]) =>
   callRpc<{ count: number }>('mm_unbook_rolls', { p_payload: { roll_ids: rollIds } });
+
+// ── Inspection sampling sessions ─────────────────────────────────────────────
+
+export type MmInspStatus = 'draft' | 'escalated' | 'passed' | 'passed_deviation' | 'closed' | 'rejected' | string;
+
+export type MmInspInspection = {
+  inspected_length?: number | null;
+  length_uom?: string | null;
+  cuttable_width?: number | null;
+  width_uom?: string | null;
+  pts_1?: number | null;
+  pts_2?: number | null;
+  pts_3?: number | null;
+  pts_4?: number | null;
+  remarks?: string | null;
+  result?: string | null;
+  result_override?: string | null;
+  override_reason?: string | null;
+  [key: string]: unknown;
+} | null;
+
+export type MmInspSessionRoll = {
+  seq?: number | null;
+  selected: boolean;
+  inspection: MmInspInspection;
+  roll: MmV4RollRow;
+};
+
+export type MmInspSession = {
+  id: string;
+  status: MmInspStatus;
+  sample_pct?: number | null;
+  total_rolls?: number | null;
+  sample_size?: number | null;
+  selected_count?: number | null;
+  inspected_count?: number | null;
+  failed_count?: number | null;
+  escalated_at?: string | null;
+  decision_reason?: string | null;
+  decision?: string | null;
+  rolls?: MmInspSessionRoll[];
+  [key: string]: unknown;
+};
+
+export type MmInspScopeKind = 'in_challan' | 'process_challan';
+
+export const mmInspOpenSession = (scopeKind: MmInspScopeKind, scopeId: string) =>
+  callRpc<MmInspSession>('mm_insp_open_session', { p_scope_kind: scopeKind, p_scope_id: scopeId });
+
+export const mmInspGetSession = (sessionId: string) =>
+  callRpc<MmInspSession>('mm_insp_get_session', { p_session_id: sessionId });
+
+export const mmInspListSessions = (scopeKind: MmInspScopeKind, scopeId: string) =>
+  callRpc<{ rows?: MmInspSession[] } | MmInspSession[]>('mm_insp_list_sessions', { p_scope_kind: scopeKind, p_scope_id: scopeId });
+
+export const mmInspSetSelection = (sessionId: string, rollIds: string[]) =>
+  callRpc<MmInspSession>('mm_insp_set_selection', { p_session_id: sessionId, p_roll_ids: rollIds });
+
+export const mmInspSaveSession = (sessionId: string, rows: MmV4QcInspectionRow[], inspectedAt?: string | null) =>
+  callRpc<MmInspSession>('mm_insp_save_session', {
+    p_session_id: sessionId,
+    p_rows: rows,
+    ...(inspectedAt ? { p_inspected_at: inspectedAt } : {}),
+  });
+
+export const mmInspDecide = (sessionId: string, decision: 'accept_deviation' | 'reject', reason: string) =>
+  callRpc<MmInspSession>('mm_insp_decide', { p_session_id: sessionId, p_decision: decision, p_reason: reason });
+
+// ── Allocation notes ─────────────────────────────────────────────────────────
+
+export type MmAllocNoteStyle = {
+  style_name?: string | null;
+  style_ref?: string | null;
+  order_no?: string | null;
+  colorway_name?: string | null;
+  fabric_code?: string | null;
+  fabric_name?: string | null;
+  style_material_id?: string | null;
+  order_id?: string | null;
+  [key: string]: unknown;
+};
+
+export type MmAllocNoteCounts = {
+  lines?: number;
+  active?: number;
+  allocated?: number;
+  booked?: number;
+  dispatched?: number;
+  released?: number;
+  qty_active?: number;
+  [key: string]: number | undefined;
+};
+
+export type MmAllocNoteRow = {
+  id: string;
+  note_no: string;
+  created_at?: string | null;
+  created_by_name?: string | null;
+  remarks?: string | null;
+  status: string;
+  style?: MmAllocNoteStyle | null;
+  counts?: MmAllocNoteCounts | null;
+};
+
+export type MmAllocNoteLine = {
+  id: string;
+  kind: 'allocate' | 'book' | string;
+  status: 'active' | 'released' | 'dispatched' | 'converted' | string;
+  qty?: number | null;
+  uom?: string | null;
+  created_at?: string | null;
+  closed_at?: string | null;
+  close_reason?: string | null;
+  store_challan_no?: string | null;
+  store_challan_id?: string | null;
+  roll: MmV4RollRow;
+};
+
+export type MmAllocNoteDetail = MmAllocNoteRow & {
+  lines?: MmAllocNoteLine[];
+  note?: MmAllocNoteRow;
+};
+
+export const mmListAllocationNotes = (filter: {
+  style_material_id?: string | null;
+  order_id?: string | null;
+  status?: 'open' | 'dispatched' | 'closed' | null;
+  search?: string | null;
+} = {}) =>
+  callRpc<{ rows?: MmAllocNoteRow[] } | MmAllocNoteRow[]>('mm_list_allocation_notes', { p_filter: filter });
+
+export const mmGetAllocationNote = (id: string) =>
+  callRpc<MmAllocNoteDetail>('mm_get_allocation_note', { p_id: id });
+
+export const mmCancelAllocationNote = (id: string, reason: string) =>
+  callRpc<{ id: string; note_no?: string }>('mm_cancel_allocation_note', { p_id: id, p_reason: reason });

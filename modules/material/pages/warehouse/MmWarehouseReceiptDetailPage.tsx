@@ -21,9 +21,12 @@ import {
   receiptValueText,
 } from '../../lib/receiptForm';
 import {
+  mmInspListSessions,
   mmWhGetReceipt,
   type MmV4RollRow,
 } from '../../lib/mmV4Rpc';
+import { MmInspectionChip } from '../../components/MmInspectionChip';
+import { inspSessionStatusLabel } from '../../lib/inspAlloc';
 
 const th = 'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
 const td = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
@@ -106,6 +109,17 @@ export default function MmWarehouseReceiptDetailPage() {
     enabled: Boolean(factoryId && id),
   });
 
+  const inspSessionsQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'receiptInspSessions', id] as const,
+    queryFn: async () => {
+      const res = await mmInspListSessions('in_challan', id);
+      if (res.ok === false) return [];
+      return Array.isArray(res.data) ? res.data : (res.data.rows ?? []);
+    },
+    enabled: Boolean(factoryId && id),
+  });
+  const latestInsp = inspSessionsQ.data?.[0] ?? null;
+
   const receipt = detailQ.data?.receipt;
   const rolls = detailQ.data?.rolls ?? [];
   const processSummary = detailQ.data?.process_summary ?? receipt?.process_summary ?? [];
@@ -154,7 +168,7 @@ export default function MmWarehouseReceiptDetailPage() {
       onRetry={() => { void detailQ.refetch(); }}
       skeleton="card"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 mb-3 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1.3fr_1fr_0.68fr] gap-3 mb-3 items-stretch">
         <InfoCard title="Receipt information" kicker={String(receipt?.grn_no || receipt?.challan_no || '')}>
           <Fact label="Source" value={sourceLabel(String(receipt?.source ?? ''))} />
           <Fact label="From" value={fromName} />
@@ -180,7 +194,7 @@ export default function MmWarehouseReceiptDetailPage() {
             </div>
           ) : null}
         </InfoCard>
-        <InfoCard title="Fabric information" kicker={fabric?.code || ''}>
+        <InfoCard title="Fabric information" kicker={fabric?.code || ''} colsClass="grid-cols-[1.5fr_1fr]">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Name</p>
             <p className="text-[12px] font-semibold text-slate-900 truncate">{fabric?.name || '—'}</p>
@@ -221,14 +235,22 @@ export default function MmWarehouseReceiptDetailPage() {
             <h2 className="text-[12px] font-semibold text-slate-900 truncate">Testing, inspection and print</h2>
           </div>
           <div className="px-4 py-3 flex flex-col gap-2">
+            {latestInsp ? (
+              <p className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                <span>Inspection verdict</span>
+                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${String(latestInsp.status).toLowerCase() === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' : String(latestInsp.status).toLowerCase() === 'escalated' ? 'bg-amber-50 text-amber-800 border-amber-200' : String(latestInsp.status).toLowerCase().startsWith('passed') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                  {inspSessionStatusLabel(latestInsp.status)}
+                </span>
+              </p>
+            ) : null}
             <Button
               type="button"
               size="sm"
-              variant="primary"
+              variant="secondary"
               icon={FlaskConical}
               disabled={!id}
               onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'in_challan' })}
-              className="w-full"
+              className="w-full !bg-blue-100 !border-blue-200 !text-blue-800 hover:!bg-blue-200"
             >
               Testing
             </Button>
@@ -239,7 +261,7 @@ export default function MmWarehouseReceiptDetailPage() {
               icon={ClipboardCheck}
               disabled={!id}
               onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'in_challan', mode: 'inspection' })}
-              className="w-full !bg-amber-500 !border-amber-500 !text-white hover:!bg-amber-600"
+              className="w-full !bg-amber-100 !border-amber-200 !text-amber-800 hover:!bg-amber-200"
             >
               Inspection
             </Button>
@@ -249,7 +271,7 @@ export default function MmWarehouseReceiptDetailPage() {
               variant="secondary"
               icon={Printer}
               onClick={() => window.print()}
-              className="w-full !bg-slate-700 !border-slate-700 !text-white hover:!bg-slate-800"
+              className="w-full !bg-violet-100 !border-violet-200 !text-violet-800 hover:!bg-violet-200"
             >
               Print
             </Button>
@@ -257,20 +279,19 @@ export default function MmWarehouseReceiptDetailPage() {
         </Card>
       </div>
 
-      {processSummary.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <MmProcessSummaryChips
-            items={processSummary}
-            activeKey={processKey}
-            onPick={(key) => setProcessKey((current) => (current === key ? null : key))}
-          />
-        </div>
-      ) : null}
-
       <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-          <p className="text-[11px] font-semibold text-slate-700">Rolls on this receipt</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">What arrived on this receipt.</p>
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold text-slate-700">Rolls on this receipt</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">What arrived on this receipt.</p>
+          </div>
+          {processSummary.length > 0 ? (
+            <MmProcessSummaryChips
+              items={processSummary}
+              activeKey={processKey}
+              onPick={(key) => setProcessKey((current) => (current === key ? null : key))}
+            />
+          ) : null}
         </div>
         <div className="overflow-auto">
           <table className="w-full min-w-[1200px] border-collapse">
@@ -320,7 +341,7 @@ export default function MmWarehouseReceiptDetailPage() {
                     <td className={td}>{rollStageLabel(roll)}</td>
                     <td className={td}><span className={mark.className}>{mark.text}</span></td>
                     <td className={td}>{statusWithOrigin(roll.test_status, roll.last_test?.origin)}</td>
-                    <td className={td}>{String(roll.inspection_status ?? '').trim() || '—'}</td>
+                    <td className={td}><MmInspectionChip status={roll.inspection_status} inspection={roll.inspection} /></td>
                     <td className={td}>{spec ? <span className={spec.className}>{spec.text}</span> : '—'}</td>
                     <td className={td}>{bookedOrAllocated(roll)}</td>
                     <td className={td}>{locationText(roll)}</td>
@@ -339,14 +360,14 @@ export default function MmWarehouseReceiptDetailPage() {
   );
 }
 
-function InfoCard({ title, kicker, children }: { title: string; kicker?: string; children: React.ReactNode }) {
+function InfoCard({ title, kicker, children, colsClass = 'grid-cols-2' }: { title: string; kicker?: string; children: React.ReactNode; colsClass?: string }) {
   return (
     <Card className="shadow-sm border-slate-200 overflow-hidden h-full" noPadding>
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
         {kicker ? <h2 className="text-[12px] font-semibold text-slate-900 truncate">{kicker}</h2> : null}
       </div>
-      <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-3">{children}</div>
+      <div className={`px-4 py-3 grid ${colsClass} gap-x-4 gap-y-3`}>{children}</div>
     </Card>
   );
 }

@@ -55,6 +55,8 @@ export type RoutePath =
   | "#/material/warehouse/returns/:id"
   | "#/material/warehouse/end-bits"
   | "#/material/warehouse/movements"
+  | "#/material/warehouse/allocations"
+  | "#/material/warehouse/allocations/:id"
   | "#/user-management"
   | "#/reports"
   | "#/reports/day"
@@ -125,6 +127,8 @@ export const RoutePath = {
   MATERIAL_WAREHOUSE_RETURNS_DETAIL: "#/material/warehouse/returns/:id",
   MATERIAL_WAREHOUSE_END_BITS: "#/material/warehouse/end-bits",
   MATERIAL_WAREHOUSE_MOVEMENTS: "#/material/warehouse/movements",
+  MATERIAL_WAREHOUSE_ALLOCATIONS: "#/material/warehouse/allocations",
+  MATERIAL_WAREHOUSE_ALLOCATION: "#/material/warehouse/allocations/:id",
   USER_MANAGEMENT: "#/user-management",
   REPORTS: "#/reports",
   REPORTS_DAY: "#/reports/day",

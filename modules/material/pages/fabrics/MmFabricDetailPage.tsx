@@ -16,6 +16,7 @@ import { useNavigationStore } from '../../../../stores';
 import { FabricFormDrawer } from '../../components/FabricFormDrawer';
 import { MmRollProcessMark } from '../../components/MmProcessStatus';
 import { MmRollPassportModalV4 } from '../../components/MmRollPassportModalV4';
+import { MmInspectionChip } from '../../components/MmInspectionChip';
 import { MmStatusDot } from '../../components/MmStatusDot';
 import { colorMethodLabel, widthFormLabel } from '../../lib/fabricLabels';
 import { formatStoredQty, formatStoredWidth, qtyLabel, unitBase, useFabricUnits } from '../../lib/units';
@@ -360,12 +361,13 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                     <th className={th}>Dye lot</th>
                     <th className={th}>Allocated</th>
                     <th className={th}>Last test</th>
+                    <th className={th}>Inspection</th>
                   </tr>
                 </thead>
                 <tbody>
                   {shownRolls.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-[11px] text-slate-400">No rolls in this group.</td>
+                      <td colSpan={9} className="px-4 py-8 text-center text-[11px] text-slate-400">No rolls in this group.</td>
                     </tr>
                   ) : shownRolls.map((roll) => {
                     const test = lastTestParts(roll);
@@ -397,6 +399,7 @@ export default function MmFabricDetailPage({ fabricId }: { fabricId: string }) {
                             </span>
                           )}
                         </td>
+                        <td className={td}><MmInspectionChip status={roll.inspection_status} inspection={roll.inspection} /></td>
                       </tr>
                     );
                   })}

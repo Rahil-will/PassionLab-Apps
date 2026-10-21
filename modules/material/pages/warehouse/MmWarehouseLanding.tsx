@@ -517,6 +517,11 @@ export default function MmWarehouseLanding() {
                   subtitle="Status before dispatch"
                   onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLES)}
                 />
+                <HubLink
+                  title="Allocations"
+                  subtitle="Numbered allocation notes"
+                  onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_ALLOCATIONS)}
+                />
               </HubGroup>
               <HubGroup label="Processing" tone="processing">
                 <HubLink

@@ -30,6 +30,7 @@ type Props = {
   getValue: (row: number, key: string) => string;
   onChange: (row: number, key: string, value: string) => void;
   isRowLocked?: (row: number) => boolean;
+  isCellLocked?: (row: number, key: string) => boolean;
   emptyText?: string;
   rowAction?: (row: number) => React.ReactNode;
   /** Stretch columns to the parent. Default keeps a minimum width so dense grids can scroll. */
@@ -60,6 +61,7 @@ export function MmSheetGrid({
   getValue,
   onChange,
   isRowLocked,
+  isCellLocked,
   emptyText = 'No rows.',
   rowAction,
   fit = false,
@@ -73,6 +75,7 @@ export function MmSheetGrid({
   const [editBuf, setEditBuf] = useState('');
   const [fillTo, setFillTo] = useState<{ row: number; col: number } | null>(null);
   const dragging = useRef<'select' | 'fill' | null>(null);
+  const cellLocked = (row: number, key: string): boolean => Boolean(isCellLocked ? isCellLocked(row, key) : isRowLocked?.(row));
 
   const range = useMemo<SheetRange>(
     () => ({ r0: anchor.row, c0: anchor.col, r1: focus.row, c1: focus.col }),
@@ -86,17 +89,17 @@ export function MmSheetGrid({
     (next?: string) => {
       if (!editing) return;
       const col = columns[focus.col];
-      if (col?.editable && !isRowLocked?.(focus.row)) {
+      if (col?.editable && !cellLocked(focus.row, col.key)) {
         onChange(focus.row, col.key, next ?? editBuf);
       }
       setEditing(false);
     },
-    [columns, editBuf, editing, focus.col, focus.row, isRowLocked, onChange],
+    [columns, editBuf, editing, focus.col, focus.row, isRowLocked, isCellLocked, onChange],
   );
 
   const startEdit = (row: number, col: number, seed?: string) => {
     const column = columns[col];
-    if (!column?.editable || isRowLocked?.(row)) return;
+    if (!column?.editable || cellLocked(row, column.key)) return;
     setAnchor({ row, col });
     setFocus({ row, col });
     if (column.kind === 'select' || column.kind === 'check' || column.kind === 'date') {
@@ -132,7 +135,7 @@ export function MmSheetGrid({
   const writeBlock = (writes: Array<{ row: number; col: number; value: string }>) => {
     for (const item of writes) {
       const column = columns[item.col];
-      if (!column?.editable || isRowLocked?.(item.row)) continue;
+      if (!column?.editable || cellLocked(item.row, column.key)) continue;
       onChange(item.row, column.key, item.value);
     }
   };
@@ -209,7 +212,7 @@ export function MmSheetGrid({
     if (e.key === ' ' && columns[focus.col]?.kind === 'check') {
       e.preventDefault();
       const column = columns[focus.col];
-      if (!column?.editable || isRowLocked?.(focus.row)) return;
+      if (!column?.editable || cellLocked(focus.row, column.key)) return;
       const current = getValue(focus.row, column.key);
       onChange(focus.row, column.key, current === 'true' ? 'false' : 'true');
       return;
@@ -225,7 +228,7 @@ export function MmSheetGrid({
       for (let r = n.r0; r <= n.r1; r += 1) {
         for (let c = n.c0; c <= n.c1; c += 1) {
           const column = columns[c];
-          if (!column?.editable || isRowLocked?.(r)) continue;
+          if (!column?.editable || cellLocked(r, column.key)) continue;
           onChange(r, column.key, '');
         }
       }
@@ -287,7 +290,7 @@ export function MmSheetGrid({
                   {columns.map((column, col) => {
                     const active = focus.row === row && focus.col === col;
                     const selected = inRange(shownRange, row, col);
-                    const locked = Boolean(isRowLocked?.(row));
+                    const locked = cellLocked(row, column.key);
                     const value = getValue(row, column.key);
                     const isStatus = column.kind === 'status';
                     const isSelect = column.kind === 'select';

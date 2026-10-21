@@ -8,6 +8,7 @@ import { MmAllocateV4Modal } from './MmAllocateV4Modal';
 import { MmProcSendModalV4 } from './MmProcSendModalV4';
 import { MmRollPassportModalV4 } from './MmRollPassportModalV4';
 import { mmWhListReadiness } from '../lib/mmV4Rpc';
+import { MmInspectionChip } from './MmInspectionChip';
 
 const th =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
@@ -182,9 +183,7 @@ export function MmWarehouseReadinessPanel() {
                       </Badge>
                     </td>
                     <td className={td}>
-                      <Badge variant={statusBadgeVariant(row.inspection_status)}>
-                        {String(row.inspection_status ?? 'NONE')}
-                      </Badge>
+                      <MmInspectionChip status={row.inspection_status} inspection={row.inspection} />
                     </td>
                     <td className={td}>
                       <div className="flex flex-wrap gap-1">
