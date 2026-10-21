@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
-import { Card } from '../../../../components/ui';
+import { Filter, Search } from 'lucide-react';
+import { Card, SelectDropdown } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { useDebouncedValue } from '../../../../hooks/useDebouncedValue';
@@ -13,19 +13,11 @@ import { noteStatusChip } from '../../lib/inspAlloc';
 import { mmListAllocationNotes, type MmAllocNoteRow } from '../../lib/mmV4Rpc';
 import { whTd, whTdMuted, whTh } from './whTable';
 
-const TABS = [
-  { key: 'open', label: 'Open' },
-  { key: 'dispatched', label: 'Dispatched' },
-  { key: 'closed', label: 'Closed' },
-] as const;
-
-type TabKey = (typeof TABS)[number]['key'];
-
 export default function MmWarehouseAllocationsPage() {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<TabKey>('open');
+  const [tab, setTab] = useState('open');
   const debounced = useDebouncedValue(search, 300);
 
   usePageHeader({ title: 'Allocations', subtitle: 'Numbered allocation notes from allocate and book actions.' });
@@ -33,7 +25,7 @@ export default function MmWarehouseAllocationsPage() {
   const notesQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'allocNotes', tab, debounced] as const,
     queryFn: async () => {
-      const res = await mmListAllocationNotes({ status: tab, search: debounced || null });
+      const res = await mmListAllocationNotes({ status: (tab || null) as 'open' | 'dispatched' | 'closed' | null, search: debounced || null });
       if (res.ok === false) throw new Error(res.message);
       return (Array.isArray(res.data) ? res.data : (res.data.rows ?? [])) as MmAllocNoteRow[];
     },
@@ -42,22 +34,10 @@ export default function MmWarehouseAllocationsPage() {
   const rows = notesQ.data ?? [];
 
   return (
-    <PageShell loading={notesQ.isLoading} error={notesQ.error} onRetry={() => { void notesQ.refetch(); }} skeleton="table" className="w-full pb-20">
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
+    <PageShell loading={notesQ.isLoading} error={notesQ.error} onRetry={() => { void notesQ.refetch(); }} skeleton="table" className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden w-full">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl flex-1 min-h-0 flex flex-col">
         <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3 bg-slate-50/50">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-            {TABS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`h-7 px-3 rounded-md text-[11px] font-semibold ${tab === item.key ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
-                onClick={() => setTab(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 max-w-sm flex-1">
+          <div className="flex items-center gap-2 max-w-sm flex-1 min-w-0">
             <Search size={14} className="text-slate-400 shrink-0" />
             <input
               className="text-[11px] bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
@@ -66,8 +46,23 @@ export default function MmWarehouseAllocationsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <div className="flex items-center gap-2 lg:ml-auto">
+            <SelectDropdown
+              size="compact"
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: '', label: 'All statuses' },
+                { value: 'open', label: 'Open' },
+                { value: 'dispatched', label: 'Dispatched' },
+                { value: 'closed', label: 'Closed' },
+              ]}
+              icon={Filter}
+              className="w-40"
+            />
+          </div>
         </div>
-        <div className="overflow-auto">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr>

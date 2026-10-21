@@ -36,10 +36,10 @@ export default function MmWarehouseEndBitsPage() {
       error={query.error}
       onRetry={() => void query.refetch()}
       skeleton="table"
-      className="w-full pb-20"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden w-full"
     >
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
-        <div className="overflow-x-auto">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl flex-1 min-h-0 flex flex-col">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full min-w-[860px] border-collapse">
             <thead>
               <tr>

@@ -91,9 +91,9 @@ export default function MmWarehouseFabricsPage() {
       error={listQ.error}
       onRetry={() => { void listQ.refetch(); }}
       skeleton="table"
-      className="w-full pb-20"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden w-full"
     >
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl w-full">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl w-full flex-1 min-h-0 flex flex-col">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2 max-w-sm">
             <Search size={14} className="text-slate-400 shrink-0" />
@@ -105,7 +105,7 @@ export default function MmWarehouseFabricsPage() {
             />
           </div>
         </div>
-        <div className="overflow-x-auto w-full">
+        <div className="overflow-auto w-full flex-1 min-h-0">
           <table className="w-full min-w-[1100px] table-fixed border-collapse">
             <colgroup>
               <col style={{ width: '22%' }} />

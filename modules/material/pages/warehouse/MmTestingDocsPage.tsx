@@ -17,6 +17,7 @@ import {
   type MmWhReceiptRow,
 } from '../../lib/mmV4Rpc';
 import { MmStatusDot } from '../../components/MmStatusDot';
+import { loadProcChallanFacts, type ProcChallanFacts } from '../../lib/procChallanFacts';
 import {
   whTd,
   whTdDone,
@@ -91,21 +92,23 @@ function receiptDoc(row: MmWhReceiptRow, sourceKey: SourceKey, source: string): 
   };
 }
 
-function processDoc(row: MmV4ProcChallanListRow): TestDoc {
+function processDoc(row: MmV4ProcChallanListRow, facts?: ProcChallanFacts): TestDoc {
   const rolls = Number(row.counts?.rolls ?? row.counts?.out ?? 0);
   const waiting = row.tested !== true;
   const process = typeof row.process_type === 'string' ? row.process_type : row.process_type?.name || '';
+  // Reprocess = failed rolls sent again. Anything else here has come back from a process unit.
+  const reprocess = String(row.purpose ?? '').toLowerCase() === 'reprocess';
   return {
     id: row.id,
     kind: 'process_challan',
     no: row.challan_no,
     sourceKey: 'process_return',
-    source: 'Process return',
+    source: reprocess ? 'Reprocess' : 'Back from process',
     receivedAt: row.sent_at ?? row.created_at ?? null,
     from: row.unit?.name || '—',
-    fabric: process ? `Process · ${process}` : 'Process return',
-    fabricSub: '',
-    qty: '—',
+    fabric: facts?.fabric || '—',
+    fabricSub: [process ? `Process · ${process}` : '', reprocess ? 'Failed → sent again' : ''].filter(Boolean).join(' · '),
+    qty: facts && facts.receivedQty !== '—' ? facts.receivedQty : (facts?.sentQty ?? '—'),
     rolls,
     tested: waiting ? 0 : rolls,
     notTested: waiting ? rolls : 0,
@@ -162,11 +165,13 @@ export default function MmTestingDocsPage({ mode }: { mode: 'queue' | 'testing' 
       const linked = new Set(
         (returned.data.rows ?? []).map((row) => row.process_challan?.id).filter((id): id is string => Boolean(id)),
       );
+      const processRows = (process.data.rows ?? []).filter((row) => !linked.has(row.id));
+      const facts = await loadProcChallanFacts(processRows.map((row) => row.id)).catch(() => new Map());
       return [
         ...(external.data.rows ?? []).map((row) => receiptDoc(row, 'grn', 'GRN')),
         ...(internal.data.rows ?? []).map((row) => receiptDoc(row, 'internal', 'Internal receipt')),
-        ...(returned.data.rows ?? []).map((row) => receiptDoc(row, 'process_return', 'Process return')),
-        ...(process.data.rows ?? []).filter((row) => !linked.has(row.id)).map(processDoc),
+        ...(returned.data.rows ?? []).map((row) => receiptDoc(row, 'process_return', 'Back from process')),
+        ...processRows.map((row) => processDoc(row, facts.get(row.id))),
       ].sort(byQueue);
     },
     enabled: Boolean(factoryId),
@@ -195,9 +200,9 @@ export default function MmTestingDocsPage({ mode }: { mode: 'queue' | 'testing' 
       error={docsQ.error}
       onRetry={() => { void docsQ.refetch(); }}
       skeleton="table"
-      className="w-full pb-20"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden w-full"
     >
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl flex-1 min-h-0 flex flex-col">
         <div className="px-4 py-3 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center gap-3 bg-slate-50/50">
           <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
             <Search size={14} className="text-slate-400 shrink-0" />
@@ -234,7 +239,7 @@ export default function MmTestingDocsPage({ mode }: { mode: 'queue' | 'testing' 
                 { value: '', label: 'All sources' },
                 { value: 'grn', label: 'GRN' },
                 { value: 'internal', label: 'Internal receipt' },
-                { value: 'process_return', label: 'Process return' },
+                { value: 'process_return', label: 'Back from process / reprocess' },
               ]}
               icon={Filter}
               className="w-40"
@@ -252,7 +257,7 @@ export default function MmTestingDocsPage({ mode }: { mode: 'queue' | 'testing' 
             />
           </div>
         </div>
-        <div className="overflow-auto">
+        <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full min-w-[1080px] border-collapse">
             <thead>
               <tr>

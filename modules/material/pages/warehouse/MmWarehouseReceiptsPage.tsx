@@ -219,12 +219,15 @@ export default function MmWarehouseReceiptsPage() {
                   >
                     <td className={`${td} text-slate-500 whitespace-nowrap`}>{dateLabel(row.received_at)}</td>
                     <td className={td}>
-                      <span className="block font-semibold text-slate-800 truncate">{row.party_challan_no || '—'}</span>
+                      <span className="block font-semibold text-slate-800 truncate">{row.grn_no || row.party_challan_no || '—'}</span>
+                      {row.party_challan_no && row.party_challan_no !== row.grn_no ? (
+                        <span className={`${sub} text-slate-400`}>{row.party_challan_no}</span>
+                      ) : null}
                       {row.process_challan?.no ? (
                         <span className={`${sub} text-slate-400`}>{row.process_challan.no}</span>
                       ) : null}
                     </td>
-                    <td className={`${td} truncate`}>{row.po_no || '—'}</td>
+                    <td className={`${td} truncate`}>{row.po_no || row.invoice_ref || row.po_ref || row.lr_no || row.container_no || '—'}</td>
                     <td className={`${td} truncate`}>{row.from?.name || '—'}</td>
                     <td className={td}>
                       <span className="block truncate">{row.fabric?.name || row.fabric?.code || '—'}</span>
