@@ -589,7 +589,7 @@ export default function MmWarehouseReceivePage() {
                 <p className="text-slate-500 mt-1 leading-snug" style={helperStyle}>
                   {stageNeedsColour
                     ? 'This stage can be cut, so each roll needs a colour.'
-                    : 'Colour can wait. It is required once the stage can be cut.'}
+                    : 'Colour can wait. It is required once the stage can be cut. Greige and other not-yet-finished rolls can only be booked to a style here, not allocated — they switch to allocated once they reach a cuttable stage.'}
                 </p>
                 </div>
                 <div>
