@@ -1371,7 +1371,7 @@ export const CreateOrderMaster: React.FC = () => {
                             showBack={true}
                             onBack={() => changeStage('shipments')}
                             onDiscard={handleCancel}
-                            nextLabel={saving ? 'Saving…' : isEditingExistingOrder ? 'Edit Order' : 'Create Order'}
+                            nextLabel={saving ? 'Saving…' : isEditingExistingOrder ? 'Update Order' : 'Create Order'}
                             onNext={() => void handleConfirmOrder()}
                             nextDisabled={saving}
                             gateNext

@@ -44,6 +44,7 @@ type VendorDraft = {
   rowVersion: number;
   inhouse: boolean;
   fabricTypeIds: string[];
+  gstin: string;
   qcAtSource: QcAtSource;
   remarks: string;
   isDefault: boolean;
@@ -92,6 +93,7 @@ const MmFabricVendorsPage = forwardRef<
   const [active, setActive] = useState(true);
   const [fabricTypeIds, setFabricTypeIds] = useState<string[] | null>(null);
   const [qcAtSource, setQcAtSource] = useState<QcAtSource>('none');
+  const [gstin, setGstin] = useState('');
   const [remarks, setRemarks] = useState('');
   const [inhouse, setInhouse] = useState(false);
   const [isDefault, setIsDefault] = useState(false);
@@ -105,6 +107,7 @@ const MmFabricVendorsPage = forwardRef<
     rowVersion: Number(row.row_version ?? 1),
     inhouse,
     fabricTypeIds: row.fabric_type_ids ?? [],
+    gstin: row.gstin ?? '',
     qcAtSource: qcAtSourceOf(row.qc_at_source),
     remarks: row.remarks ?? '',
     isDefault: row.is_default === true,
@@ -127,6 +130,7 @@ const MmFabricVendorsPage = forwardRef<
     setActive(true);
     setFabricTypeIds(null);
     setQcAtSource('none');
+    setGstin('');
     setRemarks('');
     setInhouse(false);
     setIsDefault(false);
@@ -139,13 +143,14 @@ const MmFabricVendorsPage = forwardRef<
       if (!row) return false;
       return row.name !== name || row.contact !== contact || row.active !== active
         || row.qcAtSource !== qcAtSource
+        || row.gstin !== gstin
         || row.remarks !== remarks
         || row.inhouse !== inhouse
         || row.isDefault !== isDefault
         || !sameTypeChoice(row.fabricTypeIds, fabricTypeIds);
     }
-    return Boolean(name.trim() || contact.trim() || remarks.trim() || inhouse || isDefault || fabricTypeIds !== null || qcAtSource !== 'none');
-  }, [editingId, rows, name, contact, active, fabricTypeIds, qcAtSource, remarks, inhouse, isDefault]);
+    return Boolean(name.trim() || contact.trim() || remarks.trim() || gstin.trim() || inhouse || isDefault || fabricTypeIds !== null || qcAtSource !== 'none');
+  }, [editingId, rows, name, contact, active, fabricTypeIds, qcAtSource, gstin, remarks, inhouse, isDefault]);
 
   const dirty = useMemo(() => {
     if (!hydrated) return false;
@@ -157,8 +162,8 @@ const MmFabricVendorsPage = forwardRef<
     onDirtyChange?.(dirty);
   }, [dirty, hydrated, onDirtyChange]);
 
-  const snapshot = useRef({ rows, removed, name, contact, active, fabricTypeIds, qcAtSource, remarks, inhouse, isDefault, editingId });
-  snapshot.current = { rows, removed, name, contact, active, fabricTypeIds, qcAtSource, remarks, inhouse, isDefault, editingId };
+  const snapshot = useRef({ rows, removed, name, contact, active, fabricTypeIds, qcAtSource, gstin, remarks, inhouse, isDefault, editingId });
+  snapshot.current = { rows, removed, name, contact, active, fabricTypeIds, qcAtSource, gstin, remarks, inhouse, isDefault, editingId };
 
   const resetForm = () => {
     setEditingId(null);
@@ -167,6 +172,7 @@ const MmFabricVendorsPage = forwardRef<
     setActive(true);
     setFabricTypeIds(null);
     setQcAtSource('none');
+    setGstin('');
     setRemarks('');
     setInhouse(false);
     setIsDefault(false);
@@ -195,6 +201,7 @@ const MmFabricVendorsPage = forwardRef<
       contact: form.contact.trim(),
       active: form.active,
       fabricTypeIds: chosenTypeIds(form.fabricTypeIds),
+      gstin: form.gstin.trim().toUpperCase(),
       qcAtSource: form.qcAtSource,
       remarks: form.remarks.trim(),
       inhouse: form.inhouse,
@@ -217,6 +224,7 @@ const MmFabricVendorsPage = forwardRef<
         && existing.contact === form.contact.trim()
         && existing.active === form.active
         && existing.qcAtSource === form.qcAtSource
+        && existing.gstin === form.gstin.trim().toUpperCase()
         && existing.remarks === form.remarks.trim()
         && existing.inhouse === form.inhouse
         && existing.isDefault === form.isDefault
@@ -245,6 +253,7 @@ const MmFabricVendorsPage = forwardRef<
     setActive(row.active);
     setFabricTypeIds(row.fabricTypeIds.length === 0 ? [ANY_TYPE] : row.fabricTypeIds);
     setQcAtSource(row.qcAtSource);
+    setGstin(row.gstin);
     setRemarks(row.remarks);
     setInhouse(row.inhouse);
     setIsDefault(row.isDefault);
@@ -273,6 +282,7 @@ const MmFabricVendorsPage = forwardRef<
           remarks: row.remarks.trim() || null,
           is_active: row.active,
           fabric_type_ids: row.fabricTypeIds,
+          gstin: row.gstin.trim().toUpperCase() || null,
           qc_at_source: row.qcAtSource,
           is_default: row.isDefault,
         });
@@ -351,6 +361,7 @@ const MmFabricVendorsPage = forwardRef<
                 onKeyDown={(e) => e.key === 'Enter' && submitForm()}
               />
               <Input label="Contact" value={contact} onChange={(e) => setContact(e.target.value)} />
+              <Input label="GSTIN" placeholder="27ABCDE1234F1Z5" value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} />
               <div>
                 <label className="block text-[10px] font-semibold text-slate-600 mb-1">Remarks</label>
                 <textarea
@@ -439,7 +450,7 @@ const MmFabricVendorsPage = forwardRef<
               emptyMessage="No fabric vendors yet."
               headerAction={<MmTableSaveButton />}
             >
-              <CatalogTable headers={['S.No', 'Vendor', 'Source', 'Default', 'Fabric types', 'QC at source', 'Contact', 'Remarks', 'Active']}>
+              <CatalogTable headers={['S.No', 'Vendor', 'GSTIN', 'Source', 'Default', 'Fabric types', 'QC at source', 'Contact', 'Remarks', 'Active']}>
                 {rows.map((row, idx) => (
                   <CatalogTableRow key={row.localId} onClick={() => loadRow(row)} selected={editingId === row.localId}>
                     <CatalogTableCell className={catalogSerialCellClass}>{idx + 1}</CatalogTableCell>
@@ -447,6 +458,7 @@ const MmFabricVendorsPage = forwardRef<
                       {row.name || '—'}
                       {!row.id ? <span className="ml-2 text-[9px] font-semibold uppercase text-amber-600">New</span> : null}
                     </CatalogTableCell>
+                    <CatalogTableCell className="text-slate-600 truncate">{row.gstin || '—'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600">{row.inhouse ? 'In-house' : 'External'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600">{row.isDefault ? 'Yes' : '—'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600 truncate">{typeLabel(row.fabricTypeIds)}</CatalogTableCell>

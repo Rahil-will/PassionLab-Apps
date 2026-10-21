@@ -2808,7 +2808,6 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
-          remarks: string | null
           requirement_fields: Json
           requires_shade_band: boolean
           row_version: number
@@ -2825,7 +2824,6 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
-          remarks?: string | null
           requirement_fields?: Json
           requires_shade_band?: boolean
           row_version?: number
@@ -2842,7 +2840,6 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
-          remarks?: string | null
           requirement_fields?: Json
           requires_shade_band?: boolean
           row_version?: number

@@ -3,7 +3,7 @@ import { Database, Plus, Search, Trash2 } from 'lucide-react';
 import { Button, SelectDropdown } from '../../../../components/ui';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { MmSheetGrid, type SheetColumn } from '../../components/MmSheetGrid';
-import { fillReceiptColumn } from '../../lib/receivePayload';
+import { VENDOR_RESULT_KEY } from '../../lib/receivePayload';
 import type { MmTestField } from '../../lib/mmRpc';
 import {
   applyFieldValue,
@@ -195,8 +195,6 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
   receiptQtyLabel,
   cellTone,
 }) => {
-  const [fillKey, setFillKey] = useState('');
-  const [fillValue, setFillValue] = useState('');
   const [rollCount, setRollCount] = useState('');
   const [countError, setCountError] = useState<string | null>(null);
   const [rollFilter, setRollFilter] = useState('');
@@ -234,6 +232,33 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
 
   const patchField = (localId: string, field: MmTestField, value: string) => {
     onChange(rows.map((row) => (row.localId === localId ? writeField(row, field, value) : row)));
+  };
+
+  const fillDummy = () => {
+    let next = autoFillDraftRolls(rows, displayFields, {
+      measures: measureColumns === 'target' ? [] : nativeMeasures,
+      fillLotType: showLotType,
+    });
+    if (appendColumns.length > 0) {
+      next = next.map((row) => {
+        if (row.locked) return row;
+        const attributes = { ...row.attributes };
+        for (const column of appendColumns) {
+          if (column.editable === false) continue;
+          if ((attributes[column.key] ?? '').trim() !== '') continue;
+          if (column.key === VENDOR_RESULT_KEY) attributes[column.key] = 'pass';
+          else if (column.kind === 'select') attributes[column.key] = column.options?.find((opt) => opt.value)?.value ?? '';
+          else if (column.kind === 'check') attributes[column.key] = 'true';
+          else if (column.kind === 'date') attributes[column.key] = new Date().toISOString().slice(0, 10);
+          else if (column.kind === 'number') {
+            const token = column.label.toLowerCase();
+            attributes[column.key] = token.includes('gsm') ? '180' : token.includes('width') ? '60' : token.includes('shrink') ? '2.00' : '10';
+          } else attributes[column.key] = `${column.label} 1`;
+        }
+        return { ...row, attributes };
+      });
+    }
+    onChange(next);
   };
 
   const generate = () => {
@@ -469,81 +494,9 @@ export const MmRollEntryGrid: React.FC<MmRollEntryGridProps> = ({
             {showAutoFill && rows.length > 0 ? (
               receiptForm ? (
                 <DesktopWriteGate>
-                  <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <span className="text-[10px] font-semibold text-slate-500">Auto fill</span>
-                    <SelectDropdown
-                      value={(sheetColumns.find((col) => col.editable && col.key === fillKey) ?? sheetColumns.find((col) => col.editable))?.key ?? ''}
-                      onChange={(value) => {
-                        setFillKey(value);
-                        setFillValue('');
-                      }}
-                      disabled={disabled}
-                      size="compact"
-                      shape="pill"
-                      options={sheetColumns.filter((col) => col.editable).map((col) => ({
-                        value: col.key,
-                        label: col.label.replace(' *', ''),
-                      }))}
-                    />
-                    {(() => {
-                      const column = sheetColumns.find((col) => col.key === fillKey) ?? sheetColumns.find((col) => col.editable);
-                      if (!column) return null;
-                      if (column.kind === 'select' || column.kind === 'check') {
-                        const options = column.kind === 'check'
-                          ? [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]
-                          : (column.options ?? []).filter((opt) => opt.value);
-                        return (
-                          <SelectDropdown
-                            value={fillValue}
-                            onChange={setFillValue}
-                            disabled={disabled}
-                            size="compact"
-                            shape="pill"
-                            placeholder="Value"
-                            options={options}
-                          />
-                        );
-                      }
-                      return (
-                        <input
-                          className="h-8 w-28 px-2 text-[11px] border border-slate-200 rounded-lg bg-white"
-                          type={column.kind === 'date' ? 'date' : column.kind === 'number' ? 'number' : 'text'}
-                          step={column.kind === 'number' ? '0.01' : undefined}
-                          value={fillValue}
-                          disabled={disabled}
-                          placeholder="Value"
-                          aria-label="Auto fill value"
-                          onChange={(e) => setFillValue(e.target.value)}
-                        />
-                      );
-                    })()}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={disabled || !fillValue.trim()}
-                      onClick={() => {
-                        const key = fillKey || sheetColumns.find((col) => col.editable)?.key || '';
-                        if (!key) return;
-                        onChange(fillReceiptColumn(rows, key, fillValue, 'all', uom));
-                      }}
-                    >
-                      Fill all rows
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={disabled || !fillValue.trim()}
-                      onClick={() => {
-                        const key = fillKey || sheetColumns.find((col) => col.editable)?.key || '';
-                        if (!key) return;
-                        onChange(fillReceiptColumn(rows, key, fillValue, 'empty', uom));
-                      }}
-                    >
-                      Fill empty only
-                    </Button>
-                  </div>
+                  <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={fillDummy}>
+                    Auto fill dummy
+                  </Button>
                 </DesktopWriteGate>
               ) : (
                 <DesktopWriteGate>

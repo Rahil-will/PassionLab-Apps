@@ -228,6 +228,7 @@ describe('buildProcessReturnPayload', () => {
     expect(payload).toEqual({
       source: 'process_return',
       process_challan_id: 'ch-1',
+      stage_code: null,
       party_challan_no: 'RET-1',
       po_no: 'REF',
       received_at: '2026-10-16',
@@ -241,6 +242,22 @@ describe('buildProcessReturnPayload', () => {
     expect(raw).not.toContain('qc_status');
     expect(raw).not.toContain('actual_');
     expect(raw).not.toContain('line-2');
+  });
+
+  it('sends the stage the rolls come back as', () => {
+    const payload = buildProcessReturnPayload({
+      processChallanId: 'ch-1',
+      stageCode: 'DYED',
+      challanInvoice: '',
+      referenceNo: '',
+      receivedOn: '2026-10-16',
+      remarks: '',
+      receiptValues: {},
+      receiptFields,
+      rollFields,
+      rolls: [roll({ roll_no: 'R1', length_m: '8', attributes: { out_line_id: 'line-1' } })],
+    });
+    expect(payload.stage_code).toBe('DYED');
   });
 });
 

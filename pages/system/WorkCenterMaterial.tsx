@@ -116,7 +116,7 @@ const SECTIONS: { id: MaterialSection; label: string; hint: string }[] = [
   {
     id: 'process-form',
     label: 'Process requirement form',
-    hint: '',
+    hint: 'Fields captured on the process challan when fabric is sent out for a process.',
   },
   {
     id: 'process-vendors',

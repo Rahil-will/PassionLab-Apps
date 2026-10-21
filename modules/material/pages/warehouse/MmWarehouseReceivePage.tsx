@@ -158,6 +158,7 @@ export default function MmWarehouseReceivePage() {
   const [remarks, setRemarks] = useState('');
   const [receivedOn, setReceivedOn] = useState(todayIso());
   const [receiptValues, setReceiptValues] = useState<Record<string, string>>({});
+  const [returnStageCode, setReturnStageCode] = useState('');
   const [stageCode, setStageCode] = useState(initialStage);
   const [purpose, setPurpose] = useState<MmReceiptPurpose>('stock');
   const [customer, setCustomer] = useState('');
@@ -270,6 +271,13 @@ export default function MmWarehouseReceivePage() {
         ? [{ value: '', label: '—' }, ...parseTestOptions(field.options).map((opt) => ({ value: opt, label: opt }))]
         : undefined,
     }));
+    if (qcMode === 'tested_inspected') {
+      columns.push({
+        key: 'vendor_inspection',
+        label: 'Vendor inspection',
+        editable: false,
+      });
+    }
     columns.push({
       key: VENDOR_RESULT_KEY,
       label: 'Vendor result *',
@@ -278,17 +286,40 @@ export default function MmWarehouseReceivePage() {
       options: [
         { value: '', label: '—' },
         { value: 'pass', label: 'Pass' },
-        { value: 'hold', label: 'Hold' },
         { value: 'fail', label: 'Fail' },
+        { value: 'hold', label: 'Quarantine' },
       ],
     });
     return columns;
   }, [qcMode, sourceTestFields]);
   const qcNote = qcMode === 'tested_inspected'
-    ? "This vendor sends test reports. Rolls clear QC on the vendor's result and inspection."
+    ? "This vendor sends test reports and inspects each roll. The testing columns are this fabric type's testing parameters. Vendor result starts at Pass for every roll; change it to Fail or Quarantine where needed."
     : qcMode === 'tested'
-      ? "This vendor sends test reports. Rolls clear QC on the vendor's result."
-      : null;
+      ? "This vendor sends test reports. The testing columns are this fabric type's testing parameters. Vendor result starts at Pass for every roll; change it to Fail or Quarantine where needed."
+      : pickedVendor
+        ? 'This vendor does not send test reports, so no testing columns are shown. Rolls are tested after they arrive.'
+        : null;
+
+  useEffect(() => {
+    if (qcMode === 'none') return;
+    setRows((current) => {
+      const needsDefault = current.some((row) => (
+        (row.attributes[VENDOR_RESULT_KEY] ?? '').trim() === ''
+        || (qcMode === 'tested_inspected' && (row.attributes.vendor_inspection ?? '').trim() === '')
+      ));
+      if (!needsDefault) return current;
+      return current.map((row) => ({
+        ...row,
+        attributes: {
+          ...row.attributes,
+          [VENDOR_RESULT_KEY]: (row.attributes[VENDOR_RESULT_KEY] ?? '').trim() || 'pass',
+          ...(qcMode === 'tested_inspected'
+            ? { vendor_inspection: (row.attributes.vendor_inspection ?? '').trim() || 'Pass' }
+            : {}),
+        },
+      }));
+    });
+  }, [qcMode, rows]);
 
   const styleQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'styleFabrics', fabric?.id ?? 'receive'] as const,
@@ -374,6 +405,10 @@ export default function MmWarehouseReceivePage() {
       ...res.data,
       challan: { ...res.data.challan, id: res.data.challan.id || id },
     });
+    const sentStages = [...new Set(
+      (res.data.rolls ?? []).map((roll) => String(roll.stage_code ?? '').trim()).filter(Boolean),
+    )];
+    setReturnStageCode(sentStages.length === 1 ? sentStages[0] : '');
     setRows((res.data.rolls ?? []).map((roll) => ({
       localId: roll.out_line_id,
       roll_no: roll.roll_code,
@@ -413,6 +448,7 @@ export default function MmWarehouseReceivePage() {
       }
       const payload = buildProcessReturnPayload({
         processChallanId: String(returnDetail.challan.id ?? ''),
+        stageCode: returnStageCode,
         challanInvoice,
         referenceNo,
         receivedOn,
@@ -533,6 +569,9 @@ export default function MmWarehouseReceivePage() {
 
   const receivedStage = stages.find((stage) => stage.code === (stageCode || initialStage));
   const stageNeedsColour = receivedStage?.can_cut === true && String(fabric?.color_method ?? '') !== 'greige_only';
+  const sortedStages = [...stages].sort((a, b) => Number(a.seq ?? 0) - Number(b.seq ?? 0));
+  const returnStage = sortedStages.find((stage) => stage.code === returnStageCode);
+  const returnStageNotFinished = Boolean(returnStageCode && returnStage && returnStage.can_cut !== true);
 
   return (
     <PageShell skeleton="card">
@@ -547,17 +586,36 @@ export default function MmWarehouseReceivePage() {
               {source === 'process_return' ? 'Process challan' : 'Fabric'}
             </h4>
             {source === 'process_return' ? (
-              <ProcessChallanPicker
-                query={challanQuery}
-                onQuery={setChallanQuery}
-                rows={challanListQ.data ?? []}
-                loading={challanListQ.isLoading}
-                error={challanListQ.error instanceof Error ? challanListQ.error.message : null}
-                detail={returnDetail}
-                disabled={saving}
-                onPick={(id) => { void pickChallan(id); }}
-                onClear={() => { setReturnDetail(null); setRows([]); }}
-              />
+              <div className="flex flex-col gap-4">
+                <ProcessChallanPicker
+                  query={challanQuery}
+                  onQuery={setChallanQuery}
+                  rows={challanListQ.data ?? []}
+                  loading={challanListQ.isLoading}
+                  error={challanListQ.error instanceof Error ? challanListQ.error.message : null}
+                  detail={returnDetail}
+                  disabled={saving}
+                  onPick={(id) => { void pickChallan(id); }}
+                  onClear={() => { setReturnDetail(null); setRows([]); setReturnStageCode(''); }}
+                />
+                <div>
+                  <SelectDropdown
+                    label="Comes back as"
+                    value={returnStageCode}
+                    onChange={setReturnStageCode}
+                    disabled={saving || !returnDetail}
+                    options={[
+                      { value: '', label: 'Keep each roll\u2019s sent stage' },
+                      ...sortedStages.map((stage) => ({ value: stage.code, label: stage.label || stage.code })),
+                    ]}
+                  />
+                  {returnStageNotFinished ? (
+                    <p className="text-slate-500 mt-1 leading-snug" style={helperStyle}>
+                      Booked, not allocated — this stage is not Finished (ready to cut), so rolls come back booked, not allocated.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
             ) : (
             <div className="flex flex-col gap-4">
               <div>
@@ -588,8 +646,8 @@ export default function MmWarehouseReceivePage() {
                 />
                 <p className="text-slate-500 mt-1 leading-snug" style={helperStyle}>
                   {stageNeedsColour
-                    ? 'This stage can be cut, so each roll needs a colour.'
-                    : 'Colour can wait. It is required once the stage can be cut.'}
+                    ? 'This stage can be cut, so each roll needs a colour. Shade and dye lot are roll columns below.'
+                    : 'Colour can wait. It is required once the stage can be cut. Greige and other not-yet-finished rolls can only be booked to a style here, not allocated — they switch to allocated once they reach a cuttable stage.'}
                 </p>
                 </div>
                 <div>
@@ -695,6 +753,7 @@ export default function MmWarehouseReceivePage() {
                     if (next === 'process_return') {
                       setReturnDetail(null);
                       setRows([]);
+                      setReturnStageCode('');
                       return;
                     }
                     setFromId('');
@@ -811,6 +870,7 @@ export default function MmWarehouseReceivePage() {
             }, row.attributes[key]) === 'out' ? 'out' : undefined;
           }}
           entryMode={source === 'process_return' ? 'none' : 'add'}
+          showAutoFill={source !== 'process_return'}
           columnSource="fields"
           align="center"
           showSerialNumber

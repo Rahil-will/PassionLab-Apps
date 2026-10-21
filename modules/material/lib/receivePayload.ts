@@ -41,6 +41,8 @@ export type ProcessReturnRollPayload = {
 export type ProcessReturnPayload = {
   source: 'process_return';
   process_challan_id: string;
+  /** Stage the rolls come back as. Null = each roll keeps the stage it went out in. */
+  stage_code: string | null;
   party_challan_no: string | null;
   po_no: string | null;
   received_at: string | null;
@@ -94,6 +96,7 @@ export type ReceiveDraftInput = {
 
 export type ProcessReturnDraftInput = {
   processChallanId: string;
+  stageCode?: string | null;
   challanInvoice: string;
   referenceNo: string;
   receivedOn: string;
@@ -194,6 +197,7 @@ export function buildProcessReturnPayload(input: ProcessReturnDraftInput): Proce
   return {
     source: 'process_return',
     process_challan_id: input.processChallanId,
+    stage_code: blankToNull(input.stageCode ?? ''),
     party_challan_no: blankToNull(input.challanInvoice),
     po_no: blankToNull(input.referenceNo),
     received_at: blankToNull(input.receivedOn),

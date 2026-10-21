@@ -11,7 +11,7 @@ import MmWarehouseStylePage from './warehouse/MmWarehouseStylePage';
 import MmWarehouseStylesPage from './warehouse/MmWarehouseStylesPage';
 import MmWarehouseExpectedPage from './warehouse/MmWarehouseExpectedPage';
 import MmWarehouseFabricsPage from './warehouse/MmWarehouseFabricsPage';
-import MmWarehouseFabricDetailPage from './warehouse/MmWarehouseFabricDetailPage';
+import MmFabricDetailPage from './fabrics/MmFabricDetailPage';
 import MmWarehouseRacksPage from './warehouse/MmWarehouseRacksPage';
 import MmStoreChallanDetail from './warehouse/MmStoreChallanDetail';
 import MmWarehouseDispatchPage from './warehouse/MmWarehouseDispatchPage';
@@ -31,6 +31,7 @@ import MmQcQueuePage from './MmQcQueuePage';
 export default function MmWarehouseRouter() {
   const route = useNavigationStore((s) => s.currentRoute);
   const rollId = useNavigationStore((s) => s.routeParams.id);
+  const fabricId = useNavigationStore((s) => s.routeParams.fabricId ?? '');
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function MmWarehouseRouter() {
   if (route === RoutePath.MATERIAL_WAREHOUSE_FABRICS || route === RoutePath.MATERIAL_WAREHOUSE_STOCK) {
     return <MmWarehouseFabricsPage />;
   }
-  if (route === RoutePath.MATERIAL_WAREHOUSE_FABRIC) return <MmWarehouseFabricDetailPage />;
+  if (route === RoutePath.MATERIAL_WAREHOUSE_FABRIC) return <MmFabricDetailPage fabricId={fabricId} />;
   if (route === RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC_ALLOCATE) return <MmWarehouseStyleFabricAllocatePage />;
   if (route === RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC) return <MmWarehouseStyleFabricPage />;
   if (route === RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRICS) return <MmWarehouseExpectedPage />;

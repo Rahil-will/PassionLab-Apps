@@ -231,7 +231,6 @@ export type MmV4ProcessType = {
   name: string;
   sort_order?: number | null;
   active?: boolean;
-  output_stage_code?: string | null;
   default_return_mode?: MmV4ReturnMode | string | null;
   resets_testing?: boolean;
   resets_inspection?: boolean;
@@ -351,12 +350,25 @@ export type MmV4ProcListFilter = {
   search?: string | null;
 };
 
+export type MmProcLoss = {
+  sent?: number | null;
+  back?: number | null;
+  still_out?: number | null;
+  written_off?: number | null;
+  loss?: number | null;
+  loss_pct?: number | null;
+  norm_pct?: number | null;
+  over_norm?: boolean | null;
+};
+
 export type MmV4ProcChallanListRow = {
   id: string;
   challan_no: string;
   side?: string | null;
   status?: string | null;
   purpose?: string | null;
+  due_on?: string | null;
+  loss?: MmProcLoss | null;
   parent_challan_no?: string | null;
   unit?: { name?: string; ownership?: string };
   process_type?: { id?: string; name?: string } | string | null;
@@ -569,6 +581,7 @@ export type MmPartnerRow = {
   inhouse?: boolean;
   is_default?: boolean;
   remarks?: string | null;
+  gstin?: string | null;
 };
 
 export type MmPartnerSave = {
@@ -584,6 +597,7 @@ export type MmPartnerSave = {
   qc_at_source?: 'none' | 'tested' | 'tested_inspected';
   is_default?: boolean;
   remarks?: string | null;
+  gstin?: string | null;
 };
 
 export const mmListPartners = (kind: MmPartnerKind, includeInactive = true) =>
@@ -608,10 +622,9 @@ export type MmChallanField = {
 export type MmProcessRow = {
   id: string;
   name: string;
-  output_stage_code?: string | null;
-  output_stage_label?: string | null;
   active?: boolean;
   sort_order?: number | null;
+  expected_loss_pct?: number | null;
   vendor_count?: number | null;
   in_use?: boolean;
   done_inhouse?: boolean;
@@ -625,9 +638,9 @@ export type MmProcessRow = {
 export type MmProcessSave = {
   id?: string;
   name: string;
-  output_stage_code?: string | null;
   active?: boolean;
   sort_order?: number;
+  expected_loss_pct?: number | null;
   done_inhouse?: boolean;
   done_external?: boolean;
   challan_fields?: MmChallanField[];
@@ -700,6 +713,8 @@ export type MmWhReceiveResult = {
 export type MmWhProcessReturnPayload = {
   source: 'process_return';
   process_challan_id: string;
+  /** Stage the rolls come back as. Null/blank = each roll keeps the stage it went out in. */
+  stage_code?: string | null;
   party_challan_no?: string | null;
   po_no?: string | null;
   received_at?: string | null;
@@ -825,7 +840,7 @@ export type MmRecvProcessChallanDetail = {
     id?: string;
     challan_no: string;
     unit?: { id?: string; name?: string | null } | null;
-    process?: { name?: string | null; output_stage_code?: string | null } | null;
+    process?: { name?: string | null } | null;
     target_color?: string | null;
     fabric?: { id?: string; code?: string | null; name?: string | null; fabric_type_id?: string | null; uom?: string | null; qty_unit?: string | null; width_unit?: string | null } | null;
   };
@@ -837,6 +852,9 @@ export type MmRecvProcessChallanDetail = {
     color?: string | null;
     shade?: string | null;
     dye_lot?: string | null;
+    /** Stage the roll went out in. */
+    stage_code?: string | null;
+    stage_label?: string | null;
   }>;
   form?: unknown;
 };
@@ -900,6 +918,66 @@ export const mmProcListChallans = (filter: MmV4ProcListFilter = {}) =>
 
 export const mmProcGetChallan = (id: string) =>
   callRpc<MmV4ProcChallanDetail>('mm_proc_get_challan', { p_id: id });
+
+export const mmProcSetCommercials = (challanId: string, rate: number | null, hsnCode: string | null) =>
+  callRpc<{ id: string }>('mm_proc_set_commercials', {
+    p_challan_id: challanId,
+    p_rate: rate,
+    p_hsn_code: hsnCode,
+  });
+
+export type MmItc04SentRow = {
+  challan_no?: string | null;
+  challan?: string | null;
+  date?: string | null;
+  sent_at?: string | null;
+  due_on?: string | null;
+  job_worker?: string | null;
+  gstin?: string | null;
+  process?: string | null;
+  hsn_code?: string | null;
+  description?: string | null;
+  qty?: number | null;
+  uom?: string | null;
+  rate?: number | null;
+  taxable_value?: number | null;
+  overdue?: boolean | null;
+  [key: string]: unknown;
+};
+
+export type MmItc04ReceivedRow = {
+  return_no?: string | null;
+  date?: string | null;
+  returned_at?: string | null;
+  challan_no?: string | null;
+  challan?: string | null;
+  job_worker?: string | null;
+  gstin?: string | null;
+  qty?: number | null;
+  uom?: string | null;
+  [key: string]: unknown;
+};
+
+export type MmItc04WrittenOffRow = {
+  challan_no?: string | null;
+  challan?: string | null;
+  roll?: string | null;
+  roll_code?: string | null;
+  unit_code?: string | null;
+  qty?: number | null;
+  uom?: string | null;
+  reason?: string | null;
+  [key: string]: unknown;
+};
+
+export type MmItc04Report = {
+  sent?: MmItc04SentRow[];
+  received?: MmItc04ReceivedRow[];
+  written_off?: MmItc04WrittenOffRow[];
+};
+
+export const mmRptItc04 = (from?: string | null, to?: string | null) =>
+  callRpc<MmItc04Report>('mm_rpt_itc04', { p_from: from ?? null, p_to: to ?? null });
 
 // ── Quality ─────────────────────────────────────────────────────────────────
 

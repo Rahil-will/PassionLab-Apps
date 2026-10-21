@@ -21,6 +21,7 @@ import {
   processorLabel,
 } from '../../lib/procChallanFacts';
 import { dateLabel } from '../../lib/mmRollDraft';
+import { dueLabel, isOverdue, lossText } from '../../lib/challanLoss';
 
 const th =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
@@ -219,7 +220,7 @@ export default function MmProcChallanListV4Page() {
             ) : null}
 
             <div className="overflow-auto">
-              <table className="w-full min-w-[980px] border-collapse">
+              <table className="w-full min-w-[1120px] border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr>
                     <th className={thFirst}>Date</th>
@@ -231,13 +232,15 @@ export default function MmProcChallanListV4Page() {
                     <th className={th}>Received at</th>
                     <th className={`${th} text-center`}>Qty</th>
                     <th className={`${th} text-center`}>Rolls / laps</th>
+                    <th className={th}>Due</th>
+                    <th className={th}>Loss</th>
                     <th className={`${th} text-center`}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                      <td colSpan={12} className="px-4 py-10 text-center text-[11px] text-slate-400">
                         No challans sent yet.
                       </td>
                     </tr>
@@ -266,6 +269,16 @@ export default function MmProcChallanListV4Page() {
                           <td className={`${td} whitespace-nowrap text-slate-600`}>{facts.receivedAt}</td>
                           <td className={`${td} text-center tabular-nums font-semibold whitespace-nowrap`}>{facts.receivedQty}</td>
                           <td className={`${td} text-center tabular-nums whitespace-nowrap`}>{facts.receivedCount}</td>
+                          <td className={`${td} whitespace-nowrap ${isOverdue(row.due_on, row.status) ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>{dueLabel(row.due_on)}</td>
+                          <td className={`${td} whitespace-nowrap`}>
+                            {lossText(row.loss) ? (
+                              row.loss?.over_norm ? (
+                                <span className="inline-flex rounded-md bg-red-50 border border-red-200 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">{lossText(row.loss)}</span>
+                              ) : (
+                                <span className="text-slate-600">{lossText(row.loss)}</span>
+                              )
+                            ) : '—'}
+                          </td>
                           <td className={`${td} text-center whitespace-nowrap`}>
                             <span className="inline-flex items-center justify-center gap-1.5">
                               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.dot}`} />

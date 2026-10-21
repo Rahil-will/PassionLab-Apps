@@ -40,7 +40,7 @@ function asFieldType(value: string): MmChallanFieldType {
 
 function typeLabel(type: MmChallanFieldType): string {
   if (type === 'number') return 'Number';
-  if (type === 'select') return 'Choice';
+  if (type === 'select') return 'Dropdown';
   return 'Text';
 }
 
@@ -121,7 +121,7 @@ const MmProcessFormPage = forwardRef<
     }
     const optionList = options.split(',').map((item) => item.trim()).filter(Boolean);
     if (fieldType === 'select' && optionList.length === 0) {
-      showNotification('Choice fields need options', 'error');
+      showNotification('Dropdown fields need options', 'error');
       return null;
     }
     const next: FieldDraft = {
@@ -159,7 +159,7 @@ const MmProcessFormPage = forwardRef<
       const res = await mmSaveProcess({
         id: row.id,
         name: row.name,
-        output_stage_code: row.output_stage_code ?? null,
+        expected_loss_pct: row.expected_loss_pct ?? null,
         active: row.active !== false,
         sort_order: row.sort_order ?? 0,
         done_inhouse: row.done_inhouse === true,
@@ -227,12 +227,12 @@ const MmProcessFormPage = forwardRef<
                 options={[
                   { value: 'text', label: 'Text' },
                   { value: 'number', label: 'Number' },
-                  { value: 'select', label: 'Choice' },
+                  { value: 'select', label: 'Dropdown' },
                 ]}
               />
               {fieldType === 'select' ? (
                 <Input
-                  label="Options"
+                  label="Dropdown options"
                   value={options}
                   placeholder="Comma list"
                   onChange={(event) => setOptions(event.target.value)}
@@ -288,7 +288,7 @@ const MmProcessFormPage = forwardRef<
             emptyMessage="No fields on this process yet."
             headerAction={<MmTableSaveButton />}
           >
-            <CatalogTable headers={['S.No', 'Process', 'Label', 'Type', 'Options', 'Required']}>
+            <CatalogTable headers={['S.No', 'Process', 'Label', 'Type', 'Dropdown options', 'Required']}>
               {fields.map((field, index) => (
                 <CatalogTableRow key={field.localId} onClick={() => loadField(field)} selected={editingId === field.localId}>
                   <CatalogTableCell className={catalogSerialCellClass}>{index + 1}</CatalogTableCell>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ClipboardCheck, FlaskConical, Printer } from 'lucide-react';
 import { Button, Card } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
@@ -7,7 +8,7 @@ import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { rollIsRejected } from '../../components/MmRollDamageActions';
-import { MmProcessSummaryChips, MmRollProcessMark, rollMatchesSummary, summaryKey } from '../../components/MmProcessStatus';
+import { MmProcessSummaryChips, rollMatchesSummary, summaryKey } from '../../components/MmProcessStatus';
 import { formatStoredQty, formatStoredWidth, isStoredWidthKey, useFabricUnits } from '../../lib/units';
 import { colorMethodLabel } from '../../lib/fabricLabels';
 import { dateLabel } from '../../lib/mmRollDraft';
@@ -153,7 +154,7 @@ export default function MmWarehouseReceiptDetailPage() {
       onRetry={() => { void detailQ.refetch(); }}
       skeleton="card"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3 mb-3 items-stretch">
         <InfoCard title="Receipt information" kicker={String(receipt?.grn_no || receipt?.challan_no || '')}>
           <Fact label="Source" value={sourceLabel(String(receipt?.source ?? ''))} />
           <Fact label="From" value={fromName} />
@@ -214,6 +215,46 @@ export default function MmWarehouseReceiptDetailPage() {
             </>
           )}
         </InfoCard>
+        <Card className="shadow-sm border-slate-200 overflow-hidden h-full" noPadding>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Actions</p>
+            <h2 className="text-[12px] font-semibold text-slate-900 truncate">Testing, inspection and print</h2>
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              icon={FlaskConical}
+              disabled={!id}
+              onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'in_challan' })}
+              className="w-full"
+            >
+              Testing
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              icon={ClipboardCheck}
+              disabled={!id}
+              onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'in_challan', mode: 'inspection' })}
+              className="w-full !bg-amber-500 !border-amber-500 !text-white hover:!bg-amber-600"
+            >
+              Inspection
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              icon={Printer}
+              onClick={() => window.print()}
+              className="w-full !bg-slate-700 !border-slate-700 !text-white hover:!bg-slate-800"
+            >
+              Print
+            </Button>
+          </div>
+        </Card>
       </div>
 
       {processSummary.length > 0 ? (
@@ -225,28 +266,6 @@ export default function MmWarehouseReceiptDetailPage() {
           />
         </div>
       ) : null}
-
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          disabled={!id}
-          onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'in_challan' })}
-        >
-          Testing
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          disabled={!id}
-          onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'in_challan', mode: 'inspection' })}
-        >
-          Inspection
-        </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={() => window.print()}>Print</Button>
-      </div>
 
       <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
@@ -298,12 +317,7 @@ export default function MmWarehouseReceiptDetailPage() {
                     <td className={td}>{roll.shade || '—'}</td>
                     <td className={td}>{rollColour(roll)}</td>
                     <td className={td}>{roll.dye_lot || '—'}</td>
-                    <td className={td}>
-                      <span className="inline-flex flex-wrap items-center gap-1.5">
-                        <span>{rollStageLabel(roll)}</span>
-                        <MmRollProcessMark status={roll.process_status} />
-                      </span>
-                    </td>
+                    <td className={td}>{rollStageLabel(roll)}</td>
                     <td className={td}><span className={mark.className}>{mark.text}</span></td>
                     <td className={td}>{statusWithOrigin(roll.test_status, roll.last_test?.origin)}</td>
                     <td className={td}>{String(roll.inspection_status ?? '').trim() || '—'}</td>

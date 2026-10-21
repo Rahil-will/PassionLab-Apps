@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Button, Card } from '../../../../components/ui';
+import React, { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Card, Input } from '../../../../components/ui';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { MmProcQuickReceiveModal } from '../../components/MmProcQuickReceiveModal';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { queryKeys } from '../../../../lib/queryKeys';
-import { useNavigationStore } from '../../../../stores';
+import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { finishedText, rollColour, rollStageLabel } from '../../lib/rollColour';
-import { mmProcGetChallan, type MmRollFinished } from '../../lib/mmV4Rpc';
+import { mmProcGetChallan, mmProcSetCommercials, type MmProcLoss, type MmRollFinished } from '../../lib/mmV4Rpc';
+import { dueLabel, isOverdue, lossText } from '../../lib/challanLoss';
 import { useMmV4Config } from '../../lib/useMmV4Config';
 import { dateLabel } from '../../lib/mmRollDraft';
 import { formatStoredQty, parseQtyUnit, unitBase, useMmUnits } from '../../lib/units';
@@ -52,11 +53,11 @@ function fieldText(challan: Record<string, unknown>, key: string | undefined): s
   return '—';
 }
 
-function Fact({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+function Fact({ label, value, wide, valueClassName }: { label: string; value: string; wide?: boolean; valueClassName?: string }) {
   return (
     <div className={wide ? 'min-w-0 col-span-2 md:col-span-3' : 'min-w-0'}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`text-[12px] font-semibold text-slate-800 mt-0.5 ${wide ? '' : 'truncate'}`}>{value || '—'}</p>
+      <p className={`text-[12px] font-semibold text-slate-800 mt-0.5 ${wide ? '' : 'truncate'} ${valueClassName ?? ''}`}>{value || '—'}</p>
     </div>
   );
 }
@@ -67,6 +68,11 @@ export default function MmProcChallanDetailV4Page() {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [rate, setRate] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
+  const [savingCommercials, setSavingCommercials] = useState(false);
+  const showNotification = useNotificationStore((s) => s.showNotification);
+  const queryClient = useQueryClient();
   const { data: v4 } = useMmV4Config();
 
   const detailQ = useQuery({
@@ -88,11 +94,7 @@ export default function MmProcChallanDetailV4Page() {
   const outLines = detailQ.data?.out_lines ?? [];
 
   const unit = (challan.unit ?? {}) as { id?: string; name?: string; ownership?: string };
-  const processType = (challan.process_type ?? {}) as { id?: string; name?: string; output_stage_code?: string | null };
-  const knownProcess = (v4?.process_types ?? []).find((row) =>
-    (processType.id && row.id === processType.id) || (processType.name && row.name === processType.name),
-  );
-  const outputStageCode = String(processType.output_stage_code ?? knownProcess?.output_stage_code ?? '').trim();
+  const processType = (challan.process_type ?? {}) as { id?: string; name?: string };
   const targetColor = String(challan.target_color ?? '').trim()
     || (challan.field_values && typeof challan.field_values === 'object'
       ? String((challan.field_values as Record<string, unknown>).target_color ?? '').trim()
@@ -111,7 +113,39 @@ export default function MmProcChallanDetailV4Page() {
       ...(challan.target_shade ? [{ label: 'Target shade', value: String(challan.target_shade) }] : []),
     ];
 
+  useEffect(() => {
+    const current = detailQ.data?.challan;
+    if (!current) return;
+    setRate(current.rate != null ? String(current.rate) : '');
+    setHsnCode(current.hsn_code != null ? String(current.hsn_code) : '');
+  }, [detailQ.data]);
+
   const facts = factsQ.data?.get(id) ?? emptyProcChallanFacts();
+  const loss = (challan.loss ?? null) as MmProcLoss | null;
+  const fabricHsn = (() => {
+    const fabric = challan.fabric as { hsn_code?: string | null } | undefined;
+    return fabric?.hsn_code ? String(fabric.hsn_code) : '';
+  })();
+  const saveCommercials = async () => {
+    const rateText = rate.trim();
+    const parsed = rateText === '' ? null : Number(rateText);
+    if (parsed != null && (!Number.isFinite(parsed) || parsed < 0)) {
+      showNotification('Rate must be a number', 'error');
+      return;
+    }
+    setSavingCommercials(true);
+    try {
+      const res = await mmProcSetCommercials(id, parsed, hsnCode.trim() || null);
+      if (res.ok === false) {
+        showNotification(res.message, 'error');
+        return;
+      }
+      showNotification('Commercials saved', 'success');
+      await queryClient.invalidateQueries({ queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'procChallanV4', id] });
+    } finally {
+      setSavingCommercials(false);
+    }
+  };
   const status = procChallanStatus(String(challan.status ?? 'open'));
   const canReceive = outLines.some((line) => {
     const lineState = String(line.line_status ?? line.status ?? 'out').toLowerCase();
@@ -180,12 +214,24 @@ export default function MmProcChallanDetailV4Page() {
             <Fact label="Received at" value={facts.receivedAt} />
             <Fact label="Received qty" value={facts.receivedQty} />
             <Fact label="Received rolls / laps" value={facts.receivedCount} />
+            <Fact label="Due" value={dueLabel(challan.due_on == null ? null : String(challan.due_on))} valueClassName={isOverdue(challan.due_on == null ? null : String(challan.due_on), String(challan.status ?? '')) ? 'text-red-600' : undefined} />
+            <Fact label="Loss" value={lossText(loss) ?? '—'} valueClassName={loss?.over_norm ? 'text-red-600' : undefined} />
             {extraFields.map((field) => (
               <Fact key={field.label} label={field.label} value={field.value} />
             ))}
           </div>
           <div className="flex flex-col gap-3 min-w-0">
             <Fact label="Sent date" value={dateLabel(String(challan.sent_at ?? challan.created_at ?? ''))} />
+            <div className="rounded-lg border border-slate-200 px-3 py-2.5 flex flex-col gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Commercials</p>
+              <Input label="Rate per kg/m" type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
+              <Input label="HSN" placeholder={fabricHsn || 'HSN'} value={hsnCode} onChange={(e) => setHsnCode(e.target.value)} />
+              <DesktopWriteGate>
+                <Button type="button" size="sm" disabled={savingCommercials} onClick={() => void saveCommercials()}>
+                  {savingCommercials ? 'Saving…' : 'Save commercials'}
+                </Button>
+              </DesktopWriteGate>
+            </div>
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Remarks</p>
               <p className="text-[12px] text-slate-800 mt-0.5 whitespace-pre-wrap">{String(challan.remarks ?? '').trim() || '—'}</p>
@@ -257,7 +303,6 @@ export default function MmProcChallanDetailV4Page() {
         factoryId={factoryId ?? ''}
         outLines={outLines}
         stages={v4?.stages ?? []}
-        outputStageCode={outputStageCode}
         targetColor={targetColor}
         onClose={() => setReceiveOpen(false)}
       />

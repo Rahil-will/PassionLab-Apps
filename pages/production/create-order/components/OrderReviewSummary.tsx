@@ -86,7 +86,6 @@ export const OrderReviewSummary: React.FC<OrderReviewSummaryProps> = ({
   shipmentPlan,
   displaySizes,
 }) => {
-  const pairWidth = 84 / ((colorways.length + 1) * 2);
   const orderTotal = colorways.reduce((s, c) => s + sumSizeOrderQty(c.sizes), 0);
   const adjTotal = colorways.reduce((s, c) => s + sumSizeAdjQty(c.sizes), 0);
   const shipTotal = planTotalQty(shipmentPlan);
@@ -98,6 +97,7 @@ export const OrderReviewSummary: React.FC<OrderReviewSummaryProps> = ({
     if (displaySizes.length > 0) return displaySizes;
     return [...new Set(colorways.flatMap((c) => c.sizes.map((s) => s.size)))];
   }, [colorways, displaySizes]);
+  const pairWidth = 84 / ((sizeColumns.length + 1) * 2);
 
   const sizeTotals = useMemo(() => {
     const totals: Record<string, { order: number; adj: number }> = {};
@@ -158,17 +158,16 @@ export const OrderReviewSummary: React.FC<OrderReviewSummaryProps> = ({
         </div>
       </Panel>
 
-      <div className="min-w-0 min-h-[8.5rem] h-full flex flex-col">
+      <div className="min-w-0">
       <Panel title="Colours & quantities" hint={selectedColour ? `Showing ${selectedColour.name || 'colour'}` : 'Click a colour to filter requirements and shipments'}>
         {colorways.length === 0 ? (
           <p className="px-3 py-4 text-[11px] text-slate-400 italic">No colours added</p>
         ) : (
-          <div className="overflow-auto flex-1 basis-0 min-h-0">
-            <table className="w-full h-full min-h-full table-fixed text-[11px]">
+            <table className="w-full table-fixed text-[11px]">
               <colgroup>
                 <col style={{ width: '16%' }} />
-                {colorways.map((cw) => (
-                  <React.Fragment key={cw.id}>
+                {sizeColumns.map((size) => (
+                  <React.Fragment key={size}>
                     <col style={{ width: `${pairWidth}%` }} />
                     <col style={{ width: `${pairWidth}%` }} />
                   </React.Fragment>
@@ -178,72 +177,61 @@ export const OrderReviewSummary: React.FC<OrderReviewSummaryProps> = ({
               </colgroup>
               <thead>
                 <tr className="bg-slate-50 text-[9px] uppercase text-slate-500">
-                  <th rowSpan={2} className="px-3 py-1.5 text-left sticky top-0 left-0 z-20 bg-slate-50 align-bottom">Size</th>
-                  {colorways.map((cw) => {
-                    const selected = cw.id === selectedColourId;
-                    return (
-                      <th
-                        key={cw.id}
-                        colSpan={2}
-                        className={`px-2 py-1.5 text-center sticky top-0 cursor-pointer ${selected ? 'bg-blue-100 text-blue-900' : 'bg-slate-50'}`}
+                  <th rowSpan={2} className="px-3 py-1.5 text-left bg-slate-50 align-bottom">Colour</th>
+                  {sizeColumns.map((size) => (
+                    <th key={size} colSpan={2} className="px-2 py-1.5 text-center bg-slate-50">
+                      {size}
+                    </th>
+                  ))}
+                  <th colSpan={2} className="px-2 py-1.5 text-center bg-slate-100">Total</th>
+                </tr>
+                <tr className="bg-slate-50 text-[9px] uppercase text-slate-500">
+                  {sizeColumns.map((size) => (
+                    <React.Fragment key={size}>
+                      <th className="px-2 py-1 text-right bg-slate-50">Order</th>
+                      <th className="px-2 py-1 text-right bg-slate-50">Adj</th>
+                    </React.Fragment>
+                  ))}
+                  <th className="px-2 py-1 text-right bg-slate-100">Order</th>
+                  <th className="px-2 py-1 text-right bg-slate-100">Adj</th>
+                </tr>
+              </thead>
+              <tbody>
+                {colorways.map((cw) => {
+                  const selected = cw.id === selectedColourId;
+                  return (
+                    <tr key={cw.id} className="border-t border-slate-100">
+                      <td
+                        className={`px-3 py-1.5 font-medium text-slate-800 cursor-pointer ${selected ? 'bg-blue-50' : 'bg-white'}`}
                         onClick={() => toggleColour(cw.id)}
                       >
-                        <span className="inline-flex items-center justify-center gap-1.5 max-w-full">
+                        <span className="inline-flex items-center gap-1.5 max-w-full">
                           <span
                             className="w-2.5 h-2.5 rounded-full border border-slate-200 shrink-0"
                             style={swatchStyleFromColorName(cw.name || '')}
                           />
-                          <span className="truncate normal-case font-semibold text-[11px]">{cw.name || 'Untitled'}</span>
+                          <span className="truncate">{cw.name || 'Untitled'}</span>
                         </span>
-                      </th>
-                    );
-                  })}
-                  <th colSpan={2} className="px-2 py-1.5 text-center sticky top-0 bg-slate-100">Total</th>
-                </tr>
-                <tr className="bg-slate-50 text-[9px] uppercase text-slate-500">
-                  {colorways.map((cw) => {
-                    const selected = cw.id === selectedColourId;
-                    const head = selected ? 'bg-blue-50 text-blue-800' : 'bg-slate-50';
-                    return (
-                      <React.Fragment key={cw.id}>
-                        <th className={`px-2 py-1 text-right sticky top-7 ${head}`}>Order</th>
-                        <th className={`px-2 py-1 text-right sticky top-7 ${head}`}>Adj</th>
-                      </React.Fragment>
-                    );
-                  })}
-                  <th className="px-2 py-1 text-right sticky top-7 bg-slate-100">Order</th>
-                  <th className="px-2 py-1 text-right sticky top-7 bg-slate-100">Adj</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sizeColumns.map((size) => (
-                  <tr key={size} className="border-t border-slate-100">
-                    <td className="px-3 py-1.5 sticky left-0 bg-white font-medium text-slate-800">{size}</td>
-                    {colorways.map((cw) => {
-                      const qty = qtyFor(cw.sizes, size);
-                      return <QtyCells key={cw.id} order={qty.order} adj={qty.adj} selected={cw.id === selectedColourId} />;
-                    })}
-                    <QtyCells order={sizeTotals[size]?.order ?? 0} adj={sizeTotals[size]?.adj ?? 0} />
-                  </tr>
-                ))}
+                      </td>
+                      {sizeColumns.map((size) => {
+                        const qty = qtyFor(cw.sizes, size);
+                        return <QtyCells key={size} order={qty.order} adj={qty.adj} selected={selected} />;
+                      })}
+                      <QtyCells order={sumSizeOrderQty(cw.sizes)} adj={sumSizeAdjQty(cw.sizes)} selected={selected} />
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t border-slate-200 bg-slate-50 font-bold">
-                  <td className="px-3 py-1.5 sticky left-0 bg-slate-50">Total</td>
-                  {colorways.map((cw) => (
-                    <QtyCells
-                      key={cw.id}
-                      order={sumSizeOrderQty(cw.sizes)}
-                      adj={sumSizeAdjQty(cw.sizes)}
-                      selected={cw.id === selectedColourId}
-                    />
+                  <td className="px-3 py-1.5 bg-slate-50">Total</td>
+                  {sizeColumns.map((size) => (
+                    <QtyCells key={size} order={sizeTotals[size]?.order ?? 0} adj={sizeTotals[size]?.adj ?? 0} />
                   ))}
-                  <td className="px-2 py-1.5 text-right tabular-nums">{orderTotal.toLocaleString()}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-blue-800">{adjTotal.toLocaleString()}</td>
+                  <QtyCells order={orderTotal} adj={adjTotal} />
                 </tr>
               </tfoot>
             </table>
-          </div>
         )}
       </Panel>
       </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '../../../../components/ui';
+import { Button, Card } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
@@ -9,7 +9,6 @@ import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { MmSheetGrid, type SheetColumn } from '../../components/MmSheetGrid';
 import { parseTestOptions } from '../../lib/mmRollDraft';
 import { displayNumberToInches, formatStoredQty, parseQtyUnit, parseWidthUnit, qtyLabel, toDisplayWidth, unitBase, useMmUnits, widthLabel } from '../../lib/units';
-import { processStatusText } from '../../components/MmProcessStatus';
 import { lastTestCaption, toleranceState } from '../../lib/qcTolerance';
 import {
   mmQcGetScope,
@@ -142,9 +141,6 @@ export default function MmWarehouseTestingDetail() {
   }, [scopeQ.data?.sessions]);
   const facts = doc ? stripItems(doc) : [];
   const lengthUnit = unitBase(qtyUnit) === 'm' ? qtyUnit : 'm';
-  const title = inspecting
-    ? (doc?.kind_label && doc.no ? `Inspect rolls · ${doc.kind_label} ${doc.no}` : 'Inspect rolls')
-    : (doc?.kind_label && doc.no ? `Test rolls · ${doc.kind_label} ${doc.no}` : 'Test rolls');
 
   const cellKey = (rollId: string, key: string) => `${rollId}::${key}`;
 
@@ -380,11 +376,11 @@ export default function MmWarehouseTestingDetail() {
   }, [setPendingDiscardAction, setPendingSaveAction, setUnsaved]);
 
   usePageHeader({
-    title,
+    title: inspecting ? 'Inspection' : 'Testing',
     subtitle: inspecting
       ? 'Enter length, width, and defect points per roll. A row without length and width is not saved.'
       : 'Enter values per roll. Cells outside tolerance turn red. Rows without a result are not saved.',
-  }, [title, inspecting]);
+  }, [inspecting]);
 
   return (
     <PageShell
@@ -394,24 +390,37 @@ export default function MmWarehouseTestingDetail() {
       skeleton="table"
       className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden w-full"
     >
-      <div className="-mx-4 flex flex-col flex-1 min-h-0">
-        <div className="px-4 pb-3 flex items-start justify-between gap-3 shrink-0">
-          <div className="min-w-0 flex flex-wrap gap-x-5 gap-y-2">
-            {facts.map((fact) => (
+      <div className="-mx-4 flex flex-col flex-1 min-h-0 px-4 gap-3">
+        <Card className="shadow-sm border-slate-200 overflow-hidden shrink-0" noPadding>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/70 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                {inspecting ? 'Inspection' : 'Testing'}
+              </p>
+              <h2 className="text-[12px] font-semibold text-slate-900 truncate">
+                {doc?.kind_label ? `${doc.kind_label} information` : 'Receipt information'}
+                {doc?.no ? ` · ${doc.no}` : ''}
+              </h2>
+            </div>
+            <DesktopWriteGate>
+              <Button type="button" size="sm" disabled={saving || rolls.length === 0} onClick={() => void save()}>
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+            </DesktopWriteGate>
+          </div>
+          <div className="px-4 py-3 flex flex-wrap gap-x-5 gap-y-2">
+            {facts.length === 0 ? (
+              <p className="text-[11px] text-slate-400">Receipt information is not available.</p>
+            ) : facts.map((fact) => (
               <div key={fact.label} className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{fact.label}</p>
                 <p className="text-[13px] font-semibold text-slate-900 truncate">{fact.value}</p>
               </div>
             ))}
           </div>
-          <DesktopWriteGate>
-            <Button type="button" size="sm" disabled={saving || rolls.length === 0} onClick={() => void save()}>
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-          </DesktopWriteGate>
-        </div>
+        </Card>
 
-        <div className="flex-1 min-h-0 bg-white border-y border-slate-200">
+        <div className="flex-1 min-h-0 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <MmSheetGrid
             columns={columns}
             rowCount={rolls.length}
@@ -432,11 +441,7 @@ export default function MmWarehouseTestingDetail() {
               if (!roll) return '';
               if (key === 'roll') return roll.roll_code;
               if (key === 'qty') return qtyOf(roll);
-              if (key === 'stage') {
-                const stage = roll.stage_label || roll.stage_code || '—';
-                const mark = processStatusText(roll.process_status);
-                return mark ? `${stage} · ${mark}` : stage;
-              }
+              if (key === 'stage') return roll.stage_label || roll.stage_code || '—';
               if (key === 'colour') return roll.color || roll.color_ref || '—';
               if (key === 'last') return lastResult(roll);
               if (key === 'result') return results[roll.roll_id] || '';
@@ -460,7 +465,7 @@ export default function MmWarehouseTestingDetail() {
           />
         </div>
 
-        {inspecting ? null : <details className="mx-4 mt-3 shrink-0 rounded-lg border border-slate-200 bg-white">
+        {inspecting ? null : <details className="shrink-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold text-slate-700">
             Past sessions
           </summary>

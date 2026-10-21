@@ -26,6 +26,7 @@ type VendorDraft = {
   id: string | null;
   name: string;
   contact: string;
+  gstin: string;
   remarks: string;
   processIds: string[];
   active: boolean;
@@ -51,6 +52,7 @@ const MmProcessVendorsPage = forwardRef<
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [vendorName, setVendorName] = useState('');
   const [vendorContact, setVendorContact] = useState('');
+  const [vendorGstin, setVendorGstin] = useState('');
   const [vendorRemarks, setVendorRemarks] = useState('');
   const [vendorProcessIds, setVendorProcessIds] = useState<string[]>([]);
   const [vendorActive, setVendorActive] = useState(true);
@@ -64,6 +66,7 @@ const MmProcessVendorsPage = forwardRef<
       id: row.id,
       name: row.name,
       contact: row.contact ?? '',
+      gstin: row.gstin ?? '',
       remarks: row.remarks ?? '',
       processIds: row.process_type_ids ?? [],
       active: row.is_active !== false,
@@ -76,6 +79,7 @@ const MmProcessVendorsPage = forwardRef<
     setEditingVendorId(null);
     setVendorName('');
     setVendorContact('');
+    setVendorGstin('');
     setVendorRemarks('');
     setVendorProcessIds([]);
     setVendorActive(true);
@@ -89,13 +93,14 @@ const MmProcessVendorsPage = forwardRef<
       return (
         row.name !== vendorName
         || row.contact !== vendorContact
+        || row.gstin !== vendorGstin
         || row.remarks !== vendorRemarks
         || row.active !== vendorActive
         || JSON.stringify(row.processIds) !== JSON.stringify(vendorProcessIds)
       );
     }
-    return Boolean(vendorName.trim() || vendorContact.trim() || vendorRemarks.trim() || vendorProcessIds.length > 0);
-  }, [editingVendorId, vendors, vendorName, vendorContact, vendorRemarks, vendorActive, vendorProcessIds]);
+    return Boolean(vendorName.trim() || vendorContact.trim() || vendorGstin.trim() || vendorRemarks.trim() || vendorProcessIds.length > 0);
+  }, [editingVendorId, vendors, vendorName, vendorContact, vendorGstin, vendorRemarks, vendorActive, vendorProcessIds]);
 
   const dirty = useMemo(() => {
     if (!hydrated) return false;
@@ -118,6 +123,7 @@ const MmProcessVendorsPage = forwardRef<
     setEditingVendorId(null);
     setVendorName('');
     setVendorContact('');
+    setVendorGstin('');
     setVendorRemarks('');
     setVendorProcessIds([]);
     setVendorActive(true);
@@ -127,6 +133,7 @@ const MmProcessVendorsPage = forwardRef<
     setEditingVendorId(row.localId);
     setVendorName(row.name);
     setVendorContact(row.contact);
+    setVendorGstin(row.gstin);
     setVendorRemarks(row.remarks);
     setVendorProcessIds([...row.processIds]);
     setVendorActive(row.active);
@@ -140,6 +147,7 @@ const MmProcessVendorsPage = forwardRef<
     vendors,
     vendorName,
     vendorContact,
+    vendorGstin,
     vendorRemarks,
     vendorProcessIds,
     vendorActive,
@@ -149,6 +157,7 @@ const MmProcessVendorsPage = forwardRef<
     vendors,
     vendorName,
     vendorContact,
+    vendorGstin,
     vendorRemarks,
     vendorProcessIds,
     vendorActive,
@@ -159,6 +168,7 @@ const MmProcessVendorsPage = forwardRef<
     const form = snapshot.current;
     const trimmed = form.vendorName.trim();
     const contact = form.vendorContact.trim();
+    const gstin = form.vendorGstin.trim().toUpperCase();
     const remarks = form.vendorRemarks.trim();
     if (!trimmed) {
       if (form.editingVendorId || contact || remarks || form.vendorProcessIds.length > 0 || !form.vendorActive) {
@@ -178,6 +188,7 @@ const MmProcessVendorsPage = forwardRef<
     const next = {
       name: trimmed,
       contact,
+      gstin,
       remarks,
       processIds: form.vendorProcessIds,
       active: form.vendorActive,
@@ -189,6 +200,7 @@ const MmProcessVendorsPage = forwardRef<
         existing
         && existing.name === trimmed
         && existing.contact === contact
+        && existing.gstin === gstin
         && existing.remarks === remarks
         && existing.active === form.vendorActive
         && JSON.stringify(existing.processIds) === JSON.stringify(form.vendorProcessIds)
@@ -238,6 +250,7 @@ const MmProcessVendorsPage = forwardRef<
           kind: 'process_vendor',
           name: row.name.trim(),
           contact: row.contact.trim() || null,
+          gstin: row.gstin.trim().toUpperCase() || null,
           remarks: row.remarks.trim() || null,
           is_active: row.active,
           process_type_ids: processTypeIds,
@@ -294,6 +307,7 @@ const MmProcessVendorsPage = forwardRef<
                 onKeyDown={(e) => e.key === 'Enter' && submitVendorForm()}
               />
               <Input label="Contact" value={vendorContact} onChange={(e) => setVendorContact(e.target.value)} />
+              <Input label="GSTIN" placeholder="27ABCDE1234F1Z5" value={vendorGstin} onChange={(e) => setVendorGstin(e.target.value.toUpperCase())} />
               <div>
                 <label className="block text-[10px] font-semibold text-slate-600 mb-1">Remarks</label>
                 <textarea
@@ -381,7 +395,7 @@ const MmProcessVendorsPage = forwardRef<
               emptyMessage="No process vendors yet."
               headerAction={<MmTableSaveButton />}
             >
-              <CatalogTable headers={['S.No', 'Vendor', 'Contact', 'Remarks', 'Processes', 'Active', '']}>
+              <CatalogTable headers={['S.No', 'Vendor', 'GSTIN', 'Contact', 'Remarks', 'Processes', 'Active', '']}>
                 {vendors.map((row, idx) => (
                   <CatalogTableRow key={row.localId} onClick={() => loadVendor(row)} selected={editingVendorId === row.localId}>
                     <CatalogTableCell className={catalogSerialCellClass}>{idx + 1}</CatalogTableCell>
@@ -389,6 +403,7 @@ const MmProcessVendorsPage = forwardRef<
                       {row.name || '—'}
                       {!row.id ? <span className="ml-2 text-[9px] font-semibold uppercase text-amber-600">New</span> : null}
                     </CatalogTableCell>
+                    <CatalogTableCell className="text-slate-600 truncate">{row.gstin || '—'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600 truncate">{row.contact || '—'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600 truncate">{row.remarks.trim() || '—'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600 whitespace-normal">

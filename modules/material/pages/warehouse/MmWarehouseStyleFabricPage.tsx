@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Layers } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 import { Button, Card } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
@@ -8,8 +8,13 @@ import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
-import { fabricTypeCategoryLine, MmFabricSummaryCard } from '../../components/MmFabricSummaryCard';
+import { MmFabricSummaryCard } from '../../components/MmFabricSummaryCard';
 import { fmtUomQty } from '../../lib/fabricStock';
+import { lineDispatchedStatus, wordDot, wordText } from '../../lib/fabricLineStatus';
+import { inboundStatusDot, inboundStatusText, storeDispatchStatusLabel } from '../../lib/inboundDisplay';
+import { dateTimeParts, formatQtyM } from '../../lib/mmRollDraft';
+import type { MmStyleWarehouseChallan } from '../../lib/mmRpc';
+import { useMmStyleWarehouse } from '../../lib/useMmOps';
 import { finishedText, rollColour, rollStageLabel } from '../../lib/rollColour';
 import {
   mmListRollsV4,
@@ -57,7 +62,34 @@ export default function MmWarehouseStyleFabricPage() {
   const styleMaterialId = line?.style_material_id ?? '';
   const uom = line?.uom === 'kg' ? 'kg' : 'm';
   const fabricName = line?.fabric?.name || line?.line_name || '—';
-  const fabricMeta = fabricTypeCategoryLine(line?.fabric_type ?? line?.fabric?.fabric_type, line?.fabric_category);
+
+  // Same source the Dispatch line page uses — it carries the style image
+  // (mm_style_fabric_position has no image_url, which is why the image
+  // never showed here) plus racked / dispatched totals and store challans.
+  const styleWhQ = useMmStyleWarehouse(line?.order_id ?? null);
+  const styleWh = styleWhQ.data ?? null;
+  const warehouseFabric = useMemo(() => {
+    const fabrics = styleWh?.fabrics ?? [];
+    return (
+      fabrics.find((row) => styleMaterialId && row.style_material_id === styleMaterialId)
+      ?? fabrics.find((row) => row.colorway_id === line?.colorway_id && row.fabric_name === fabricName)
+      ?? fabrics.find((row) => row.colorway_id === line?.colorway_id)
+      ?? null
+    );
+  }, [styleWh?.fabrics, styleMaterialId, line?.colorway_id, fabricName]);
+  const dispatchedChallans = useMemo(() => {
+    const store = (styleWh?.challans ?? []).filter((row) => row.kind === 'store');
+    const colorName = warehouseFabric?.color_name || line?.colorway_name || '';
+    const name = warehouseFabric?.fabric_name || fabricName;
+    const strict = store.filter((row) => row.color_name === colorName && (row.fabric_name === name || row.fabric_name === warehouseFabric?.fabric_type));
+    if (strict.length > 0) return strict;
+    return colorName ? store.filter((row) => row.color_name === colorName) : store;
+  }, [styleWh?.challans, warehouseFabric, line?.colorway_name, fabricName]);
+  const qtyRacked = warehouseFabric ? Number(warehouseFabric.qty_racked ?? 0) : Number(line?.in_warehouse?.qty ?? 0);
+  const rollsRacked = warehouseFabric ? Number(warehouseFabric.rolls_racked ?? 0) : Number(line?.in_warehouse?.rolls ?? 0);
+  const qtyIssued = warehouseFabric ? Number(warehouseFabric.qty_issued ?? 0) : Number(line?.issued?.qty ?? 0);
+  const rollsIssued = warehouseFabric ? Number(warehouseFabric.rolls_issued ?? 0) : Number(line?.issued?.units ?? 0);
+  const dispatchedStatus = lineDispatchedStatus(qtyIssued, line?.required);
 
   const rollsQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'whStyleFabricRolls', styleMaterialId] as const,
@@ -87,6 +119,7 @@ export default function MmWarehouseStyleFabricPage() {
   const refresh = async () => {
     await lineQ.refetch();
     await rollsQ.refetch();
+    await styleWhQ.refetch();
   };
 
   const unbook = async () => {
@@ -139,20 +172,18 @@ export default function MmWarehouseStyleFabricPage() {
           Order cancelled — release rolls
         </p>
       ) : null}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-4 mb-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 mb-4 items-stretch">
         <MmFabricSummaryCard
-          title="Style"
-          showFabric={false}
-          splitColours
           data={{
             style_name: line?.style_name,
             style_ref: line?.style_ref,
             buyer_name: line?.buyer_name,
             po_number: line?.po_number,
+            image_url: styleWh?.order?.image_url,
             color_name: line?.colorway_name,
             fabric_color: line?.colour,
             fabric_name: fabricName,
-            fabric_type: line?.fabric_type,
+            fabric_type: line?.fabric_type ?? line?.fabric?.fabric_type,
             fabric_category: line?.fabric_category,
           }}
           onStyleClick={
@@ -160,41 +191,40 @@ export default function MmWarehouseStyleFabricPage() {
               ? () => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLE, { orderId: line.order_id })
               : undefined
           }
-          extraMetrics={(
-            <>
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 flex items-center gap-1.5">
-                  <Layers size={12} className="text-slate-400" />
-                  Fabric
-                </p>
-                <p className="text-[15px] font-bold text-slate-900 leading-tight mt-1" title={fabricName}>
-                  {fabricName}
-                </p>
-                {fabricMeta !== '—' ? (
-                  <p className="text-[12px] text-slate-500 mt-0.5 truncate" title={fabricMeta}>{fabricMeta}</p>
-                ) : null}
-              </div>
-              <Metric label="Required" value={fmtUomQty(line?.required, uom)} tone="blue" />
-            </>
-          )}
         />
         <Card className="shadow-sm border-slate-200 h-full" noPadding>
-          <div className="px-5 py-4 h-full flex flex-col">
-            <DesktopWriteGate>
-              <div className="flex flex-wrap justify-end gap-2 mb-3">
-                <Button type="button" size="sm" onClick={openAllocate}>Allocate rolls</Button>
-                <Button type="button" size="sm" variant="secondary" onClick={newReceipt}>New receipt for this style</Button>
-              </div>
-            </DesktopWriteGate>
-            <div className="grid grid-cols-2 gap-2.5 flex-1 content-start">
-              <Metric label="Allocated" value={fmtUomQty(line?.allocated, uom)} tone="green" />
+          <div className="px-5 py-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h4 className="text-[13px] font-semibold text-slate-900 flex items-center gap-2">
+                <ClipboardList size={16} className="text-primary-600" />
+                Fabric progress
+              </h4>
+              <DesktopWriteGate>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button type="button" size="sm" onClick={openAllocate}>Allocate rolls</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={newReceipt}>New receipt</Button>
+                </div>
+              </DesktopWriteGate>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Metric label="Required" value={fmtUomQty(line?.required, uom)} tone="blue" />
+              <Metric label="Racked" value={fmtUomQty(qtyRacked, uom)} sub={`${rollsRacked} ${rollsRacked === 1 ? 'roll' : 'rolls'} waiting`} tone="yellow" />
               <Metric label="Booked" value={fmtUomQty(line?.booked?.qty, uom)} sub={`${line?.booked?.rolls ?? 0} rolls`} tone="violet" />
-              <Metric label="Issued" value={fmtUomQty(line?.issued.qty, uom)} tone="slate" />
-              <Metric
-                label="Uncovered"
-                value={Number(line?.uncovered) > 0 ? fmtUomQty(line?.uncovered, uom) : '—'}
-                tone={Number(line?.uncovered) > 0 ? 'red' : 'slate'}
-              />
+              <Metric label="Allocated" value={fmtUomQty(line?.allocated, uom)} sub={`${rollsQ.data?.allocated.length ?? 0} rolls`} tone="green" />
+              <Metric label="Dispatched" value={fmtUomQty(qtyIssued, uom)} sub={`${rollsIssued} ${rollsIssued === 1 ? 'roll' : 'rolls'}`} tone="green" />
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900">
+                <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Status</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-medium text-slate-900">Cutting</span>
+                  <span className={`inline-flex items-center gap-1.5 text-[12px] font-bold ${wordText(dispatchedStatus.key)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${wordDot(dispatchedStatus.key)}`} />
+                    {dispatchedStatus.label}
+                  </span>
+                </div>
+                {Number(line?.uncovered) > 0 ? (
+                  <p className="text-[10px] mt-0.5 text-red-600 font-semibold">Uncovered {fmtUomQty(line?.uncovered, uom)}</p>
+                ) : null}
+              </div>
             </div>
           </div>
         </Card>
@@ -222,20 +252,114 @@ export default function MmWarehouseStyleFabricPage() {
           busy={busy}
         />
       </div>
+      <div className="mt-4">
+        <DispatchedTable
+          challans={dispatchedChallans}
+          uom={uom}
+          onOpen={
+            line?.order_id && warehouseFabric?.fabric_line_id
+              ? () => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_DISPATCH_LINE, {
+                  orderId: line.order_id,
+                  colorwayId: warehouseFabric.colorway_id,
+                  fabricLineId: warehouseFabric.fabric_line_id ?? '',
+                })
+              : undefined
+          }
+        />
+      </div>
     </PageShell>
   );
 }
 
-function Metric({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: 'blue' | 'green' | 'violet' | 'slate' | 'red' }) {
+function WhenCell({ iso }: { iso: string | null | undefined }) {
+  const parts = dateTimeParts(iso);
+  if (parts.date === '—') return <span className="text-slate-400">—</span>;
+  return (
+    <span className="whitespace-nowrap">
+      {parts.date}
+      {parts.time ? <span className="text-slate-400">, {parts.time}</span> : null}
+    </span>
+  );
+}
+
+function DispatchedTable({
+  challans,
+  uom,
+  onOpen,
+}: {
+  challans: MmStyleWarehouseChallan[];
+  uom: string;
+  onOpen?: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+        <h4 className="text-[11px] font-semibold text-slate-800">Dispatched</h4>
+        <p className="text-[10px] text-slate-400 mt-0.5">
+          Challans already sent to cutting for this fabric.{onOpen ? ' Open to see the dispatch.' : ''}
+        </p>
+      </div>
+      <div className="overflow-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className={th}>S.No</th>
+              <th className={th}>Dispatched</th>
+              <th className={th}>Challan</th>
+              <th className={th}>To</th>
+              <th className={th}>Rolls</th>
+              <th className={th}>Qty</th>
+              <th className={th}>Status</th>
+              <th className={th}>Received</th>
+            </tr>
+          </thead>
+          <tbody>
+            {challans.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-6 text-center text-[11px] text-slate-400">No dispatches for this fabric yet.</td>
+              </tr>
+            ) : challans.map((challan, idx) => (
+              <tr
+                key={challan.id}
+                className={onOpen ? 'hover:bg-slate-50/80 cursor-pointer' : undefined}
+                onClick={onOpen}
+              >
+                <td className={`${td} text-slate-400 font-semibold tabular-nums`}>{idx + 1}</td>
+                <td className={td}><WhenCell iso={challan.sent_at} /></td>
+                <td className={`${td} font-semibold text-slate-800`}>{challan.challan_no}</td>
+                <td className={td}>Cutting store</td>
+                <td className={`${td} font-semibold text-green-800 tabular-nums`}>{challan.roll_count}</td>
+                <td className={`${td} font-semibold text-green-800 tabular-nums`}>{formatQtyM(challan.qty, challan.uom ?? uom)}</td>
+                <td className={td}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${inboundStatusDot(challan.status)}`} />
+                    <span className={`text-[10px] font-bold ${inboundStatusText(challan.status)}`}>
+                      {storeDispatchStatusLabel(challan.status)}
+                    </span>
+                  </span>
+                </td>
+                <td className={td}><WhenCell iso={challan.received_at} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: 'blue' | 'green' | 'violet' | 'slate' | 'red' | 'yellow' }) {
   const shell = tone === 'blue'
     ? 'border-blue-100 bg-blue-50/70 text-blue-900'
     : tone === 'green'
       ? 'border-green-200 bg-green-50 text-green-900'
-      : tone === 'violet'
-        ? 'border-violet-200 bg-violet-50 text-violet-900'
-        : tone === 'red'
-          ? 'border-red-200 bg-red-50 text-red-700'
-          : 'border-slate-200 bg-slate-50 text-slate-900';
+      : tone === 'yellow'
+        ? 'border-yellow-200 bg-yellow-50 text-yellow-900'
+        : tone === 'violet'
+          ? 'border-violet-200 bg-violet-50 text-violet-900'
+          : tone === 'red'
+            ? 'border-red-200 bg-red-50 text-red-700'
+            : 'border-slate-200 bg-slate-50 text-slate-900';
   return (
     <div className={`rounded-xl border px-3 py-2 ${shell}`}>
       <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{label}</p>

@@ -294,6 +294,12 @@ function randomForField(field: MmTestField): string {
   if (role === 'shade') return String.fromCharCode(65 + Math.floor(Math.random() * 6));
   if (role === 'lot') return LOT_TYPE_OPTIONS[Math.floor(Math.random() * LOT_TYPE_OPTIONS.length)] ?? 'A1';
   if (token.includes('shrink')) return randBetween(0.2, 4).toFixed(2);
+  if (token.includes('colour') || token.includes('color')) {
+    return ['Navy', 'Black', 'White', 'Maroon', 'Olive'][Math.floor(Math.random() * 5)] ?? 'Navy';
+  }
+  if (token.includes('dyelot')) return `DL-${Math.floor(randBetween(100, 999))}`;
+  if (token.includes('gsm')) return String(Math.floor(randBetween(120, 240)));
+  if (token.includes('width')) return randBetween(54, 72).toFixed(1);
   if (field.data_type === 'number') return String(Math.floor(randBetween(1, 100)));
   if (field.data_type === 'decimal') return randBetween(0.5, 20).toFixed(2);
   return `${field.label} ${Math.floor(randBetween(1, 99))}`;

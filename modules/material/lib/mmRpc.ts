@@ -47,6 +47,9 @@ export const mmGetConfigBundle = () => callRpc<MmConfigBundle>('mm_get_config_bu
 export const mmListUnits = () =>
   callRpc<{ qty?: unknown; width?: unknown; all?: unknown }>('mm_list_units');
 
+export const mmAddUnit = (row: { kind: 'qty' | 'width'; label: string; factor: number; base: 'kg' | 'm' | 'in' }) =>
+  callRpc<{ code: string; units?: unknown }>('mm_add_unit', { p_row: row });
+
 export const mmSaveFabricType = (row: Record<string, unknown>) =>
   callRpc('mm_save_fabric_type', { p_row: row });
 

@@ -17,7 +17,7 @@ import {
   mmSaveProcess,
   type MmChallanField,
 } from '../lib/mmV4Rpc';
-import { useMmProcesses, useMmV4Config, useRefreshMmV4Config } from '../lib/useMmV4Config';
+import { useMmProcesses, useRefreshMmV4Config } from '../lib/useMmV4Config';
 
 export interface MmProcessesHandle {
   save: () => Promise<boolean>;
@@ -28,8 +28,7 @@ type ProcessDraft = {
   localId: string;
   id: string | null;
   name: string;
-  outputStageCode: string | null;
-  outputStageLabel: string | null;
+  expectedLoss: string;
   active: boolean;
   sortOrder: number;
   vendorCount: number;
@@ -61,7 +60,6 @@ const MmProcessesPage = forwardRef<
 >(function MmProcessesPage({ onDirtyChange }, ref) {
   const showNotification = useNotificationStore((s) => s.showNotification);
   const refreshV4 = useRefreshMmV4Config();
-  const { data: v4 } = useMmV4Config();
   const processesQ = useMmProcesses();
 
   const [processes, setProcesses] = useState<ProcessDraft[]>([]);
@@ -69,15 +67,10 @@ const MmProcessesPage = forwardRef<
   const [hydrated, setHydrated] = useState(false);
   const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
   const [processName, setProcessName] = useState('');
-  const [outputStageCode, setOutputStageCode] = useState('');
+  const [expectedLoss, setExpectedLoss] = useState('');
   const [processActive, setProcessActive] = useState(true);
   const [doneAt, setDoneAt] = useState<'inhouse' | 'external' | 'both'>('inhouse');
   const [showInactive, setShowInactive] = useState(false);
-
-  const stages = useMemo(
-    () => (v4?.stages ?? []).filter((stage) => stage.is_active !== false),
-    [v4?.stages],
-  );
 
   useEffect(() => {
     if (!processesQ.data) return;
@@ -87,8 +80,7 @@ const MmProcessesPage = forwardRef<
         localId: row.id,
         id: row.id,
         name: row.name,
-        outputStageCode: row.output_stage_code ?? null,
-        outputStageLabel: row.output_stage_label ?? null,
+        expectedLoss: row.expected_loss_pct != null ? String(row.expected_loss_pct) : '',
         active: row.active !== false,
         sortOrder: row.sort_order ?? 0,
         vendorCount: row.vendor_count ?? 0,
@@ -102,7 +94,7 @@ const MmProcessesPage = forwardRef<
     setHydrated(true);
     setEditingProcessId(null);
     setProcessName('');
-    setOutputStageCode('');
+    setExpectedLoss('');
     setProcessActive(true);
     setDoneAt('inhouse');
     onDirtyChange(false);
@@ -114,13 +106,13 @@ const MmProcessesPage = forwardRef<
       if (!row) return false;
       return (
         row.name !== processName
-        || (row.outputStageCode ?? '') !== outputStageCode
+        || row.expectedLoss !== expectedLoss
         || row.active !== processActive
         || doneAtOf(row.doneInhouse, row.doneExternal) !== doneAt
       );
     }
     return Boolean(processName.trim());
-  }, [editingProcessId, processes, processName, outputStageCode, processActive, doneAt]);
+  }, [editingProcessId, processes, processName, expectedLoss, processActive, doneAt]);
 
   const dirty = useMemo(() => {
     if (!hydrated) return false;
@@ -132,15 +124,10 @@ const MmProcessesPage = forwardRef<
     onDirtyChange(dirty);
   }, [dirty, hydrated, onDirtyChange]);
 
-  const stageLabel = (code: string | null) => {
-    if (!code) return 'No change';
-    return stages.find((stage) => stage.code === code)?.label || code;
-  };
-
   const resetProcessForm = () => {
     setEditingProcessId(null);
     setProcessName('');
-    setOutputStageCode('');
+    setExpectedLoss('');
     setProcessActive(true);
     setDoneAt('inhouse');
   };
@@ -148,7 +135,7 @@ const MmProcessesPage = forwardRef<
   const loadProcess = (row: ProcessDraft) => {
     setEditingProcessId(row.localId);
     setProcessName(row.name);
-    setOutputStageCode(row.outputStageCode ?? '');
+    setExpectedLoss(row.expectedLoss);
     setProcessActive(row.active);
     setDoneAt(doneAtOf(row.doneInhouse, row.doneExternal));
   };
@@ -156,20 +143,18 @@ const MmProcessesPage = forwardRef<
   const snapshot = useRef({
     processes,
     processName,
-    outputStageCode,
+    expectedLoss,
     processActive,
     doneAt,
     editingProcessId,
-    stages,
   });
   snapshot.current = {
     processes,
     processName,
-    outputStageCode,
+    expectedLoss,
     processActive,
     doneAt,
     editingProcessId,
-    stages,
   };
 
   const applyProcessForm = (rows: ProcessDraft[]): ProcessDraft[] | null => {
@@ -186,7 +171,14 @@ const MmProcessesPage = forwardRef<
       showNotification('That process already exists', 'error');
       return null;
     }
-    const stage = form.stages.find((item) => item.code === form.outputStageCode);
+    const lossText = form.expectedLoss.trim();
+    if (lossText) {
+      const loss = Number(lossText);
+      if (!Number.isFinite(loss) || loss < 0 || loss > 100) {
+        showNotification('Expected loss must be between 0 and 100', 'error');
+        return null;
+      }
+    }
     const doneInhouse = form.doneAt !== 'external';
     const doneExternal = form.doneAt !== 'inhouse';
     if (form.editingProcessId) {
@@ -195,8 +187,7 @@ const MmProcessesPage = forwardRef<
           ? {
             ...row,
             name: trimmed,
-            outputStageCode: form.outputStageCode || null,
-            outputStageLabel: form.outputStageCode ? (stage?.label ?? form.outputStageCode) : null,
+            expectedLoss: lossText,
             active: form.processActive,
             doneInhouse,
             doneExternal,
@@ -212,8 +203,7 @@ const MmProcessesPage = forwardRef<
         localId: nextKey(),
         id: null,
         name: trimmed,
-        outputStageCode: form.outputStageCode || null,
-        outputStageLabel: form.outputStageCode ? (stage?.label ?? form.outputStageCode) : null,
+        expectedLoss: lossText,
         active: form.processActive,
         sortOrder,
         vendorCount: 0,
@@ -251,7 +241,7 @@ const MmProcessesPage = forwardRef<
         const res = await mmSaveProcess({
           ...(row.id ? { id: row.id } : {}),
           name: row.name.trim(),
-          output_stage_code: row.outputStageCode,
+          expected_loss_pct: row.expectedLoss.trim() === '' ? null : Number(row.expectedLoss),
           active: row.active,
           sort_order: row.sortOrder,
           done_inhouse: row.doneInhouse,
@@ -288,11 +278,6 @@ const MmProcessesPage = forwardRef<
 
   const visibleProcesses = processes.filter((row) => showInactive || row.active);
 
-  const stageOptions = [
-    { value: '', label: 'No change' },
-    ...stages.map((stage) => ({ value: stage.code, label: stage.label || stage.code })),
-  ];
-
   return (
     <div className="h-full min-h-0 overflow-hidden flex flex-col gap-3">
       <p className="text-[11px] text-slate-500 shrink-0">
@@ -315,8 +300,15 @@ const MmProcessesPage = forwardRef<
                 onChange={(e) => setProcessName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && submitProcessForm()}
               />
-              <SelectDropdown size="compact" label="Output stage" value={outputStageCode} onChange={setOutputStageCode} options={stageOptions} />
-              <p className="text-[11px] text-slate-400 -mt-3">QC resets automatically when an output stage is set.</p>
+              <Input
+                label="Expected loss %"
+                type="number"
+                min={0}
+                max={100}
+                placeholder="Optional"
+                value={expectedLoss}
+                onChange={(e) => setExpectedLoss(e.target.value)}
+              />
               <SelectDropdown size="compact"
                 label="Done at"
                 value={doneAt}
@@ -379,7 +371,7 @@ const MmProcessesPage = forwardRef<
                 </div>
               )}
             >
-              <CatalogTable headers={['S.No', 'Process', 'Done at', 'Output stage', 'Vendors', 'Active', '']}>
+              <CatalogTable headers={['S.No', 'Process', 'Done at', 'Expected loss %', 'Vendors', 'Active', '']}>
                 {visibleProcesses.map((row, idx) => (
                   <CatalogTableRow key={row.localId} onClick={() => loadProcess(row)} selected={editingProcessId === row.localId}>
                     <CatalogTableCell className={catalogSerialCellClass}>{idx + 1}</CatalogTableCell>
@@ -388,9 +380,7 @@ const MmProcessesPage = forwardRef<
                       {!row.id ? <span className="ml-2 text-[9px] font-semibold uppercase text-amber-600">New</span> : null}
                     </CatalogTableCell>
                     <CatalogTableCell className="text-slate-600">{doneAtLabel(row)}</CatalogTableCell>
-                    <CatalogTableCell className="text-slate-600 truncate">
-                      {row.outputStageLabel || stageLabel(row.outputStageCode)}
-                    </CatalogTableCell>
+                    <CatalogTableCell className="text-slate-600 tabular-nums">{row.expectedLoss.trim() ? `${row.expectedLoss.trim()}%` : '—'}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600 tabular-nums">{row.vendorCount}</CatalogTableCell>
                     <CatalogTableCell className="text-slate-600">{row.active ? 'Yes' : 'No'}</CatalogTableCell>
                     <CatalogTableCell>
