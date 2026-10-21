@@ -4,10 +4,9 @@ import { Modal, SelectDropdown } from '../../../components/ui';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 import { useNavigationStore } from '../../../stores';
 import { RoutePath } from '../../../types';
-import { bucketLabel, fmtNum, fmtQty, fmtUomQty } from '../lib/fabricStock';
-import { uomLabel } from '../lib/fabricLabels';
+import { bucketLabel, fmtNum, fmtQty, fmtUomQty, presentMeasures } from '../lib/fabricStock';
+import { formatStoredQty, qtyLabel } from '../lib/units';
 import { useMmRequirementCatalog } from '../lib/useMmRequirementCatalog';
-import { useMmV4Config } from '../lib/useMmV4Config';
 import {
   getFabricStockSummary,
   type MmFabricStockGroup,
@@ -18,7 +17,7 @@ import {
 } from '../lib/mmFabricRpc';
 import { FabricStockRollsDrawer } from './FabricStockRollsDrawer';
 
-type QtyKey = 'on_hand' | 'free' | 'allocated' | 'at_mill' | 'at_processing' | 'qc_pending' | 'on_hold' | 'rejected' | 'in_stock' | 'issued';
+type QtyKey = 'on_hand' | 'free' | 'allocated' | 'at_processing' | 'qc_pending' | 'on_hold' | 'rejected' | 'in_stock' | 'issued';
 
 const catalogColumns: Array<{
   key: 'rolls' | QtyKey;
@@ -31,25 +30,10 @@ const catalogColumns: Array<{
   { key: 'on_hand', label: 'On hand', bucket: 'on_hand' },
   { key: 'free', label: 'Free', bucket: 'on_hand', allocation: 'free' },
   { key: 'allocated', label: 'Allocated', bucket: 'on_hand', allocation: 'allocated' },
-  { key: 'at_mill', label: 'At mill', bucket: 'at_mill' },
   { key: 'at_processing', label: 'Processing', bucket: 'at_processing' },
   { key: 'qc_pending', label: 'QC pending', bucket: 'qc_pending' },
   { key: 'in_stock', label: 'In stock', bucket: 'in_stock' },
   { key: 'issued', label: 'Issued', bucket: 'issued', muted: true },
-];
-
-const millColumns: Array<{
-  key: QtyKey;
-  label: string;
-  bucket: MmStockBucket;
-  allocation?: 'free' | 'allocated';
-  muted?: boolean;
-}> = [
-  { key: 'at_mill', label: 'At mill', bucket: 'at_mill' },
-  { key: 'at_processing', label: 'At processing', bucket: 'at_processing' },
-  { key: 'qc_pending', label: 'QC pending', bucket: 'qc_pending' },
-  { key: 'allocated', label: 'Allocated', bucket: 'on_hand', allocation: 'allocated' },
-  { key: 'free', label: 'Free', bucket: 'on_hand', allocation: 'free' },
 ];
 
 const warehouseColumns: Array<{
@@ -85,50 +69,53 @@ function formCount(totals: MmStockTotals, key: string): string {
   return rollsLapsLabel(row?.rolls ?? 0, row?.laps ?? 0);
 }
 
-function StageSplit({
-  group,
-  onOpen,
+type ColTone = 'yellow' | 'blue' | 'amber' | 'emerald' | 'slate';
+
+const toneHead: Record<ColTone, string> = {
+  yellow: 'text-yellow-800 border-yellow-100 bg-yellow-100',
+  blue: 'text-blue-800 border-blue-100 bg-blue-100',
+  amber: 'text-amber-800 border-amber-100 bg-amber-100',
+  emerald: 'text-emerald-800 border-emerald-100 bg-emerald-100',
+  slate: 'text-slate-600 border-slate-200 bg-slate-100',
+};
+
+const toneCell: Record<ColTone, string> = {
+  yellow: 'text-yellow-900 border-yellow-50 bg-yellow-50',
+  blue: 'text-blue-900 border-blue-50 bg-blue-50',
+  amber: 'text-amber-900 border-amber-50 bg-amber-50',
+  emerald: 'text-emerald-900 border-emerald-50 bg-emerald-50',
+  slate: 'text-slate-800 border-slate-100 bg-slate-50',
+};
+
+function QtyHeads({
+  cols,
 }: {
-  group: MmFabricStockGroup;
-  onOpen: (stageCode: string) => void;
+  cols: ReadonlyArray<{ key: string; label: string; muted?: boolean; tone?: ColTone }>;
 }) {
-  const stages = group.stages ?? [];
-  if (stages.length === 0) return null;
-  const uom = group.uom === 'kg' ? 'kg' : 'm';
-  return (
-    <span className="mt-1 flex flex-wrap gap-1">
-      {stages.map((stage) => {
-        const rolls = stage.totals.on_hand_rolls ?? stage.totals.rolls ?? 0;
-        const laps = stage.totals.on_hand_laps ?? 0;
-        return (
-          <button
-            key={stage.stage_code}
-            type="button"
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen(stage.stage_code);
-            }}
-          >
-            {stage.stage_label || stage.stage_code}
-            {' · '}
-            {fmtUomQty(stage.totals.on_hand || stage.totals.in_stock || 0, uom)}
-            {' · '}
-            {rollsLapsLabel(rolls, laps)}
-            {stage.can_cut ? null : <span className="text-amber-700">Not cuttable</span>}
-          </button>
-        );
-      })}
-    </span>
-  );
+  return cols.map((col) => {
+    const head = col.tone
+      ? `px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide border-b whitespace-nowrap text-right overflow-hidden ${toneHead[col.tone]}`
+      : `${thQty} ${col.muted ? 'text-slate-400' : ''}`;
+    return (
+      <React.Fragment key={col.key}>
+        <th className={head}>{col.label}</th>
+        <th className={head}>Rolls / laps</th>
+      </React.Fragment>
+    );
+  });
 }
 
-function qtyText(totals: MmStockTotals, key: QtyKey, uom: 'kg' | 'm' | 'mixed'): string {
+function stockQty(value: number, uom: 'kg' | 'm' | 'mixed', qtyUnit?: string | null): string {
+  if (uom === 'mixed') return fmtUomQty(value, uom);
+  return formatStoredQty(value, qtyUnit ?? uom);
+}
+
+function qtyText(totals: MmStockTotals, key: QtyKey, uom: 'kg' | 'm' | 'mixed', qtyUnit?: string | null): string {
   if (uom === 'mixed') {
     if (key === 'on_hand') return fmtQty(totals, 'mixed');
     return fmtNum(totals[key]);
   }
-  return fmtUomQty(totals[key], uom);
+  return formatStoredQty(totals[key], qtyUnit ?? uom);
 }
 
 function groupTitle(group: MmFabricStockGroup): string {
@@ -141,7 +128,6 @@ export function FabricStockPanel({
   focusUnlinked,
   onClearFabric,
   warehouseOnly = false,
-  side,
   reloadKey = 0,
   selectionBar,
 }: {
@@ -149,14 +135,11 @@ export function FabricStockPanel({
   focusUnlinked?: boolean;
   onClearFabric?: () => void;
   warehouseOnly?: boolean;
-  /** Mill stock passes side mill. Warehouse stock passes side through warehouseOnly. */
-  side?: 'mill';
   reloadKey?: number;
   selectionBar?: (rows: MmFabricStockRoll[]) => React.ReactNode;
 }) {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const catalog = useMmRequirementCatalog();
-  const v4 = useMmV4Config(side === 'mill');
   const [search, setSearch] = useState('');
   const [stageCode, setStageCode] = useState('');
   const [typeId, setTypeId] = useState('');
@@ -170,8 +153,8 @@ export function FabricStockPanel({
   const [tick, setTick] = useState(0);
   const [drill, setDrill] = useState<{ title: string; unlinked: boolean; filter: MmFabricStockRollFilter } | null>(null);
   const debounced = useDebouncedValue(search, 300);
-  const cols = side === 'mill' ? millColumns : warehouseOnly ? warehouseColumns : catalogColumns;
-  const summarySide = side === 'mill' ? 'mill' : warehouseOnly ? 'warehouse' : undefined;
+  const cols = warehouseOnly ? warehouseColumns : catalogColumns;
+  const summarySide = warehouseOnly ? 'warehouse' as const : undefined;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -206,13 +189,6 @@ export function FabricStockPanel({
     document.getElementById('unlinked-stock')?.scrollIntoView({ block: 'start' });
   }, [focusUnlinked, groups]);
 
-  const stageOptions = [
-    { value: '', label: 'All stages' },
-    ...((v4.data?.stages ?? []).filter((stage) => stage.is_active !== false).map((stage) => ({
-      value: stage.code,
-      label: stage.label || stage.code,
-    }))),
-  ];
   const visibleGroups = stageCode
     ? groups.filter((group) => (group.stages ?? []).some((stage) => stage.stage_code === stageCode && (Number(stage.totals.on_hand) || Number(stage.totals.in_stock) || stage.totals.rolls) > 0))
     : groups;
@@ -227,20 +203,11 @@ export function FabricStockPanel({
       if (key === 'on_hand' && singleUom == null) {
         const kg = linked.reduce((n, group) => n + (Number(group.totals.on_hand_kg) || 0), 0);
         const m = linked.reduce((n, group) => n + (Number(group.totals.on_hand_m) || 0), 0);
-        return `${fmtNum(kg)} kg · ${fmtNum(m)} m`;
+        return presentMeasures(kg, m);
       }
       if (singleUom && singleUom !== 'mixed') return `${fmtNum(sum(key))} ${singleUom}`;
       return fmtNum(sum(key));
     };
-    if (side === 'mill') {
-      return [
-        ['At mill', text('at_mill')],
-        ['At processing', text('at_processing')],
-        ['QC pending', text('qc_pending')],
-        ['Allocated', text('allocated')],
-        ['Free', text('free')],
-      ] as const;
-    }
     return warehouseOnly
       ? ([
           ['QC pending', text('qc_pending')],
@@ -255,11 +222,10 @@ export function FabricStockPanel({
           ['On hand', text('on_hand')],
           ['Free', text('free')],
           ['Allocated', text('allocated')],
-          ['At mill', text('at_mill')],
           ['At processing', text('at_processing')],
           ['QC pending', text('qc_pending')],
         ] as const);
-  }, [linked, singleUom, warehouseOnly, side]);
+  }, [linked, singleUom, warehouseOnly]);
 
   const typeOptions = useMemo(
     () => [{ value: '', label: 'All types' }, ...(catalog.data?.fabricTypes ?? []).map((t) => ({ value: t.id, label: t.name }))],
@@ -308,35 +274,70 @@ export function FabricStockPanel({
     });
   };
 
-  const renderQty = (group: MmFabricStockGroup, totals: MmStockTotals, fromColour: boolean, colour?: string | null) => (
-    cols.map((col) => (
-      <React.Fragment key={col.key}>
-        <td className={`${tdQty} ${col.muted ? 'text-slate-400' : ''}`}>
-          <button
-            type="button"
-            className="hover:underline"
-            onClick={() => openDrill(group, col, colour, fromColour)}
-          >
-            {col.key === 'rolls' ? totals.rolls : qtyText(totals, col.key, group.uom)}
-          </button>
-          {col.key === 'rolls' && totals.rolls_missing_qty > 0 ? (
-            <span className="ml-1 inline-flex rounded bg-amber-50 border border-amber-200 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
-              {totals.rolls_missing_qty} rolls no qty
-            </span>
-          ) : null}
-        </td>
-        <td className={tdQty}>{formCount(totals, col.key === 'rolls' ? 'on_hand' : col.key)}</td>
-      </React.Fragment>
-    ))
+  const renderQty = (
+    group: MmFabricStockGroup,
+    totals: MmStockTotals,
+    fromColour: boolean,
+    colour?: string | null,
+    stageCodeOverride?: string,
+  ) => (
+    cols.map((col) => {
+      const tone = 'tone' in col && (col.tone === 'yellow' || col.tone === 'blue' || col.tone === 'amber' || col.tone === 'emerald' || col.tone === 'slate')
+        ? col.tone
+        : undefined;
+      const cell = tone
+        ? `px-2.5 py-2.5 text-[11px] font-semibold border-b text-right tabular-nums max-w-0 overflow-hidden ${toneCell[tone]}`
+        : `${tdQty} ${col.muted ? 'text-slate-400' : ''}`;
+      return (
+        <React.Fragment key={col.key}>
+          <td className={cell}>
+            <button
+              type="button"
+              className="hover:underline"
+              onClick={() => {
+                if (stageCodeOverride) {
+                  setDrill({
+                    title: `${groupTitle(group)} · ${stageCodeOverride}`,
+                    unlinked: group.unlinked,
+                    filter: {
+                      ...(group.unlinked
+                        ? { unlinked: true, fabric_type_id: group.fabric_type?.id }
+                        : { fabric_id: group.fabric?.id, fabric_type_id: group.fabric_type?.id }),
+                      bucket: col.bucket,
+                      allocation: col.allocation,
+                      stage_code: stageCodeOverride,
+                      ...(fromColour ? { colour: colour ?? '' } : {}),
+                    },
+                  });
+                  return;
+                }
+                openDrill(group, col, colour, fromColour);
+              }}
+            >
+              {col.key === 'rolls' ? totals.rolls : qtyText(totals, col.key, group.uom, group.fabric?.qty_unit)}
+            </button>
+            {col.key === 'rolls' && totals.rolls_missing_qty > 0 ? (
+              <span className="ml-1 inline-flex rounded bg-amber-50 border border-amber-200 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
+                {totals.rolls_missing_qty} rolls no qty
+              </span>
+            ) : null}
+          </td>
+          <td className={cell}>{formCount(totals, col.key === 'rolls' ? 'on_hand' : col.key)}</td>
+        </React.Fragment>
+      );
+    })
   );
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
       <div className={`grid grid-cols-2 gap-2 ${warehouseOnly ? 'md:grid-cols-4 xl:grid-cols-7' : 'md:grid-cols-6'}`}>
         {kpis.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="text-[13px] font-semibold text-slate-800 tabular-nums mt-0.5">{value}</p>
+          <div
+            key={label}
+            className="rounded-xl border px-3 py-2 border-slate-200 bg-white"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="text-[13px] font-semibold text-slate-900 tabular-nums mt-0.5">{value}</p>
           </div>
         ))}
       </div>
@@ -355,17 +356,14 @@ export function FabricStockPanel({
             />
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
-            <SelectDropdown options={typeOptions} value={typeId} onChange={setTypeId} icon={Filter} className="w-36" />
-            {side === 'mill' ? (
-              <SelectDropdown options={stageOptions} value={stageCode} onChange={setStageCode} icon={Filter} className="w-36" />
-            ) : null}
-            <SelectDropdown
+            <SelectDropdown size="compact" options={typeOptions} value={typeId} onChange={setTypeId} icon={Filter} className="w-36" />
+            <SelectDropdown size="compact"
               options={stockOptions}
               value={onlyWithStock ? 'stock' : 'all'}
               onChange={(value) => setOnlyWithStock(value !== 'all')}
               className="w-40"
             />
-            <SelectDropdown
+            <SelectDropdown size="compact"
               options={linkOptions}
               value={showUnlinked ? 'show' : 'hide'}
               onChange={(value) => setShowUnlinked(value !== 'hide')}
@@ -386,12 +384,7 @@ export function FabricStockPanel({
               <th className={`${th} text-left pl-4`}>Fabric</th>
               <th className={`${th} text-left`}>Type</th>
               <th className={`${th} text-left`}>UOM</th>
-              {cols.map((col) => (
-                <React.Fragment key={col.key}>
-                  <th className={`${thQty} ${col.muted ? 'text-slate-400' : ''}`}>{col.label}</th>
-                  <th className={thQty}>Rolls / laps</th>
-                </React.Fragment>
-              ))}
+              <QtyHeads cols={cols} />
             </tr>
           </thead>
           <tbody>
@@ -414,22 +407,10 @@ export function FabricStockPanel({
                         </button>
                         {' · '}{group.fabric?.name}
                       </span>
-                      {side === 'mill' ? <StageSplit group={group} onOpen={(code) => {
-                        setDrill({
-                          title: `${groupTitle(group)} · ${code}`,
-                          unlinked: false,
-                          filter: {
-                            fabric_id: group.fabric?.id,
-                            fabric_type_id: group.fabric_type?.id,
-                            side: 'mill',
-                            stage_code: code,
-                          },
-                        });
-                      }} /> : null}
                     </div>
                   </td>
                   <td className={`${td} truncate cursor-pointer`} onClick={() => openDetail(group)}>{group.fabric_type?.name ?? '—'}</td>
-                  <td className={`${td} cursor-pointer`} onClick={() => openDetail(group)}>{group.uom === 'mixed' ? 'Mixed' : uomLabel(group.uom)}</td>
+                  <td className={`${td} cursor-pointer`} onClick={() => openDetail(group)}>{group.uom === 'mixed' ? 'Mixed' : qtyLabel(group.fabric?.qty_unit ?? group.uom)}</td>
                   {renderQty(group, group.totals, false)}
                 </tr>
               );
@@ -469,7 +450,7 @@ export function FabricStockPanel({
                     </button>
                   </td>
                   <td className={`${td} truncate cursor-pointer`} onClick={() => openDetail(group)}>{group.fabric_type?.name ?? '—'}</td>
-                  <td className={`${td} cursor-pointer`} onClick={() => openDetail(group)}>{group.uom === 'mixed' ? 'Mixed' : uomLabel(group.uom)}</td>
+                  <td className={`${td} cursor-pointer`} onClick={() => openDetail(group)}>{group.uom === 'mixed' ? 'Mixed' : qtyLabel(group.fabric?.qty_unit ?? group.uom)}</td>
                   {renderQty(group, group.totals, false)}
                 </tr>
               );
@@ -510,12 +491,7 @@ export function FabricStockPanel({
             <thead className="sticky top-0 z-10">
               <tr>
                 <th className={`${th} text-left pl-4`}>Colour</th>
-                {cols.map((col) => (
-                  <React.Fragment key={col.key}>
-                    <th className={`${thQty} ${col.muted ? 'text-slate-400' : ''}`}>{col.label}</th>
-                    <th className={thQty}>Rolls / laps</th>
-                  </React.Fragment>
-                ))}
+                <QtyHeads cols={cols} />
               </tr>
             </thead>
             <tbody>
@@ -540,8 +516,9 @@ export function FabricStockPanel({
         title={drill?.title ?? ''}
         filter={drill?.filter ?? {}}
         unlinked={Boolean(drill?.unlinked)}
-        omitBuckets={warehouseOnly ? ['at_mill', 'at_processing'] : undefined}
+        omitBuckets={warehouseOnly ? ['at_processing'] : undefined}
         selectionBar={selectionBar}
+        reloadKey={reloadKey}
         onClose={() => setDrill(null)}
         onChanged={() => setTick((n) => n + 1)}
       />
@@ -564,7 +541,6 @@ export function FabricStockCard({ fabricId, uom }: { fabricId: string; uom: 'kg'
 
   const totals = group?.totals;
   const buckets: Array<{ bucket: MmStockBucket; key: QtyKey }> = [
-    { bucket: 'at_mill', key: 'at_mill' },
     { bucket: 'at_processing', key: 'at_processing' },
     { bucket: 'qc_pending', key: 'qc_pending' },
     { bucket: 'on_hold', key: 'on_hold' },
@@ -583,11 +559,11 @@ export function FabricStockCard({ fabricId, uom }: { fabricId: string; uom: 'kg'
       </div>
       <div className="p-3 grid grid-cols-2 gap-1.5 text-[11px]">
         <p className="text-slate-500">On hand</p>
-        <p className="text-right tabular-nums font-semibold">{totals ? fmtUomQty(totals.on_hand, uom) : '—'}</p>
+        <p className="text-right tabular-nums font-semibold">{totals ? stockQty(totals.on_hand, uom) : '—'}</p>
         {buckets.map((row) => (
           <React.Fragment key={row.key}>
             <p className="text-slate-500">{bucketLabel(row.bucket)}</p>
-            <p className="text-right tabular-nums">{totals ? fmtUomQty(totals[row.key], uom) : '—'}</p>
+            <p className="text-right tabular-nums">{totals ? stockQty(totals[row.key], uom) : '—'}</p>
           </React.Fragment>
         ))}
       </div>

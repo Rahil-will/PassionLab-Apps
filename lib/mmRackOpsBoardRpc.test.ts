@@ -16,15 +16,15 @@ function latestRackOpsBoardSql(): string {
 }
 
 describe('mm_get_rack_ops_board migrations', () => {
-  it('latest definition is VOLATILE and does not seed locations', () => {
+  it('latest definition is STABLE and does not seed locations', () => {
     const sql = latestRackOpsBoardSql();
     expect(sql).toContain('mm_get_rack_ops_board');
     const createIdx = sql.lastIndexOf('CREATE OR REPLACE FUNCTION public.mm_get_rack_ops_board()');
     expect(createIdx).toBeGreaterThanOrEqual(0);
     const body = sql.slice(createIdx);
     const header = body.slice(0, Math.max(body.indexOf('AS $'), 0));
-    expect(header).toMatch(/\bVOLATILE\b/);
-    expect(header).not.toMatch(/\bSTABLE\b/);
+    expect(header).toMatch(/\bSTABLE\b/);
+    expect(header).not.toMatch(/\bVOLATILE\b/);
     expect(body).not.toMatch(/_mm_seed_ops_locations/);
   });
 

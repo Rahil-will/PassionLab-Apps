@@ -166,3 +166,22 @@ tr[class*='cursor-pointer'] {
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
+
+/* Testing grid: a value past its resolved min or max. */
+:root {
+  --color-tolerance-out: #FDECEC;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-tolerance-out: rgba(239, 68, 68, 0.18);
+  }
+}
+
+.dark {
+  --color-tolerance-out: rgba(239, 68, 68, 0.18);
+}
+
+.bg-tolerance-out {
+  background-color: var(--color-tolerance-out);
+}

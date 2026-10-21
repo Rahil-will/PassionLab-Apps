@@ -1,13 +1,13 @@
 import type { MmTestField } from './mmRpc';
 import {
   formatQtyM,
-  millDateTimeParts,
-  millDeclaredQty,
-  millRollFieldText,
+  dateTimeParts,
+  declaredQty,
+  rollFieldText,
   withLengthField,
 } from './mmRollDraft';
 
-export type MmChallanPrintKind = 'mill' | 'store' | 'vendor';
+export type MmChallanPrintKind = 'inhouse' | 'store' | 'vendor';
 
 export interface MmChallanPrintRoll {
   id: string;
@@ -19,7 +19,6 @@ export interface MmChallanPrintRoll {
   lot_no: string | null;
   batch_no: string | null;
   attributes: Record<string, unknown> | null;
-  mill_snapshot: Record<string, unknown> | null;
 }
 
 export interface MmChallanPrintDoc {
@@ -56,16 +55,8 @@ function text(value: string | null | undefined, fallback = '—'): string {
   return next || fallback;
 }
 
-function snapText(snap: Record<string, unknown> | null | undefined, key: string): string | null {
-  if (!snap) return null;
-  const value = snap[key];
-  if (value == null) return null;
-  const next = String(value).trim();
-  return next || null;
-}
-
 export function challanPrintDate(iso: string | null | undefined): string {
-  const parts = millDateTimeParts(iso);
+  const parts = dateTimeParts(iso);
   if (parts.date === '—') return '—';
   return parts.time ? `${parts.date}, ${parts.time}` : parts.date;
 }
@@ -89,11 +80,11 @@ export function challanPrintColumns(doc: MmChallanPrintDoc): MmTestField[] {
 }
 
 export function challanPrintRollCell(roll: MmChallanPrintRoll, field: MmTestField): string {
-  return millRollFieldText(roll, field);
+  return rollFieldText(roll, field);
 }
 
 export function challanPrintTotals(doc: MmChallanPrintDoc): { rolls: number; qty: string } {
-  const qty = doc.rolls.reduce((sum, roll) => sum + millDeclaredQty(roll), 0);
+  const qty = doc.rolls.reduce((sum, roll) => sum + declaredQty(roll, doc.uom), 0);
   return { rolls: doc.rolls.length, qty: formatQtyM(qty, doc.uom) };
 }
 
@@ -104,7 +95,7 @@ export function challanPrintBandTotals(doc: MmChallanPrintDoc): { band: string; 
     const band = String(roll.shade_band ?? '').trim() || 'Unbanded';
     const current = groups.get(band) ?? { rolls: 0, qty: 0 };
     current.rolls += 1;
-    current.qty += millDeclaredQty(roll);
+    current.qty += declaredQty(roll, doc.uom);
     groups.set(band, current);
   }
   return [...groups.entries()].map(([band, row]) => ({
@@ -115,7 +106,7 @@ export function challanPrintBandTotals(doc: MmChallanPrintDoc): { band: string; 
 }
 
 export function challanPrintHasBatch(doc: MmChallanPrintDoc): boolean {
-  return doc.kind === 'mill' || doc.rolls.some((roll) => Boolean(roll.batch_no));
+  return doc.kind === 'inhouse' || doc.rolls.some((roll) => Boolean(roll.batch_no));
 }
 
 function factoryFields(
@@ -138,7 +129,6 @@ function rollFromUnit(roll: {
   lot_no?: string | null;
   batch_no?: string | null;
   attributes?: Record<string, unknown> | null;
-  mill_snapshot?: Record<string, unknown> | null;
 }): MmChallanPrintRoll {
   return {
     id: roll.id,
@@ -148,9 +138,8 @@ function rollFromUnit(roll: {
     shade: roll.shade ?? null,
     shade_band: roll.shade_band ?? null,
     lot_no: roll.lot_no ?? null,
-    batch_no: roll.batch_no ?? snapText(roll.mill_snapshot, 'batch_no'),
+    batch_no: roll.batch_no ?? null,
     attributes: roll.attributes ?? null,
-    mill_snapshot: roll.mill_snapshot ?? null,
   };
 }
 
@@ -210,12 +199,12 @@ function baseDoc(
   };
 }
 
-export function millChallanPrintDoc(input: DocInput): MmChallanPrintDoc {
+export function inhouseChallanPrintDoc(input: DocInput): MmChallanPrintDoc {
   return baseDoc(
-    'mill',
+    'inhouse',
     'Delivery challan',
-    'Mill to warehouse',
-    'In-house mill',
+    'In-house to warehouse',
+    'In-house',
     text(input.toLocation, 'Warehouse'),
     input,
   );
@@ -245,5 +234,5 @@ export function inboundChallanPrintDoc(
       input,
     );
   }
-  return millChallanPrintDoc(input);
+  return inhouseChallanPrintDoc(input);
 }

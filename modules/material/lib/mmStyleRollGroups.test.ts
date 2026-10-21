@@ -32,7 +32,6 @@ function roll(partial: Partial<MmStyleWarehouseRoll> & Pick<MmStyleWarehouseRoll
     location_name: 'Rack 1',
     bucket: 'racked',
     attributes: { width: '58.4', 'shrinkage-w': '1.4', 'shrinkage-l': '2.1', gsm: '160' },
-    mill_snapshot: null,
     fabric_type_id: 'ft-1',
     ...partial,
   };

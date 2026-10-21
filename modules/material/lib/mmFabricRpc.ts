@@ -8,15 +8,13 @@ export type MmFabricColorMethod =
   | 'solid_dyed'
   | 'yarn_dyed'
   | 'melange'
-  | 'print'
-  | 'greige_only';
+  | 'print';
 
 export type MmFabricStatus = 'active' | 'inactive';
 export type MmFabricWidthForm = 'open' | 'tubular';
 export type MmFabricUom = 'kg' | 'm';
 
 export type MmStockBucketName =
-  | 'at_mill'
   | 'at_processing'
   | 'qc_pending'
   | 'on_hold'
@@ -39,7 +37,6 @@ export type MmStockTotals = {
   available: number;
   available_rolls?: number;
   available_laps?: number;
-  at_mill: number;
   at_processing: number;
   qc_pending: number;
   on_hold: number;
@@ -58,6 +55,8 @@ export type MmFabricStockFabric = {
   code: string;
   name: string;
   uom: MmFabricUom;
+  qty_unit?: string | null;
+  width_unit?: string | null;
   status: MmFabricStatus;
   composition_text: string | null;
   gsm: number | null;
@@ -92,7 +91,7 @@ export type MmFabricStockSummaryFilter = {
   fabric_id?: string;
   include_unlinked?: boolean;
   only_with_stock?: boolean;
-  side?: 'mill' | 'warehouse';
+  side?: 'warehouse';
 };
 
 export type MmFabricStockRollFilter = {
@@ -104,7 +103,7 @@ export type MmFabricStockRollFilter = {
   allocation?: 'free' | 'allocated';
   search?: string;
   limit?: number;
-  side?: 'mill' | 'warehouse';
+  side?: 'warehouse';
   stage_code?: string;
 };
 
@@ -119,7 +118,6 @@ export type MmFabricStockPosition = {
   allocated: boolean;
   style_material_id: string | null;
   stock_unit_id: string | null;
-  mill_roll_id: string | null;
   out_line_id: string | null;
 };
 
@@ -156,10 +154,10 @@ export type MmFabric = {
   width_in: number;
   width_form: MmFabricWidthForm;
   uom: MmFabricUom;
+  qty_unit?: string | null;
+  width_unit?: string | null;
   color_method: MmFabricColorMethod;
   design_ref: string | null;
-  greige_gsm: number | null;
-  greige_width_in: number | null;
   spec_values: Record<string, string>;
   supplier_article_no: string | null;
   hsn_code: string | null;
@@ -171,6 +169,8 @@ export type MmFabric = {
   used_on_orders: number;
   used_on_lines: number;
   locked: boolean;
+  gsm_tol_pct?: number | null;
+  width_tol_pct?: number | null;
   stock?: MmStockTotals;
   /** Open-order requirement and uncovered qty. Both are against fabric warehouse stock. */
   position?: { demand: number; short: number };
@@ -208,11 +208,11 @@ export type MmFabricSaveRow = {
   gsm: number;
   width_in: number;
   width_form: MmFabricWidthForm | string;
-  uom: MmFabricUom | string;
+  uom?: MmFabricUom | string;
+  qty_unit?: string | null;
+  width_unit?: string | null;
   color_method: MmFabricColorMethod;
   design_ref?: string | null;
-  greige_gsm?: number | null;
-  greige_width_in?: number | null;
   spec_values?: Record<string, string> | null;
   supplier_article_no?: string | null;
   hsn_code?: string | null;
@@ -321,19 +321,62 @@ export function saveFabricOpeningStock(
   });
 }
 
-export function setBatchFabric(batchId: string, fabricId: string) {
-  return callRpc<{ batch_id: string; fabric_id: string; rolls: number }>('mm_set_batch_fabric', {
-    p_batch_id: batchId,
-    p_fabric_id: fabricId,
-  });
-}
-
 export function getFabric(id: string) {
   return callRpc<MmFabricWithUsage>('mm_get_fabric', { p_id: id });
 }
 
+export type MmFabricDetailGroup = {
+  stage_code: string;
+  stage_label: string;
+  finished: boolean;
+  bucket: string;
+  rolls: number;
+  qty_kg: number | null;
+  qty_m: number | null;
+  allocated_rolls: number;
+};
+
+export type MmFabricDetailTotals = {
+  rolls: number;
+  qty_kg: number | null;
+  qty_m: number | null;
+  on_hand_rolls: number;
+};
+
+export type MmFabricDetailFabric = {
+  id: string;
+  code: string;
+  name: string;
+  gsm: number | null;
+  width_in: number | null;
+  width_form: string | null;
+  width_unit?: string | null;
+  fabric_type_id?: string | null;
+  uom: MmFabricUom | string;
+  qty_unit?: string | null;
+  color_method: string | null;
+};
+
+export type MmFabricDetail = {
+  fabric: MmFabricDetailFabric;
+  groups: MmFabricDetailGroup[];
+  totals: MmFabricDetailTotals;
+};
+
+export function getFabricDetail(fabricId: string) {
+  return callRpc<MmFabricDetail>('mm_fabric_detail', { p_fabric_id: fabricId });
+}
+
 export function checkFabricDuplicate(row: Partial<MmFabricSaveRow> & Record<string, unknown>) {
   return callRpc<MmFabricDuplicateCheck>('mm_check_fabric_duplicate', { p_row: row });
+}
+
+export function setFabricTolerance(id: string, gsmTolPct: number, widthTolPct: number) {
+  return callRpc<{ id: string; gsm_tol_pct: number; width_tol_pct: number }>('mm_set_fabric_tolerance', {
+    p_id: id,
+    p_gsm_tol_pct: gsmTolPct,
+    p_width_tol_pct: widthTolPct,
+  });
 }
 
 export function saveFabric(row: MmFabricSaveRow) {
@@ -390,8 +433,6 @@ export type MmFabricFieldOption = {
   help?: string;
 };
 
-export type MmFabricWhen = { [fieldKey: string]: string[] };
-
 export type MmFabricFieldTier = 'core' | 'standard' | 'custom';
 
 export type MmFabricFormField = {
@@ -404,8 +445,6 @@ export type MmFabricFormField = {
   input_type: MmFabricFieldInputType;
   options: MmFabricFieldOption[];
   required: boolean;
-  required_when: MmFabricWhen | null;
-  visible_when: MmFabricWhen | null;
   col_span: 1 | 2;
   seq: number;
   storage: 'column' | 'spec_values';

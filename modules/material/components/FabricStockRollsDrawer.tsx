@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui';
 import { useNotificationStore } from '../../../stores';
 import { FabricPicker } from './FabricPicker';
 import { bucketLabel, fabricMismatchMessage, fmtNum } from '../lib/fabricStock';
+import { qtyLabel } from '../lib/units';
 import { useMmConfigRights, useMmQuickCreateRights } from '../lib/useMmConfigRights';
 import {
   getFabricStockRolls,
@@ -13,27 +14,52 @@ import {
   type MmFabricStockRollFilter,
   type MmStockBucketName,
 } from '../lib/mmFabricRpc';
+import { MmRollProcessMark } from './MmProcessStatus';
+import { finishedText, needsColour, rollColour, rollStageLabel, specChip } from '../lib/rollColour';
+import { MmSetRollColourModal } from './MmSetRollColourModal';
 
 const LIMIT = 500;
 
 function whereOf(row: MmFabricStockRoll): string {
   const side = row.stock?.side;
   if (side === 'processing') return 'Processing';
-  if (side === 'mill') return row.batch_no ? `Mill · ${row.batch_no}` : 'Mill';
   const loc = row.location?.name || row.location?.code;
   return loc ? String(loc) : 'Warehouse';
 }
 
+function bookedLabel(row: MmFabricStockRoll): string {
+  const raw = row.booked_style as unknown;
+  if (typeof raw === 'string') return raw.trim();
+  if (raw && typeof raw === 'object') {
+    const record = raw as { style_name?: unknown; label?: unknown };
+    const name = typeof record.style_name === 'string' ? record.style_name : record.label;
+    return typeof name === 'string' ? name.trim() : '';
+  }
+  return '';
+}
+
 function qtyOf(row: MmFabricStockRoll): string {
-  const parts: string[] = [];
-  if (row.stock?.qty_kg != null) parts.push(`${fmtNum(row.stock.qty_kg)} kg`);
-  if (row.stock?.qty_m != null) parts.push(`${fmtNum(row.stock.qty_m)} m`);
-  if (parts.length > 0) return parts.join(' · ');
-  if (row.stock?.qty != null) return `${fmtNum(row.stock.qty)} ${row.stock.uom ?? ''}`.trim();
+  const kg = row.stock?.qty_kg;
+  const metres = row.stock?.qty_m;
+  const unit = (row.stock?.uom ?? '').trim().toLowerCase();
+  const kgN = kg != null ? Number(kg) : 0;
+  const metresN = metres != null ? Number(metres) : 0;
+  if (unit === 'kg' || unit === 'kgs') return kgN > 0 ? `${fmtNum(kgN)} ${qtyLabel('kg')}` : '—';
+  if (unit === 'm' || unit === 'mtr' || unit === 'meter' || unit === 'metre') {
+    return metresN > 0 ? `${fmtNum(metresN)} ${qtyLabel('m')}` : '—';
+  }
+  if (kgN > 0 && metresN > 0) return `${fmtNum(kgN)} ${qtyLabel('kg')} · ${fmtNum(metresN)} ${qtyLabel('m')}`;
+  if (kgN > 0) return `${fmtNum(kgN)} ${qtyLabel('kg')}`;
+  if (metresN > 0) return `${fmtNum(metresN)} ${qtyLabel('m')}`;
+  if (row.stock?.qty != null && Number(row.stock.qty) > 0) {
+    return `${fmtNum(row.stock.qty)} ${qtyLabel(row.stock.uom ?? null)}`.trim();
+  }
   return '—';
 }
 
 function styleOf(row: MmFabricStockRoll): string {
+  const booked = bookedLabel(row);
+  if (booked && !row.stock?.allocated) return `Booked · ${booked}`;
   if (!row.stock?.allocated) return 'Free';
   const order = row.style?.style_name || row.style?.style_ref || 'Allocated';
   const colour = row.stock.colour || row.style?.colorway_name;
@@ -55,6 +81,7 @@ export function FabricStockRollsDrawer({
   selectionBar,
   onClose,
   onChanged,
+  reloadKey = 0,
 }: {
   open: boolean;
   title: string;
@@ -64,6 +91,7 @@ export function FabricStockRollsDrawer({
   selectionBar?: (rows: MmFabricStockRoll[]) => React.ReactNode;
   onClose: () => void;
   onChanged: () => void;
+  reloadKey?: number;
 }) {
   const { showNotification } = useNotificationStore();
   const canAssign = useMmQuickCreateRights();
@@ -75,6 +103,7 @@ export function FabricStockRollsDrawer({
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [local, setLocal] = useState(filter);
+  const [colourIds, setColourIds] = useState<string[] | null>(null);
 
   useEffect(() => { setLocal(filter); }, [filter]);
 
@@ -98,7 +127,7 @@ export function FabricStockRollsDrawer({
     void load(local);
     // local identity is the filter snapshot the parent sets
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, JSON.stringify(local)]);
+  }, [open, reloadKey, JSON.stringify(local)]);
 
   const visibleRows = useMemo(
     () => (omitBuckets?.length
@@ -106,6 +135,21 @@ export function FabricStockRollsDrawer({
       : rows),
     [rows, omitBuckets],
   );
+  const batchGroups = useMemo(() => {
+    const grouped = new Map<string, MmFabricStockRoll[]>();
+    for (const row of visibleRows) {
+      const key = row.batch_no || 'none';
+      const list = grouped.get(key) ?? [];
+      list.push(row);
+      grouped.set(key, list);
+    }
+    return [...grouped.entries()].map(([id, rolls]) => ({
+      id,
+      batchNo: rolls.find((row) => row.batch_no)?.batch_no || 'No batch',
+      rolls,
+      booked: rolls.filter((row) => bookedLabel(row)).length,
+    })).sort((a, b) => a.batchNo.localeCompare(b.batchNo));
+  }, [visibleRows]);
   const allOn = visibleRows.length > 0 && visibleRows.every((row) => picked.includes(row.roll_id));
   const chips = useMemo(() => {
     const list: Array<{ key: string; label: string }> = [];
@@ -188,10 +232,11 @@ export function FabricStockRollsDrawer({
                 </th>
                 <th className="px-2 py-2 text-left">Roll code</th>
                 <th className="px-2 py-2 text-left">Stage</th>
+                <th className="px-2 py-2 text-left">Colour</th>
+                <th className="px-2 py-2 text-left">Finished</th>
                 <th className="px-2 py-2 text-left">Form</th>
                 <th className="px-2 py-2 text-left">Bucket</th>
                 <th className="px-2 py-2 text-left">Where</th>
-                <th className="px-2 py-2 text-left">Colour</th>
                 <th className="px-2 py-2 text-right">Qty</th>
                 <th className="px-2 py-2 text-left">Style</th>
                 <th className="px-2 py-2 text-left">Received</th>
@@ -199,36 +244,95 @@ export function FabricStockRollsDrawer({
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={10} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={11} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>
               )}
               {!loading && visibleRows.length === 0 && (
-                <tr><td colSpan={10} className="px-3 py-8 text-center text-slate-400">No rolls in this filter.</td></tr>
+                <tr><td colSpan={11} className="px-3 py-8 text-center text-slate-400">No rolls in this filter.</td></tr>
               )}
-              {!loading && visibleRows.map((row) => (
-                <tr key={row.roll_id} className="border-t border-slate-100">
-                  <td className="px-2 py-2">
-                    <input
-                      type="checkbox"
-                      checked={picked.includes(row.roll_id)}
-                      onChange={() => setPicked((cur) => cur.includes(row.roll_id) ? cur.filter((id) => id !== row.roll_id) : [...cur, row.roll_id])}
-                      aria-label={row.roll_code}
-                    />
-                  </td>
-                  <td className="px-2 py-2 font-mono text-slate-700">{row.roll_code}</td>
-                  <td className="px-2 py-2">{row.stage_code || '—'}</td>
-                  <td className="px-2 py-2">{row.unit_form || '—'}</td>
-                  <td className="px-2 py-2">
-                    <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                      {bucketLabel(row.stock.bucket)}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-slate-600">{whereOf(row)}</td>
-                  <td className="px-2 py-2">{row.stock.colour || 'No colour'}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{qtyOf(row)}</td>
-                  <td className="px-2 py-2">{styleOf(row)}</td>
-                  <td className="px-2 py-2 text-slate-500">{receivedOf(row)}</td>
-                </tr>
-              ))}
+              {!loading && batchGroups.map((group) => {
+                const ids = group.rolls.map((row) => row.roll_id);
+                const groupOn = ids.length > 0 && ids.every((id) => picked.includes(id));
+                return (
+                  <React.Fragment key={group.id}>
+                    <tr className="bg-slate-50 border-t border-slate-200">
+                      <td className="px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={groupOn}
+                          onChange={() => setPicked((cur) => (
+                            groupOn ? cur.filter((id) => !ids.includes(id)) : [...new Set([...cur, ...ids])]
+                          ))}
+                          aria-label={group.batchNo}
+                        />
+                      </td>
+                      <td className="px-2 py-2 font-semibold text-slate-800" colSpan={10}>
+                        {group.batchNo}
+                        {' · '}
+                        {group.rolls.length} {group.rolls.length === 1 ? 'roll' : 'rolls'}
+                        {group.booked > 0 ? ` · Booked ${group.booked}` : ''}
+                      </td>
+                    </tr>
+                    {group.rolls.map((row) => (
+                      <tr key={row.roll_id} className="border-t border-slate-100">
+                        <td className="px-2 py-2">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(row.roll_id)}
+                            onChange={() => setPicked((cur) => cur.includes(row.roll_id) ? cur.filter((id) => id !== row.roll_id) : [...cur, row.roll_id])}
+                            aria-label={row.roll_code}
+                          />
+                        </td>
+                        <td className="px-2 py-2 font-mono text-slate-700">
+                          {row.roll_code}
+                          {row.booked_style ? (
+                            <span className="block font-sans text-[10px] font-semibold text-violet-700">Booked · {row.booked_style}</span>
+                          ) : null}
+                          {(() => {
+                            const spec = specChip(row.spec);
+                            return spec ? <span className={`block font-sans text-[10px] ${spec.className}`}>{spec.text}</span> : null;
+                          })()}
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="inline-flex flex-wrap items-center gap-1">
+                            <span>{rollStageLabel(row)}</span>
+                            <MmRollProcessMark status={row.process_status} />
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">{rollColour(row)}</td>
+                        <td className="px-2 py-2">
+                          {(() => {
+                            const mark = finishedText(row.finished);
+                            return (
+                              <span className={mark.className}>
+                                {mark.text}
+                                {needsColour(row.finished) ? (
+                                  <button
+                                    type="button"
+                                    className="block text-[10px] font-semibold text-slate-700 hover:text-slate-900"
+                                    onClick={() => setColourIds([row.roll_id])}
+                                  >
+                                    Add colour
+                                  </button>
+                                ) : null}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-2 py-2">{row.unit_form || '—'}</td>
+                        <td className="px-2 py-2">
+                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                            {bucketLabel(row.stock.bucket)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-slate-600">{whereOf(row)}</td>
+                        <td className="px-2 py-2 text-right tabular-nums">{qtyOf(row)}</td>
+                        <td className="px-2 py-2">{styleOf(row)}</td>
+                        <td className="px-2 py-2 text-slate-500">{receivedOf(row)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
           {rows.length >= LIMIT ? (
@@ -276,6 +380,16 @@ export function FabricStockRollsDrawer({
           </div>
         ) : null}
       </aside>
+      <MmSetRollColourModal
+        open={colourIds != null}
+        rollIds={colourIds ?? []}
+        onClose={() => setColourIds(null)}
+        onSaved={() => {
+          setColourIds(null);
+          onChanged();
+          void load(local);
+        }}
+      />
     </>
   );
 }

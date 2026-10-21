@@ -108,7 +108,7 @@ export function MmShadeBandsPanel({
         ) : null}
       </div>
       <p className="text-[11px] text-slate-500">
-        {unbanded} unbanded. Mill shade stays the declared shade. A band only groups rolls in the warehouse.
+        {unbanded} unbanded. Shade stays the declared shade. A band only groups rolls in the warehouse.
       </p>
       <DesktopWriteGate>
         <div className="flex flex-wrap items-end gap-2">
@@ -166,7 +166,7 @@ export function MmShadeBandsPanel({
               <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Roll</th>
               <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Color</th>
               <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Fabric</th>
-              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Mill shade</th>
+              <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Shade</th>
               <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Tested shade</th>
               <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Lot</th>
               <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200">Qty</th>

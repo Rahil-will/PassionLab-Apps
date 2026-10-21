@@ -4,13 +4,10 @@ import { Search } from 'lucide-react';
 import { Badge, Button } from '../../../components/ui';
 import { queryKeys } from '../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../stores';
-import { MmAllocateRollsModal } from './MmAllocateRollsModal';
+import { MmAllocateV4Modal } from './MmAllocateV4Modal';
 import { MmProcSendModalV4 } from './MmProcSendModalV4';
-import { MmQcInspectModalV4 } from './MmQcInspectModalV4';
-import { MmQcTestModalV4 } from './MmQcTestModalV4';
 import { MmRollPassportModalV4 } from './MmRollPassportModalV4';
-import { mmWhListReadiness, type MmV4RollRow } from '../lib/mmV4Rpc';
-import type { MmWarehouseStockRow } from '../lib/mmRpc';
+import { mmWhListReadiness } from '../lib/mmV4Rpc';
 
 const th =
   'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
@@ -44,46 +41,12 @@ function gateLabel(code: string): string {
   return map[code] ?? code;
 }
 
-function toStockRow(roll: MmV4RollRow): MmWarehouseStockRow {
-  return {
-    id: roll.stock_unit_id || roll.roll_id,
-    unit_code: roll.roll_code,
-    qty: roll.length_m ?? roll.qty_available ?? null,
-    uom: roll.uom ?? 'm',
-    status: String(roll.custody?.status ?? 'in_stock'),
-    bucket: 'rack',
-    status_label: 'Warehouse',
-    location_code: roll.location?.code ?? null,
-    location_name: roll.location?.name ?? null,
-    order_id: null,
-    style_material_id: null,
-    style_name: String(roll.style?.style_name ?? ''),
-    style_ref: roll.style?.style_ref != null ? String(roll.style.style_ref) : null,
-    buyer_name: null,
-    po_number: null,
-    color_name: roll.color_ref ?? null,
-    color_ref: roll.color_ref ?? null,
-    shade: roll.shade ?? null,
-    lot_no: roll.lot_no ?? null,
-    fabric_name: roll.fabric_type_name ?? null,
-    fabric_type: roll.fabric_type_name ?? null,
-    fabric_type_id: roll.fabric_type_id ?? null,
-    in_challan_id: null,
-    challan_no: null,
-    challan_source: null,
-    store_challan_id: null,
-    received_at: null,
-  };
-}
-
 export function MmWarehouseReadinessPanel() {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const { showNotification } = useNotificationStore();
   const [search, setSearch] = useState('');
   const [onlyBlocked, setOnlyBlocked] = useState(false);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [testOpen, setTestOpen] = useState(false);
-  const [inspectOpen, setInspectOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [allocateOpen, setAllocateOpen] = useState(false);
   const [passportId, setPassportId] = useState<string | null>(null);
@@ -131,12 +94,6 @@ export function MmWarehouseReadinessPanel() {
         {selectedIds.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 ml-auto">
             <span className="text-[11px] text-slate-600">{selectedIds.length} selected</span>
-            <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
-              Test
-            </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={() => setInspectOpen(true)}>
-              Inspect
-            </Button>
             <Button type="button" size="sm" variant="secondary" onClick={() => setSendOpen(true)}>
               Send to processing
             </Button>
@@ -257,30 +214,6 @@ export function MmWarehouseReadinessPanel() {
         </table>
       </div>
 
-      <MmQcTestModalV4
-        open={testOpen}
-        scopeKind="rolls"
-        rollIds={selectedIds}
-        defaultSiteSide="warehouse"
-        onClose={() => setTestOpen(false)}
-        onSaved={() => {
-          setTestOpen(false);
-          setSelected({});
-          void listQ.refetch();
-        }}
-      />
-      <MmQcInspectModalV4
-        open={inspectOpen}
-        scopeKind="rolls"
-        rollIds={selectedIds}
-        defaultSiteSide="warehouse"
-        onClose={() => setInspectOpen(false)}
-        onSaved={() => {
-          setInspectOpen(false);
-          setSelected({});
-          void listQ.refetch();
-        }}
-      />
       <MmProcSendModalV4
         open={sendOpen}
         side="warehouse"
@@ -292,14 +225,12 @@ export function MmWarehouseReadinessPanel() {
           void listQ.refetch();
         }}
       />
-      <MmAllocateRollsModal
+      <MmAllocateV4Modal
         open={allocateOpen}
-        source="warehouse"
-        rolls={selectedRolls.map(toStockRow)}
+        rollIds={selectedIds}
         onClose={() => setAllocateOpen(false)}
-        onDone={(over) => {
+        onDone={() => {
           setAllocateOpen(false);
-          showNotification(over ? 'Allocated (over required)' : 'Allocated', 'success');
           setSelected({});
           void listQ.refetch();
         }}

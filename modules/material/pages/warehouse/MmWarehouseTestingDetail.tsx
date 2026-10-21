@@ -1,499 +1,499 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Search } from 'lucide-react';
-import { Button, Card } from '../../../../components/ui';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Button } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
-import { MmFabricSummaryCard } from '../../components/MmFabricSummaryCard';
+import { queryKeys } from '../../../../lib/queryKeys';
+import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { MmSheetGrid, type SheetColumn } from '../../components/MmSheetGrid';
-import { useNotificationStore } from '../../../../stores';
-import { useNavigationStore } from '../../../../stores';
-import { RoutePath } from '../../../../types';
-import { useInvalidateMmOps, useMmInChallanDetail } from '../../lib/useMmOps';
+import { parseTestOptions } from '../../lib/mmRollDraft';
+import { displayNumberToInches, formatStoredQty, parseQtyUnit, parseWidthUnit, qtyLabel, toDisplayWidth, unitBase, useMmUnits, widthLabel } from '../../lib/units';
+import { processStatusText } from '../../components/MmProcessStatus';
+import { lastTestCaption, toleranceState } from '../../lib/qcTolerance';
 import {
-  mmSaveWarehouseInspections,
-  type MmStockRoll,
-  type MmTestField,
-  type MmWarehouseInspectionWrite,
-} from '../../lib/mmRpc';
-import {
-  inboundDocKind,
-  inboundOpsStatus,
-  inboundOpsStatusClass,
-  inboundOpsStatusLabel,
-} from '../../lib/inboundDisplay';
-import {
-  attrRecord,
-  formatQtyM,
-  millDateTimeParts,
-  millFieldSeedText,
-  parseTestOptions,
-  seedWarehouseFieldValues,
-  warehouseMeasuredFieldValues,
-  warehouseTestFields,
-} from '../../lib/mmRollDraft';
-import { normalizePassFail } from '../../lib/mmSheetGrid';
+  mmQcGetScope,
+  mmQcSaveInspections,
+  mmQcSaveTestGrid,
+  type MmQcScopeDocument,
+  type MmQcScopeSession,
+  type MmV4QcResult,
+  type MmV4RollRow,
+} from '../../lib/mmV4Rpc';
 
-type ResultValue = '' | 'pass' | 'fail';
-
-interface TestingDraft {
-  id: string;
-  unit_code: string;
-  length_m: number | null;
-  status: string;
-  qc_result: string | null;
-  inspected: boolean;
-  result: ResultValue;
-  millSeeds: Record<string, string>;
-  values: Record<string, string>;
-  remarks: string;
-  millShade: string;
-  testedShade: string;
-  inspectedLength: string;
-  inspectedWidth: string;
-  widthUom: 'in' | 'cm';
-  overrideReason: string;
+function lastResult(roll: MmV4RollRow): string {
+  return lastTestCaption(roll);
 }
 
-function savedInspectionResult(roll: MmStockRoll): ResultValue {
-  if (roll.wh_result === 'pass' || roll.wh_result === 'fail') return roll.wh_result;
-  if (roll.qc_result === 'pass' || roll.qc_result === 'fail') return roll.qc_result;
+function qtyOf(roll: MmV4RollRow): string {
+  const unit = parseQtyUnit(roll.qty_unit ?? roll.uom);
+  const n = unitBase(unit) === 'kg' ? roll.weight_kg : roll.length_m;
+  return formatStoredQty(n == null ? null : Number(n), unit);
+}
+
+function widthFieldLabel(label: string, key: string, unit: string): string {
+  if (key !== 'width_in') return label || key;
+  const base = (label || key).replace(/\s*\((in|cm|inches|inch)\)\s*$/i, '');
+  return `${base} (${widthLabel(unit)})`;
+}
+
+function widthHint(limit: { text?: string | null; target?: number | null; min?: number | null; max?: number | null } | null | undefined, key: string, unit: string): string | undefined {
+  if (!limit) return undefined;
+  if (key !== 'width_in') return limit.text?.trim() || undefined;
+  const parts: string[] = [];
+  if (limit.target != null && Number.isFinite(Number(limit.target))) {
+    const shown = toDisplayWidth(Number(limit.target), unit);
+    if (shown != null) parts.push(`Spec ${shown} ${widthLabel(unit)}`);
+  }
+  if (limit.min != null && limit.max != null) {
+    const min = toDisplayWidth(Number(limit.min), unit);
+    const max = toDisplayWidth(Number(limit.max), unit);
+    if (min != null && max != null) parts.push(`${min}–${max} ${widthLabel(unit)}`);
+  }
+  if (parts.length > 0) return parts.join(' · ');
+  return limit.text?.trim() || undefined;
+}
+
+function dateLabel(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const raw = iso.trim();
+  const date = raw.length <= 10 ? new Date(`${raw}T12:00:00`) : new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+}
+
+function personName(value: MmQcScopeSession['tested_by']): string {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') return String(value.full_name || value.name || '').trim();
   return '';
 }
 
-function millSeedsFor(roll: MmStockRoll, fields: MmTestField[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const field of warehouseTestFields(fields)) {
-    out[field.key] = millFieldSeedText(roll, field);
-  }
-  return out;
+function textOf(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'string') return value.trim();
+  return '';
 }
 
-function toDraft(roll: MmStockRoll, fields: MmTestField[]): TestingDraft {
-  const millSeeds = millSeedsFor(roll, fields);
-  const result = savedInspectionResult(roll);
-  return {
-    id: roll.id,
-    unit_code: roll.unit_code,
-    length_m: roll.length_m,
-    status: roll.status,
-    qc_result: roll.qc_result,
-    inspected: Boolean(result),
-    result,
-    millSeeds,
-    values: seedWarehouseFieldValues(roll, attrRecord(roll.wh_values), fields),
-    remarks: roll.wh_remarks ?? '',
-    millShade: (roll.shade ?? '').trim(),
-    testedShade: (roll.tested_shade ?? '').trim(),
-    inspectedLength: '',
-    inspectedWidth: '',
-    widthUom: 'in',
-    overrideReason: '',
-  };
-}
+type StripItem = { label: string; value: string };
 
-function fieldSelectOptions(field: MmTestField): { value: string; label: string }[] {
-  return [
-    { value: '', label: '—' },
-    ...parseTestOptions(field.options).map((opt) => ({ value: opt, label: opt })),
+function stripItems(doc: MmQcScopeDocument): StripItem[] {
+  const fabric = [doc.fabric?.code, doc.fabric?.name].filter(Boolean).join(' – ');
+  const items: StripItem[] = [
+    { label: 'No', value: textOf(doc.no) },
+    { label: 'Date', value: dateLabel(doc.date) },
+    { label: 'Party', value: textOf(doc.party) },
+    { label: 'Party ref', value: textOf(doc.party_ref) },
+    { label: 'PO', value: textOf(doc.po_no) },
+    { label: 'Fabric', value: fabric },
+    { label: 'Stage', value: textOf(doc.stage_label) },
+    { label: 'Colour', value: textOf(doc.colour) },
+    { label: 'Rolls', value: doc.roll_count != null ? String(doc.roll_count) : '' },
   ];
-}
-
-function WhenPill({ label, iso }: { label: string; iso: string | null | undefined }) {
-  const parts = millDateTimeParts(iso);
-  return (
-    <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[10px] font-medium text-slate-600">
-      <span className="text-slate-400">{label}</span>
-      {' '}
-      <span className="tabular-nums">
-        {parts.date}
-        {parts.time ? `, ${parts.time}` : ''}
-      </span>
-    </span>
-  );
-}
-
-function MetricTile({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone: 'blue' | 'green' | 'yellow' | 'red';
-}) {
-  const shell =
-    tone === 'blue'
-      ? 'border-blue-100 bg-blue-50/70'
-      : tone === 'green'
-        ? 'border-green-200 bg-green-50'
-        : tone === 'red'
-          ? 'border-red-200 bg-red-50'
-          : 'border-yellow-200 bg-yellow-50';
-  const labelCls =
-    tone === 'blue' ? 'text-blue-600' : tone === 'green' ? 'text-green-700' : tone === 'red' ? 'text-red-700' : 'text-yellow-700';
-  const valueCls =
-    tone === 'blue' ? 'text-blue-900' : tone === 'green' ? 'text-green-900' : tone === 'red' ? 'text-red-900' : 'text-yellow-900';
-  return (
-    <div className={`rounded-xl border ${shell} px-3 py-2.5 min-w-0`}>
-      <p className={`text-[10px] font-semibold uppercase tracking-wide ${labelCls}`}>{label}</p>
-      <p className={`text-[13px] font-bold mt-1 tabular-nums ${valueCls}`}>{value}</p>
-      {sub ? <p className={`text-[10px] mt-0.5 ${labelCls}`}>{sub}</p> : null}
-    </div>
-  );
-}
-
-function canInspect(row: TestingDraft): boolean {
-  return (row.status === 'pending_qc' || row.status === 'in_stock') && !row.inspected;
-}
-
-function inspectionValues(row: TestingDraft, fields: MmTestField[]): Record<string, string> {
-  const values = warehouseMeasuredFieldValues(row.millSeeds, row.values, fields);
-  const put = (key: string, value: string) => {
-    const trimmed = value.trim();
-    if (trimmed) values[key] = trimmed;
-  };
-  put('inspected_length', row.inspectedLength);
-  put('cuttable_width', row.inspectedWidth);
-  if (row.inspectedWidth.trim()) {
-    values.width_uom = row.widthUom;
-    if (row.widthUom === 'in') put('inspected_width_in', row.inspectedWidth);
+  if (doc.kind === 'process_challan') {
+    items.push(
+      { label: 'Process', value: textOf(doc.process) },
+      { label: 'Returned', value: dateLabel(doc.returned_at) },
+    );
   }
-  put('override_reason', row.overrideReason);
-  return values;
-}
-
-function payloadFor(rows: TestingDraft[], fields: MmTestField[]): MmWarehouseInspectionWrite[] {
-  return rows
-    .filter((row) => canInspect(row) && (row.result === 'pass' || row.result === 'fail'))
-    .map((row) => ({
-      id: row.id,
-      result: row.result === 'pass' || row.result === 'fail' ? row.result : null,
-      remarks: row.remarks.trim() || null,
-      values: inspectionValues(row, fields),
-      shade: row.testedShade.trim() || null,
-    }));
+  return items.filter((item) => item.value !== '');
 }
 
 export default function MmWarehouseTestingDetail() {
-  const id = useNavigationStore((s) => s.routeParams.id);
-  const requestNavigate = useNavigationStore((s) => s.requestNavigate);
+  useMmUnits();
+  const id = useNavigationStore((s) => s.routeParams.id ?? '');
+  const kindParam = useNavigationStore((s) => s.routeParams.kind ?? '');
+  const inspecting = useNavigationStore((s) => s.routeParams.mode) === 'inspection';
+  const factoryId = useNavigationStore((s) => s.factoryId);
+  const setUnsaved = useNavigationStore((s) => s.setUnsaved);
+  const setPendingSaveAction = useNavigationStore((s) => s.setPendingSaveAction);
+  const setPendingDiscardAction = useNavigationStore((s) => s.setPendingDiscardAction);
+  const setUnsavedPrompt = useNavigationStore((s) => s.setUnsavedPrompt);
   const { showNotification } = useNotificationStore();
-  const { data, isLoading, error, refetch } = useMmInChallanDetail(id ?? null);
-  const invalidate = useInvalidateMmOps();
-  const [rows, setRows] = useState<TestingDraft[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [rollQuery, setRollQuery] = useState('');
+  const scopeKind = kindParam === 'process_challan' ? 'process_challan' : 'in_challan';
+  const [cells, setCells] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, MmV4QcResult | ''>>({});
+  const [remarks, setRemarks] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
-  const challan = data?.challan;
-  const fields = data?.test_fields ?? [];
-  const warehouseCols = useMemo(() => warehouseTestFields(fields), [fields]);
-  const uom = challan?.uom ?? null;
-  const millPending = challan?.source === 'mill' && challan.status === 'pending';
-  const canWrite = Boolean(challan && !millPending);
-
-  useEffect(() => {
-    if (!data) return;
-    setRows((data.rolls ?? []).map((roll) => toDraft(roll, data.test_fields ?? [])));
-    setRollQuery('');
-  }, [data]);
-
-  const q = rollQuery.trim().toLowerCase();
-  const visible = rows.filter((row) => !q || row.unit_code.toLowerCase().includes(q));
-  const remaining = rows.filter((row) => !row.result && canInspect(row));
-  const passedQty = rows.reduce((sum, row) => sum + (row.result === 'pass' ? Number(row.length_m || 0) : 0), 0);
-  const failedQty = rows.reduce((sum, row) => sum + (row.result === 'fail' ? Number(row.length_m || 0) : 0), 0);
-  const pendingQty = rows.reduce((sum, row) => sum + (!row.result ? Number(row.length_m || 0) : 0), 0);
-  const onChallanQty = Number(challan?.qty || 0) || rows.reduce((sum, row) => sum + Number(row.length_m || 0), 0);
-
-  const shadeOptions = useMemo(() => {
-    const set = new Set<string>();
-    const shadeField = fields.find((f) => f.key === 'shade' || /shade/i.test(f.label));
-    for (const opt of parseTestOptions(shadeField?.options)) {
-      if (opt.trim()) set.add(opt.trim());
-    }
-    for (const row of rows) {
-      if (row.millShade.trim()) set.add(row.millShade.trim());
-      if (row.testedShade.trim()) set.add(row.testedShade.trim());
-    }
-    return [
-      { value: '', label: '—' },
-      ...[...set].sort((a, b) => a.localeCompare(b)).map((s) => ({ value: s, label: s })),
-    ];
-  }, [rows, fields]);
-
-  const sheetColumns = useMemo<SheetColumn[]>(() => [
-    { key: 'sno', label: 'S.No', width: '3.25rem' },
-    { key: 'roll', label: 'Roll no.', width: '8rem' },
-    {
-      key: 'qty',
-      label: 'Qty',
-      width: '6rem',
-      headerClassName: 'text-blue-700 bg-blue-50',
-      cellClassName: 'bg-blue-50/40',
+  const scopeQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'testingScope', scopeKind, id] as const,
+    queryFn: async () => {
+      const res = await mmQcGetScope(scopeKind, id);
+      if (res.ok === false) throw new Error(res.message);
+      return res.data;
     },
-    {
-      key: 'mill_shade',
-      label: 'Mill shade',
-      width: '6.5rem',
-    },
-    ...warehouseCols.map((field) => ({
-      key: `wh:${field.key}`,
-      label: field.label,
+    enabled: Boolean(factoryId && id),
+  });
+
+  const rolls = scopeQ.data?.rolls ?? [];
+  const fields = scopeQ.data?.fields ?? [];
+  const widthUnit = parseWidthUnit(
+    scopeQ.data?.document?.fabric?.width_unit
+    ?? rolls[0]?.width_unit
+    ?? 'in',
+  );
+  const qtyUnit = parseQtyUnit(scopeQ.data?.document?.fabric?.qty_unit ?? rolls[0]?.qty_unit ?? rolls[0]?.uom);
+  const doc = scopeQ.data?.document ?? null;
+  const sessions = useMemo(() => {
+    const rows = [...(scopeQ.data?.sessions ?? [])];
+    rows.sort((a, b) => String(b.tested_at ?? '').localeCompare(String(a.tested_at ?? '')));
+    return rows;
+  }, [scopeQ.data?.sessions]);
+  const facts = doc ? stripItems(doc) : [];
+  const lengthUnit = unitBase(qtyUnit) === 'm' ? qtyUnit : 'm';
+  const title = inspecting
+    ? (doc?.kind_label && doc.no ? `Inspect rolls · ${doc.kind_label} ${doc.no}` : 'Inspect rolls')
+    : (doc?.kind_label && doc.no ? `Test rolls · ${doc.kind_label} ${doc.no}` : 'Test rolls');
+
+  const cellKey = (rollId: string, key: string) => `${rollId}::${key}`;
+
+  const dirty = useMemo(() => (
+    Object.values(cells).some((value) => value.trim() !== '')
+    || Object.values(results).some((value) => value === 'pass' || value === 'hold' || value === 'fail')
+    || Object.values(remarks).some((value) => value.trim() !== '')
+  ), [cells, remarks, results]);
+
+  const columns = useMemo<SheetColumn[]>(() => [
+    ...(inspecting ? [
+      { key: 'roll', label: 'Roll', editable: false, width: '7rem' },
+      { key: 'length', label: `Length (${qtyLabel(lengthUnit)})`, editable: true, width: '6rem' },
+      { key: 'width', label: `Width (${widthLabel(widthUnit)})`, editable: true, width: '6rem' },
+      { key: 'pts_1', label: '1 pt', editable: true, width: '4rem' },
+      { key: 'pts_2', label: '2 pt', editable: true, width: '4rem' },
+      { key: 'pts_3', label: '3 pt', editable: true, width: '4rem' },
+      { key: 'pts_4', label: '4 pt', editable: true, width: '4rem' },
+      { key: 'remarks', label: 'Remarks', editable: true, width: '10rem' },
+    ] satisfies SheetColumn[] : []),
+    ...(!inspecting ? [
+    { key: 'roll', label: 'Roll', editable: false, width: '7rem' },
+    { key: 'qty', label: `Qty (${qtyLabel(qtyUnit)})`, editable: false, width: '5rem' },
+    { key: 'stage', label: 'Stage', editable: false, width: '6rem' },
+    { key: 'colour', label: 'Colour', editable: false, width: '6rem' },
+    { key: 'last', label: 'Last result', editable: false, width: '8rem' },
+    ...fields.map((field) => ({
+      key: field.key,
+      label: widthFieldLabel(field.label || field.key, field.key, widthUnit),
+      hint: widthHint(field.limit, field.key, widthUnit),
       editable: true,
-      kind: (field.data_type === 'select' ? 'select' : 'text') as SheetColumn['kind'],
-      options: field.data_type === 'select' ? fieldSelectOptions(field) : undefined,
-      headerClassName: 'text-violet-800 bg-violet-50',
-      cellClassName: 'bg-violet-50/40',
+      width: '7rem',
+      kind: field.data_type === 'select' ? 'select' as const : field.data_type === 'checkbox' ? 'check' as const : 'text' as const,
+      options: field.data_type === 'select'
+        ? [{ value: '', label: '—' }, ...parseTestOptions(field.options).map((opt) => ({ value: opt, label: opt }))]
+        : undefined,
     })),
     {
-      key: 'tested_shade',
-      label: 'Tested shade',
-      editable: true,
-      kind: 'select' as const,
-      options: shadeOptions,
-      width: '7rem',
-      headerClassName: 'text-violet-800 bg-violet-50',
-      cellClassName: 'bg-violet-50/40',
-    },
-    { key: 'insp_len', label: 'Length', editable: true, width: '5.5rem' },
-    { key: 'insp_width', label: 'Width', editable: true, width: '5.5rem' },
-    {
-      key: 'width_uom',
-      label: 'Width unit',
-      editable: true,
-      kind: 'select' as const,
-      options: [
-        { value: 'in', label: 'in' },
-        { value: 'cm', label: 'cm' },
-      ],
-      width: '5.5rem',
-    },
-    { key: 'override', label: 'Override reason', editable: true, width: '9rem' },
-    {
       key: 'result',
-      label: 'Pass / fail',
+      label: 'Result',
       editable: true,
-      kind: 'select' as const,
+      kind: 'select',
+      width: '6rem',
       options: [
         { value: '', label: '—' },
         { value: 'pass', label: 'Pass' },
+        { value: 'hold', label: 'Hold' },
         { value: 'fail', label: 'Fail' },
       ],
-      headerClassName: 'text-emerald-800 bg-emerald-50',
-      cellClassName: 'bg-emerald-50/40',
-      width: '7.5rem',
     },
-  ], [warehouseCols, shadeOptions]);
+    { key: 'remarks', label: 'Remarks', editable: true, width: '10rem' },
+    ] satisfies SheetColumn[] : []),
+  ], [fields, inspecting, lengthUnit, qtyUnit, rolls, widthUnit]);
 
-  const sheetValue = (rowIndex: number, key: string): string => {
-    const row = visible[rowIndex];
-    if (!row) return '';
-    if (key === 'sno') return String(rows.findIndex((item) => item.id === row.id) + 1);
-    if (key === 'roll') return row.unit_code;
-    if (key === 'qty') return formatQtyM(row.length_m, uom);
-    if (key === 'mill_shade') return row.millShade;
-    if (key === 'tested_shade') return row.testedShade;
-    if (key === 'insp_len') return row.inspectedLength;
-    if (key === 'insp_width') return row.inspectedWidth;
-    if (key === 'width_uom') return row.widthUom;
-    if (key === 'override') return row.overrideReason;
-    if (key === 'result') return row.result;
-    if (key === 'remarks') return row.remarks;
-    if (key.startsWith('wh:')) return row.values[key.slice(3)] ?? '';
-    return '';
-  };
-
-  const sheetChange = (rowIndex: number, key: string, value: string) => {
-    const row = visible[rowIndex];
-    if (!row) return;
-    setRows((list) =>
-      list.map((item) => {
-        if (item.id !== row.id) return item;
-        if (key === 'tested_shade') return { ...item, testedShade: value };
-        if (key === 'insp_len') return { ...item, inspectedLength: value };
-        if (key === 'insp_width') return { ...item, inspectedWidth: value };
-        if (key === 'width_uom') return { ...item, widthUom: value === 'cm' ? 'cm' : 'in' };
-        if (key === 'override') return { ...item, overrideReason: value };
-        if (key === 'result') {
-          const next = normalizePassFail(value);
-          const result: ResultValue = next || (value === 'pass' || value === 'fail' ? value : '');
-          return { ...item, result };
+  const save = async (): Promise<boolean> => {
+    if (inspecting) {
+      let invalid = '';
+      const rows = rolls.flatMap((roll) => {
+        const lengthRaw = (cells[cellKey(roll.roll_id, 'length')] ?? '').trim();
+        const widthRaw = (cells[cellKey(roll.roll_id, 'width')] ?? '').trim();
+        const points = ['pts_1', 'pts_2', 'pts_3', 'pts_4'].map((key) => (cells[cellKey(roll.roll_id, key)] ?? '').trim());
+        const note = (remarks[roll.roll_id] ?? '').trim();
+        const touched = Boolean(lengthRaw || widthRaw || note || points.some(Boolean));
+        if (!touched) return [];
+        if (!lengthRaw || !widthRaw) {
+          invalid = `${roll.roll_code}: enter length and width`;
+          return [];
         }
-        if (key === 'remarks') return { ...item, remarks: value };
-        if (key.startsWith('wh:')) return { ...item, values: { ...item.values, [key.slice(3)]: value } };
-        return item;
-      }),
-    );
-  };
-
-  const write = async (payload: MmWarehouseInspectionWrite[], okMessage: string) => {
-    if (!id) return;
-    if (payload.length === 0) {
-      showNotification('Set pass or fail on at least one roll', 'error');
-      return;
+        const length = Number(lengthRaw);
+        const width = widthUnit === 'cm' ? Number(widthRaw) : displayNumberToInches(widthRaw, widthUnit);
+        if (!Number.isFinite(length) || length <= 0 || width == null || !Number.isFinite(width) || width <= 0) {
+          invalid = `${roll.roll_code}: length and width must be numbers`;
+          return [];
+        }
+        const counts = points.map((raw) => {
+          if (!raw) return 0;
+          const n = Number(raw);
+          if (!Number.isInteger(n) || n < 0) {
+            invalid = `${roll.roll_code}: defect counts are whole numbers`;
+            return 0;
+          }
+          return n;
+        });
+        return [{
+          roll_id: roll.roll_id,
+          inspected_length: length,
+          length_uom: lengthUnit === 'yd' ? 'yd' as const : 'm' as const,
+          cuttable_width: width,
+          width_uom: widthUnit === 'cm' ? 'cm' as const : 'in' as const,
+          pts_1: counts[0],
+          pts_2: counts[1],
+          pts_3: counts[2],
+          pts_4: counts[3],
+          remarks: note || null,
+        }];
+      });
+      if (invalid) {
+        showNotification(invalid, 'error');
+        return false;
+      }
+      if (rows.length === 0) {
+        showNotification('Enter length and width on at least one roll', 'error');
+        return false;
+      }
+      setSaving(true);
+      try {
+        const res = await mmQcSaveInspections({ site_side: 'warehouse', rows });
+        if (res.ok === false) throw new Error(res.message);
+        showNotification(`${res.data.rows?.length ?? rows.length} rolls inspected`, 'success');
+        setCells({});
+        setRemarks({});
+        setUnsaved(false);
+        await scopeQ.refetch();
+        return true;
+      } catch (error) {
+        showNotification(error instanceof Error ? error.message : 'Save failed', 'error');
+        return false;
+      } finally {
+        setSaving(false);
+      }
     }
-    setBusy(true);
+    let invalid = '';
+    const payloadRows = rolls.flatMap((roll) => {
+      const result = results[roll.roll_id];
+      if (result !== 'pass' && result !== 'hold' && result !== 'fail') return [];
+      const values: Record<string, unknown> = {};
+      for (const field of fields) {
+        const raw = (cells[cellKey(roll.roll_id, field.key)] ?? '').trim();
+        if (!raw) continue;
+        if (field.data_type === 'checkbox') {
+          if (raw === 'true') values[field.key] = true;
+          else if (raw === 'false') values[field.key] = false;
+          continue;
+        }
+        if (field.data_type === 'number' || field.data_type === 'decimal') {
+          const num = Number(raw);
+          if (!Number.isFinite(num)) {
+            invalid = `${roll.roll_code}: ${field.label || field.key} must be a number`;
+            return [];
+          }
+          values[field.key] = field.key === 'width_in'
+            ? displayNumberToInches(raw, widthUnit)
+            : num;
+        } else {
+          values[field.key] = raw;
+        }
+      }
+      return [{
+        roll_id: roll.roll_id,
+        result,
+        values,
+        remarks: (remarks[roll.roll_id] ?? '').trim() || null,
+      }];
+    });
+    if (invalid) {
+      showNotification(invalid, 'error');
+      return false;
+    }
+    if (payloadRows.length === 0) {
+      showNotification('Set pass, fail or hold on at least one roll', 'error');
+      return false;
+    }
+    setSaving(true);
     try {
-      const res = await mmSaveWarehouseInspections(id, payload);
+      const res = await mmQcSaveTestGrid({
+        scope_kind: scopeKind,
+        scope_id: id,
+        site_side: 'warehouse',
+        rows: payloadRows,
+      });
       if (res.ok === false) throw new Error(res.message);
-      showNotification(okMessage, 'success');
-      await invalidate();
-      await refetch();
-    } catch (e) {
-      showNotification(e instanceof Error ? e.message : 'Save failed', 'error');
+      const outside = res.data.out_of_tolerance?.length ?? 0;
+      const toast = outside > 0
+        ? `${res.data.saved} rolls tested · ${outside} out of tolerance`
+        : `${res.data.saved} rolls tested`;
+      showNotification(toast, 'success');
+      setCells({});
+      setResults({});
+      setRemarks({});
+      setUnsaved(false);
+      await scopeQ.refetch();
+      return true;
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : 'Save failed', 'error');
+      return false;
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
-  const save = () => {
-    if (millPending) {
-      showNotification('Receive this mill challan before testing', 'error');
-      return;
-    }
-    void write(payloadFor(rows, fields), 'Testing saved');
-  };
+  const saveRef = useRef(save);
+  saveRef.current = save;
 
-  const passRemaining = () => {
-    if (millPending) {
-      showNotification('Receive this mill challan before testing', 'error');
+  useEffect(() => {
+    setUnsavedPrompt({
+      title: inspecting ? 'Unsaved inspection' : 'Unsaved test data',
+      body: inspecting
+        ? 'You have inspection values that are not saved.'
+        : 'You have test values that are not saved.',
+      cancelLabel: 'Keep editing',
+      discardLabel: 'Discard changes',
+      hideSave: true,
+    });
+    return () => setUnsavedPrompt(null);
+  }, [inspecting, setUnsavedPrompt]);
+
+  useEffect(() => {
+    setUnsaved(dirty);
+  }, [dirty, setUnsaved]);
+
+  useEffect(() => {
+    if (!dirty) {
+      setPendingSaveAction(null);
+      setPendingDiscardAction(null);
       return;
     }
-    if (remaining.length === 0) {
-      showNotification('Nothing left to pass', 'error');
-      return;
-    }
-    void write(
-      remaining.map((row) => ({
-        id: row.id,
-        result: 'pass' as const,
-        remarks: row.remarks.trim() || null,
-        values: warehouseMeasuredFieldValues(row.millSeeds, row.values, fields),
-        shade: row.testedShade.trim() || null,
-      })),
-      `Passed ${remaining.length} ${remaining.length === 1 ? 'roll' : 'rolls'}`,
-    );
-  };
+    setPendingDiscardAction(() => {
+      setCells({});
+      setResults({});
+      setRemarks({});
+      setUnsaved(false);
+    });
+    return () => {
+      setPendingSaveAction(null);
+      setPendingDiscardAction(null);
+    };
+  }, [dirty, setPendingDiscardAction, setPendingSaveAction, setUnsaved]);
+
+  useEffect(() => () => {
+    setUnsaved(false);
+    setPendingSaveAction(null);
+    setPendingDiscardAction(null);
+  }, [setPendingDiscardAction, setPendingSaveAction, setUnsaved]);
 
   usePageHeader({
-    subtitle: !challan
-      ? 'Open a challan from Testing to pass or fail rolls.'
-      : millPending
-        ? 'Receive this mill challan first. Testing starts after warehouse receive.'
-        : 'Enter measured values, then tested shade, then pass or fail. Mill shade stays as declared.',
-  }, [challan, millPending]);
+    title,
+    subtitle: inspecting
+      ? 'Enter length, width, and defect points per roll. A row without length and width is not saved.'
+      : 'Enter values per roll. Cells outside tolerance turn red. Rows without a result are not saved.',
+  }, [title, inspecting]);
 
   return (
-    <PageShell loading={isLoading} error={error} onRetry={() => void refetch()} skeleton="card" className="pb-20">
-      {challan ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4 items-stretch">
-          <MmFabricSummaryCard
-            data={challan}
-            imageSize="large"
-            onStyleClick={
-              challan.order_id
-                ? () => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLE, { orderId: challan.order_id as string })
-                : undefined
-            }
-          />
-          <Card className="shadow-sm border-slate-200 h-full" noPadding>
-            <div className="px-5 py-4 h-full flex flex-col">
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <h4 className="text-[13px] font-semibold text-slate-900 flex items-center gap-2">
-                  <ClipboardList size={16} className="text-primary-600" />
-                  Testing Details
-                </h4>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${inboundOpsStatusClass(inboundOpsStatus(challan))}`}
-                >
-                  {inboundOpsStatusLabel(inboundOpsStatus(challan))}
-                </span>
+    <PageShell
+      loading={scopeQ.isLoading}
+      error={scopeQ.error}
+      onRetry={() => { void scopeQ.refetch(); }}
+      skeleton="table"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden w-full"
+    >
+      <div className="-mx-4 flex flex-col flex-1 min-h-0">
+        <div className="px-4 pb-3 flex items-start justify-between gap-3 shrink-0">
+          <div className="min-w-0 flex flex-wrap gap-x-5 gap-y-2">
+            {facts.map((fact) => (
+              <div key={fact.label} className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{fact.label}</p>
+                <p className="text-[13px] font-semibold text-slate-900 truncate">{fact.value}</p>
               </div>
-              <p className="text-[15px] font-bold text-slate-900 leading-tight truncate">{challan.challan_no}</p>
-              <p className="text-[12px] text-slate-500 mt-0.5 truncate">
-                {challan.source === 'mill'
-                  ? `Mill ${inboundDocKind(challan).toLowerCase()}`
-                  : challan.supplier_name
-                    ? `Vendor GRN · ${challan.supplier_name}`
-                    : 'Vendor GRN'}
-              </p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {challan.reference_no ? (
-                  <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[10px] font-medium text-slate-600">
-                    Ref {challan.reference_no}
-                  </span>
-                ) : null}
-                <WhenPill label="Sent" iso={challan.sent_at} />
-                <WhenPill label="Received" iso={challan.received_at} />
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                <MetricTile
-                  label="On challan"
-                  value={formatQtyM(onChallanQty, uom)}
-                  sub={`${challan.roll_count} ${challan.roll_count === 1 ? 'roll' : 'rolls'}`}
-                  tone="blue"
-                />
-                <MetricTile label="Passed" value={formatQtyM(passedQty, uom)} tone="green" />
-                <MetricTile label="Failed" value={formatQtyM(failedQty, uom)} tone="red" />
-                <MetricTile label="Pending" value={formatQtyM(pendingQty, uom)} tone="yellow" />
-              </div>
-            </div>
-          </Card>
+            ))}
+          </div>
+          <DesktopWriteGate>
+            <Button type="button" size="sm" disabled={saving || rolls.length === 0} onClick={() => void save()}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </DesktopWriteGate>
         </div>
-      ) : null}
 
-      {challan ? (
-        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between bg-slate-50/50 gap-3">
-            <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
-              <Search size={14} className="text-slate-400 shrink-0" />
-              <input
-                className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-                placeholder="Search roll no..."
-                value={rollQuery}
-                onChange={(e) => setRollQuery(e.target.value)}
-              />
-            </div>
-          </div>
-          {millPending ? (
-            <p className="px-4 py-3 text-[11px] text-amber-700 bg-amber-50 border-b border-amber-100">
-              Receive this mill challan on inbound first. Rolls stay in transit until then.
-            </p>
-          ) : null}
+        <div className="flex-1 min-h-0 bg-white border-y border-slate-200">
           <MmSheetGrid
-            columns={sheetColumns}
-            rowCount={visible.length}
-            getValue={sheetValue}
-            onChange={sheetChange}
-            isRowLocked={(rowIndex) => busy || !canWrite || !canInspect(visible[rowIndex])}
-            emptyText="No rolls on this challan."
+            columns={columns}
+            rowCount={rolls.length}
+            emptyText="No rolls on this document."
+            fit
+            cellTone={(row, key) => {
+              const roll = rolls[row];
+              const field = fields.find((item) => item.key === key);
+              if (!roll || !field) return undefined;
+              const raw = cells[cellKey(roll.roll_id, key)] ?? '';
+              const compare = key === 'width_in'
+                ? String(displayNumberToInches(raw, widthUnit) ?? '')
+                : raw;
+              return toleranceState(field.limit, compare) === 'out' ? 'out' : undefined;
+            }}
+            getValue={(row, key) => {
+              const roll = rolls[row];
+              if (!roll) return '';
+              if (key === 'roll') return roll.roll_code;
+              if (key === 'qty') return qtyOf(roll);
+              if (key === 'stage') {
+                const stage = roll.stage_label || roll.stage_code || '—';
+                const mark = processStatusText(roll.process_status);
+                return mark ? `${stage} · ${mark}` : stage;
+              }
+              if (key === 'colour') return roll.color || roll.color_ref || '—';
+              if (key === 'last') return lastResult(roll);
+              if (key === 'result') return results[roll.roll_id] || '';
+              if (key === 'remarks') return remarks[roll.roll_id] || '';
+              return cells[cellKey(roll.roll_id, key)] ?? '';
+            }}
+            onChange={(row, key, value) => {
+              const roll = rolls[row];
+              if (!roll) return;
+              if (key === 'result') {
+                const next: MmV4QcResult | '' = value === 'pass' || value === 'hold' || value === 'fail' ? value : '';
+                setResults((current) => ({ ...current, [roll.roll_id]: next }));
+                return;
+              }
+              if (key === 'remarks') {
+                setRemarks((current) => ({ ...current, [roll.roll_id]: value }));
+                return;
+              }
+              setCells((current) => ({ ...current, [cellKey(roll.roll_id, key)]: value }));
+            }}
           />
-          <div className="px-4 py-3 border-t border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-[10px] text-slate-400">
-              Score is points × 3600 / (length in yards × width in inches). Pass is 40 per 100 sq yd or under. A yard should carry at most 4 points; that cap is not checked. A different pass or fail needs a reason. Leave length blank to save pass or fail only.
-            </p>
-            <DesktopWriteGate>
-              <div className="flex items-center gap-2 justify-end">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy || !canWrite || remaining.length === 0}
-                  onClick={() => void passRemaining()}
-                >
-                  {busy ? 'Saving…' : `Pass remaining (${remaining.length})`}
-                </Button>
-                <Button type="button" size="sm" disabled={busy || !canWrite} onClick={() => void save()}>
-                  {busy ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
-            </DesktopWriteGate>
-          </div>
         </div>
-      ) : null}
+
+        {inspecting ? null : <details className="mx-4 mt-3 shrink-0 rounded-lg border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold text-slate-700">
+            Past sessions
+          </summary>
+          {sessions.length === 0 ? (
+            <p className="px-3 pb-3 text-[11px] text-slate-400">No sessions yet.</p>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="text-left text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  <th className="px-3 py-1.5">Date</th>
+                  <th className="px-3 py-1.5">By</th>
+                  <th className="px-3 py-1.5">Rolls</th>
+                  <th className="px-3 py-1.5">Pass</th>
+                  <th className="px-3 py-1.5">Hold</th>
+                  <th className="px-3 py-1.5">Fail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((session) => (
+                  <tr key={session.session_id} className="text-[12px] text-slate-700 border-t border-slate-100">
+                    <td className="px-3 py-1.5">{dateLabel(session.tested_at) || '—'}</td>
+                    <td className="px-3 py-1.5">{personName(session.tested_by) || '—'}</td>
+                    <td className="px-3 py-1.5">{session.rolls ?? '—'}</td>
+                    <td className="px-3 py-1.5">{session.pass ?? '—'}</td>
+                    <td className="px-3 py-1.5">{session.hold ?? '—'}</td>
+                    <td className="px-3 py-1.5">{session.fail ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </details>}
+      </div>
     </PageShell>
   );
 }

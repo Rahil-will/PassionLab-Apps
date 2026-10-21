@@ -1,8 +1,10 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Loader2, Lock, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button, Input, SelectDropdown } from '../../../../components/ui';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
+import { AppliesToChip } from '../../components/AppliesToChip';
+import { CommaSeparatedInput, joinCommaList, splitCommaList } from '../../components/OptionValuesEditor';
+import { TierLockNote } from '../../components/TierLockNote';
 import { EditorSplitLayout } from '../../../../components/settings/EditorSplitLayout';
 import {
   CatalogTable,
@@ -24,7 +26,7 @@ export interface FabricFormSchemaEditorHandle {
 }
 
 type ControlKind = 'dropdown' | 'input' | 'segment';
-type InputKind = 'text' | 'number';
+type InputKind = 'text' | 'number' | 'checkbox';
 
 interface FieldForm {
   id: string | null;
@@ -33,6 +35,7 @@ interface FieldForm {
   help: string;
   kind: ControlKind;
   input: InputKind;
+  valuesText: string;
   values: string[];
   optionValues: string[];
   required: boolean;
@@ -52,8 +55,9 @@ const EMPTY_FORM: FieldForm = {
   help: '',
   kind: 'input',
   input: 'text',
-  values: [''],
-  optionValues: [''],
+  valuesText: '',
+  values: [],
+  optionValues: [],
   required: false,
   visible: true,
   appliesTo: '',
@@ -78,16 +82,28 @@ function cloneGroups(groups: MmFabricFormGroup[]): MmFabricFormGroup[] {
 function controlOf(field: MmFabricFormField): { kind: ControlKind; input: InputKind } {
   if (field.input_type === 'segment') return { kind: 'segment', input: 'text' };
   if (field.input_type === 'select') return { kind: 'dropdown', input: 'text' };
+  if (field.input_type === 'toggle') return { kind: 'input', input: 'checkbox' };
   if (field.input_type === 'number' || field.input_type === 'decimal') return { kind: 'input', input: 'number' };
   return { kind: 'input', input: 'text' };
 }
 
 function controlLabel(field: MmFabricFormField): string {
   if (field.input_type === 'segment' || field.input_type === 'select') return 'Dropdown';
-  if (field.input_type === 'toggle') return 'Toggle';
+  if (field.input_type === 'toggle') return 'Checkbox';
   if (field.input_type === 'number' || field.input_type === 'decimal') return 'Number';
   if (field.input_type === 'text' || field.input_type === 'textarea') return 'Text';
   return field.input_type.replaceAll('_', ' ');
+}
+
+function valueSummary(field: MmFabricFormField): string {
+  if (field.input_type !== 'select' && field.input_type !== 'segment') return '—';
+  return joinCommaList(field.options.map((option) => option.label || option.value)) || '—';
+}
+
+function inputKindOf(value: string): InputKind {
+  if (value === 'number') return 'number';
+  if (value === 'checkbox') return 'checkbox';
+  return 'text';
 }
 
 function formFromField(field: MmFabricFormField): FieldForm {
@@ -99,8 +115,9 @@ function formFromField(field: MmFabricFormField): FieldForm {
     help: field.help ?? '',
     kind: control.kind,
     input: control.input,
-    values: field.options.length > 0 ? field.options.map((option) => option.label || option.value) : [''],
-    optionValues: field.options.length > 0 ? field.options.map((option) => option.value) : [''],
+    valuesText: joinCommaList(field.options.map((option) => option.label || option.value)),
+    values: field.options.map((option) => option.label || option.value),
+    optionValues: field.options.map((option) => option.value),
     required: field.required,
     visible: field.visible,
     appliesTo: field.applies_to_type_ids?.length === 1 ? field.applies_to_type_ids[0] : '',
@@ -114,11 +131,23 @@ function formFromField(field: MmFabricFormField): FieldForm {
 
 function optionsFromForm(form: FieldForm): MmFabricFormField['options'] {
   if (form.kind === 'input') return [];
-  return form.values.map((label, index) => {
-    const text = label.trim();
-    const stable = form.optionValues[index]?.trim();
-    return { value: stable || text, label: text };
-  }).filter((option) => option.label);
+  const used = new Set<number>();
+  return splitCommaList(form.valuesText).map((label) => {
+    const index = form.values.findIndex((prev, i) => (
+      !used.has(i) && prev.trim().toLowerCase() === label.toLowerCase()
+    ));
+    if (index >= 0) used.add(index);
+    const stable = index >= 0 ? form.optionValues[index]?.trim() : '';
+    return { value: stable || label, label };
+  });
+}
+
+function inputTypeFromForm(form: FieldForm, current?: MmFabricFormField['input_type']): MmFabricFormField['input_type'] {
+  if (form.kind === 'dropdown') return 'select';
+  if (form.kind === 'segment') return 'segment';
+  if (form.input === 'checkbox') return 'toggle';
+  if (form.input === 'number') return current === 'decimal' ? 'decimal' : 'number';
+  return 'text';
 }
 
 function mergeField(field: MmFabricFormField, form: FieldForm): MmFabricFormField {
@@ -139,13 +168,7 @@ function mergeField(field: MmFabricFormField, form: FieldForm): MmFabricFormFiel
   next.visible = form.visible;
   if (tier === 'standard') return next;
   const options = optionsFromForm(form);
-  const inputType = form.kind === 'dropdown'
-    ? 'select'
-    : form.kind === 'segment'
-      ? 'segment'
-      : form.input === 'number'
-        ? (field.input_type === 'decimal' ? 'decimal' : 'number')
-        : 'text';
+  const inputType = inputTypeFromForm(form, field.input_type);
   if (!field.has_values) {
     next.input_type = inputType;
     next.key = form.key.trim() || slugFieldKey(form.label);
@@ -187,11 +210,9 @@ function applyForm(groups: MmFabricFormGroup[], form: FieldForm): MmFabricFormGr
     label,
     help: form.help.trim() || null,
     placeholder: null,
-    input_type: form.kind === 'dropdown' ? 'select' : form.input === 'number' ? 'number' : 'text',
+    input_type: inputTypeFromForm(form),
     options: optionsFromForm(form),
     required: form.required,
-    required_when: null,
-    visible_when: null,
     col_span: form.colSpan,
     seq: form.seq || (host.fields.at(-1)?.seq ?? 0) + 1,
     storage: 'spec_values',
@@ -206,80 +227,6 @@ function applyForm(groups: MmFabricFormGroup[], form: FieldForm): MmFabricFormGr
     has_values: false,
   };
   return groups.map((group) => group.id === host.id ? { ...group, fields: [...group.fields, field] } : group);
-}
-
-function AppliesToChip({
-  ids,
-  types,
-  onChange,
-}: {
-  ids: string[] | null;
-  types: Array<{ id: string; name: string }>;
-  onChange: (next: string[] | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [box, setBox] = useState<{ top: number; left: number } | null>(null);
-  const known = ids?.filter((id) => types.some((type) => type.id === id)) ?? [];
-  const all = ids == null || (types.length > 0 && known.length === types.length);
-  const label = all
-    ? 'All'
-    : types.filter((type) => known.includes(type.id)).map((type) => type.name).join(', ') || 'All';
-
-  function commit(nextIds: string[]) {
-    if (nextIds.length === 0) return;
-    if (types.length > 0 && nextIds.length === types.length) onChange(null);
-    else onChange(nextIds);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          const rect = event.currentTarget.getBoundingClientRect();
-          setBox({ top: rect.bottom + 4, left: rect.left });
-          setOpen((value) => !value);
-        }}
-        className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-blue-300"
-      >
-        <span className="truncate">{label}</span>
-      </button>
-      {open && box && createPortal(
-        <>
-          <button type="button" className="fixed inset-0 z-[80] cursor-default" aria-label="Close" onClick={() => setOpen(false)} />
-          <div
-            className="fixed z-[81] w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
-            style={{ top: box.top, left: box.left }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <label className="flex items-center gap-2 px-1 py-1 text-[11px] text-slate-700">
-              <input type="checkbox" checked={all} onChange={() => onChange(null)} />
-              All
-            </label>
-            {types.map((type) => {
-              const checked = all || known.includes(type.id);
-              return (
-                <label key={type.id} className="flex items-center gap-2 px-1 py-1 text-[11px] text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => {
-                      if (all) commit(types.map((row) => row.id).filter((id) => id !== type.id));
-                      else if (known.includes(type.id)) commit(known.filter((id) => id !== type.id));
-                      else commit([...known, type.id]);
-                    }}
-                  />
-                  {type.name}
-                </label>
-              );
-            })}
-          </div>
-        </>,
-        document.body,
-      )}
-    </>
-  );
 }
 
 const FabricFormSchemaEditor = forwardRef<
@@ -374,7 +321,7 @@ const FabricFormSchemaEditor = forwardRef<
       showNotification('Select a section', 'error');
       return;
     }
-    if ((form.kind === 'dropdown' || form.kind === 'segment') && form.values.every((value) => !value.trim())) {
+    if ((form.kind === 'dropdown' || form.kind === 'segment') && splitCommaList(form.valuesText).length === 0) {
       showNotification('Add at least one dropdown value', 'error');
       return;
     }
@@ -407,7 +354,6 @@ const FabricFormSchemaEditor = forwardRef<
   }
 
   const typeLocked = form.tier !== 'custom' || form.hasValues;
-  const structureLocked = form.tier === 'core';
 
   return (
     <div className="h-full min-h-0 flex flex-col">
@@ -456,17 +402,6 @@ const FabricFormSchemaEditor = forwardRef<
                 shape="pill"
                 size="compact"
               />
-              {!structureLocked && (
-                <label className="flex items-start gap-2 text-[11px] text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={form.required}
-                    onChange={(e) => setForm((current) => ({ ...current, required: e.target.checked }))}
-                  />
-                  <span>Required when this fabric is created.</span>
-                </label>
-              )}
               {form.tier === 'custom' && (
                 <>
                   <SelectDropdown
@@ -490,10 +425,11 @@ const FabricFormSchemaEditor = forwardRef<
                       options={[
                         { value: 'text', label: 'Text' },
                         { value: 'number', label: 'Number' },
+                        { value: 'checkbox', label: 'Checkbox' },
                       ]}
                       value={form.input}
                       disabled={typeLocked}
-                      onChange={(value) => setForm((current) => ({ ...current, input: value === 'number' ? 'number' : 'text' }))}
+                      onChange={(value) => setForm((current) => ({ ...current, input: inputKindOf(value) }))}
                       shape="pill"
                       size="compact"
                     />
@@ -501,58 +437,22 @@ const FabricFormSchemaEditor = forwardRef<
                 </>
               )}
               {(form.kind === 'dropdown' || form.kind === 'segment') && (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-semibold text-slate-600">Dropdown values</p>
-                  {form.values.map((value, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <Input
-                        placeholder="Value"
-                        value={value}
-                        onChange={(e) => setForm((current) => {
-                          const values = current.values.slice();
-                          values[index] = e.target.value;
-                          return { ...current, values };
-                        })}
-                      />
-                      {form.values.length > 1 && (
-                        <button
-                          type="button"
-                          className="p-1 rounded text-slate-400 hover:text-red-600"
-                          aria-label="Remove value"
-                          onClick={() => setForm((current) => ({
-                            ...current,
-                            values: current.values.filter((_, i) => i !== index),
-                            optionValues: current.optionValues.filter((_, i) => i !== index),
-                          }))}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    icon={Plus}
-                    className="w-full"
-                    onClick={() => setForm((current) => ({
-                      ...current,
-                      values: [...current.values, ''],
-                      optionValues: [...current.optionValues, ''],
-                    }))}
-                  >
-                    Add value
-                  </Button>
-                </div>
+                <CommaSeparatedInput
+                  label="Dropdown values"
+                  value={form.valuesText}
+                  placeholder="Solid, Yarn dyed, Printed"
+                  hint="Separate values with commas."
+                  rows={3}
+                  maxRows={6}
+                  onChange={(value) => setForm((current) => ({ ...current, valuesText: value }))}
+                />
               )}
               {form.id && form.tier !== 'custom' && (
-                <p className="text-[10px] text-slate-400 flex items-start gap-1">
-                  <Lock size={11} className="mt-0.5 shrink-0" />
+                <TierLockNote>
                   {form.tier === 'core'
                     ? 'Core field. Label and help can change. Applied to decides which fabric type shows it.'
                     : 'Built-in field. Input type stays fixed. Applied to decides which fabric type shows it.'}
-                </p>
+                </TierLockNote>
               )}
               {form.hasValues && form.tier === 'custom' && (
                 <p className="text-[10px] text-slate-400">This field already has values. Key and input type stay fixed.</p>
@@ -608,12 +508,12 @@ const FabricFormSchemaEditor = forwardRef<
               emptyMessage="No fields yet."
               headerAction={<MmTableSaveButton />}
             >
-              <CatalogTable headers={['S.No', 'Label', 'Control', 'Applies to', '']}>
+              <CatalogTable headers={['S.No', 'Label', 'Control', 'Help', 'Value', 'Applies to', '']}>
                 {sections.map(({ group, fields }) => (
                   <React.Fragment key={group.id}>
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={7}
                         className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200"
                       >
                         {group.label}
@@ -641,6 +541,12 @@ const FabricFormSchemaEditor = forwardRef<
                             ) : null}
                           </CatalogTableCell>
                           <CatalogTableCell className="text-slate-600">{controlLabel(field)}</CatalogTableCell>
+                          <CatalogTableCell className="text-[10px] leading-tight text-slate-500 whitespace-normal max-w-[12rem]">
+                            {field.help?.trim() || '—'}
+                          </CatalogTableCell>
+                          <CatalogTableCell className="text-[10px] leading-tight text-slate-500 whitespace-normal max-w-[14rem]">
+                            {valueSummary(field)}
+                          </CatalogTableCell>
                           <CatalogTableCell>
                             <AppliesToChip
                               ids={field.applies_to_type_ids}

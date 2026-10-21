@@ -238,7 +238,6 @@ const App: React.FC = () => {
       case RoutePath.WORK_CENTER_PROCESS_FLOWS:
         return <WorkCenters />;
       case RoutePath.MATERIAL_MANAGEMENT:
-      case RoutePath.WORK_CENTER_MATERIAL:
         return <WorkCenterMaterial />;
       default:
         return <Dashboard />;

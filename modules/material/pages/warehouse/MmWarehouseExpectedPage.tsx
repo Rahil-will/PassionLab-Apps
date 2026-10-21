@@ -1,226 +1,263 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Filter, Search } from 'lucide-react';
 import { Card, SelectDropdown } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
-import { Pagination } from '../../../../components/Pagination';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { useDebouncedValue } from '../../../../hooks/useDebouncedValue';
+import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { fabricTypeCategoryLine } from '../../components/MmFabricSummaryCard';
-import type { MmExpectedStatus } from '../../lib/mmRpc';
-import { useMmExpectedBoard } from '../../lib/useMmOps';
-import { unitFormCountText } from '../../lib/mmUnitForm';
-import { millWordDot, millWordText } from '../mill/millStatus';
+import { mmStyleFabricPosition, type MmStyleFabricPositionRow } from '../../lib/mmV4Rpc';
+import {
+  whMuted,
+  whTd,
+  whTdDone,
+  whTdNeed,
+  whTdQty,
+  whTdRolls,
+  whTh,
+  whThDone,
+  whThNeed,
+  whThQty,
+  whThRolls,
+} from './whTable';
+import { MmStatusDot } from '../../components/MmStatusDot';
 
-const PAGE_SIZE = 20;
+function sentence(value: string | null | undefined): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '—';
+  return raw.replace(/_/g, ' ').replace(/^\w/, (ch) => ch.toUpperCase());
+}
 
-type ExpectedFilter = '' | 'all' | 'incoming' | 'met';
+function lineIdOf(row: MmStyleFabricPositionRow): string {
+  return row.colorway_material_id || row.style_material_id || '';
+}
 
-function fmtQty(value: number | null | undefined): string {
-  const n = Number(value);
+function qtyCell(qty: number | null | undefined) {
+  const n = Number(qty);
   if (!Number.isFinite(n) || n <= 0) return '—';
   return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
-function unitsText(count: number | null | undefined, form: string | null | undefined): string {
-  const n = Number(count);
-  if (!Number.isFinite(n) || n <= 0) return '—';
-  return unitFormCountText({ [form || 'roll']: n });
+function unitWord(count: number, one: string, many: string): string {
+  const n = Math.max(0, Number(count) || 0);
+  return `${n} ${n === 1 ? one : many}`;
 }
 
-function statusLabel(status: MmExpectedStatus): string {
-  if (status === 'met') return 'Met';
-  if (status === 'incoming') return 'Incoming';
-  return 'Open';
+function unitsLine(rolls: number, laps: number): string {
+  const rollN = Math.max(0, Number(rolls) || 0);
+  const lapN = Math.max(0, Number(laps) || 0);
+  if (rollN > 0 && lapN > 0) return `${unitWord(rollN, 'roll', 'rolls')} · ${unitWord(lapN, 'lap', 'laps')}`;
+  if (lapN > 0) return unitWord(lapN, 'lap', 'laps');
+  return unitWord(rollN, 'roll', 'rolls');
 }
 
-const thCls =
-  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
-const thCenterCls =
-  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-center whitespace-nowrap overflow-hidden';
-const thReqCls =
-  'px-2 py-2 text-[10px] font-semibold text-blue-700 uppercase tracking-wide border-b border-slate-200 bg-blue-50 text-center whitespace-nowrap';
-const thInCls =
-  'px-2 py-2 text-[10px] font-semibold text-yellow-800 uppercase tracking-wide border-b border-slate-200 bg-yellow-100 text-center whitespace-nowrap';
-const thRecvCls =
-  'px-2 py-2 text-[10px] font-semibold text-emerald-800 uppercase tracking-wide border-b border-slate-200 bg-emerald-100 text-center whitespace-nowrap';
-const thPassCls =
-  'px-2 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-slate-200 bg-green-100 text-center whitespace-nowrap';
-const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
-const tdReqCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-blue-50/60';
-const tdInCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-yellow-50';
-const tdRecvCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-emerald-50';
-const tdPassCls = 'px-2 py-2.5 text-center border-b border-slate-100 bg-green-50';
-const tdCenterCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
+function QtyUnits({
+  qty,
+  rolls,
+  laps,
+  tdClass,
+  qtyClass,
+  subClass,
+}: {
+  qty: number | null | undefined;
+  rolls: number;
+  laps: number;
+  tdClass: string;
+  qtyClass: string;
+  subClass: string;
+}) {
+  return (
+    <td className={tdClass}>
+      <span className={`block ${qtyClass}`}>{qtyCell(qty)}</span>
+      <span className={`block text-[10px] font-medium leading-tight ${subClass}`}>{unitsLine(rolls, laps)}</span>
+    </td>
+  );
+}
 
 export default function MmWarehouseExpectedPage() {
+  const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<ExpectedFilter>('');
-  const [page, setPage] = useState(1);
-  const debouncedSearch = useDebouncedValue(searchQuery, 300);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, filterStatus]);
-
-  const query = useMmExpectedBoard(filterStatus, debouncedSearch, page);
-  const total = query.data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const pagination = {
-    page: safePage,
-    setPage,
-    pageCount,
-    total,
-    start: total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1,
-    end: Math.min(safePage * PAGE_SIZE, total),
-  };
+  const [search, setSearch] = useState('');
+  const [buyer, setBuyer] = useState('');
+  const [orderStatus, setOrderStatus] = useState('');
+  const debounced = useDebouncedValue(search, 300);
 
   usePageHeader({
-    subtitle:
-      'Required vs incoming and received. Still needed = required minus received. Passed is QC-passed stock.',
+    subtitle: 'What each style still needs before dispatch. One row per style, colour, and fabric.',
   });
+
+  const listQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'styleFabricPosition', 'expected', debounced] as const,
+    queryFn: async () => {
+      const res = await mmStyleFabricPosition({
+        search: debounced || null,
+        include_closed: true,
+      });
+      if (res.ok === false) throw new Error(res.message);
+      return res.data.rows ?? [];
+    },
+    enabled: Boolean(factoryId),
+  });
+
+  const buyers = useMemo(() => {
+    const names = new Set<string>();
+    for (const row of listQ.data ?? []) {
+      const name = (row.buyer_name ?? '').trim();
+      if (name) names.add(name);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [listQ.data]);
+
+  const orderStatuses = useMemo(() => {
+    const names = new Set<string>();
+    for (const row of listQ.data ?? []) {
+      if (row.order_status) names.add(row.order_status);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [listQ.data]);
+
+  const rows = useMemo(() => {
+    const source = listQ.data ?? [];
+    const filtered = source.filter((row) => {
+      if (buyer && (row.buyer_name ?? '').trim() !== buyer) return false;
+      if (orderStatus && row.order_status !== orderStatus) return false;
+      return true;
+    });
+    return [...filtered].sort((a, b) => {
+      const aDue = Number(a.uncovered ?? 0) > 0 ? 0 : 1;
+      const bDue = Number(b.uncovered ?? 0) > 0 ? 0 : 1;
+      if (aDue !== bDue) return aDue - bDue;
+      const style = String(a.style_name ?? '').localeCompare(String(b.style_name ?? ''));
+      if (style !== 0) return style;
+      const colour = String(a.colorway_name ?? a.colour ?? '').localeCompare(String(b.colorway_name ?? b.colour ?? ''));
+      if (colour !== 0) return colour;
+      return String(a.fabric?.name ?? '').localeCompare(String(b.fabric?.name ?? ''));
+    });
+  }, [listQ.data, buyer, orderStatus]);
 
   return (
     <PageShell
-      loading={query.isLoading}
-      error={query.error}
-      onRetry={() => void query.refetch()}
+      loading={listQ.isLoading}
+      error={listQ.error}
+      onRetry={() => { void listQ.refetch(); }}
       skeleton="table"
-      className="w-full pb-20"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden"
     >
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
-        <div className="px-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-3">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-4 py-2 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-2">
           <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
             <Search size={14} className="text-slate-400 shrink-0" />
             <input
-              className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-              placeholder="Search style, PO, buyer, color, fabric…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              className="text-[11px] bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
+              placeholder="Search style, colour, fabric"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <SelectDropdown
-            value={filterStatus}
-            onChange={(v) => setFilterStatus(v as ExpectedFilter)}
-            options={[
-              { value: '', label: 'Open' },
-              { value: 'incoming', label: 'Incoming' },
-              { value: 'met', label: 'Met' },
-              { value: 'all', label: 'All' },
-            ]}
-            icon={Filter}
-            className="w-36"
-          />
-        </div>
-        {(total > PAGE_SIZE || debouncedSearch || filterStatus) && (
-          <div className="px-4 py-1.5 border-b border-slate-100 bg-white text-[10px] text-slate-500">
-            Page {pagination.page} of {pagination.pageCount} ({pagination.start}-{pagination.end} of {total} fabrics)
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <SelectDropdown size="compact"
+              value={buyer}
+              onChange={setBuyer}
+              options={[
+                { value: '', label: 'All buyers' },
+                ...buyers.map((name) => ({ value: name, label: name })),
+              ]}
+              icon={Filter}
+              className="w-44"
+            />
+            <SelectDropdown size="compact"
+              value={orderStatus}
+              onChange={setOrderStatus}
+              options={[
+                { value: '', label: 'All order statuses' },
+                ...orderStatuses.map((status) => ({ value: status, label: sentence(status) })),
+              ]}
+              icon={Filter}
+              className="w-44"
+            />
           </div>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1240px] table-fixed border-collapse">
-            <colgroup>
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '4%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '7%' }} />
-              <col style={{ width: '6%' }} />
-            </colgroup>
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[1180px] border-collapse">
             <thead>
               <tr>
-                <th className={thCls}>Style</th>
-                <th className={thCls}>Buyer / PO</th>
-                <th className={thCls}>Color</th>
-                <th className={thCls}>Fabric</th>
-                <th className={thCenterCls}>UOM</th>
-                <th className={thReqCls}>Required</th>
-                <th className={thInCls}>Incoming</th>
-                <th className={thRecvCls}>Received</th>
-                <th className={thRecvCls}>Rolls / laps</th>
-                <th className={thPassCls}>Passed</th>
-                <th className={thPassCls}>Passed units</th>
-                <th className={thCenterCls}>Still needed</th>
-                <th className={thCenterCls}>Status</th>
+                <th className={whTh}>Style</th>
+                <th className={whTh}>Buyer / PO</th>
+                <th className={whTh}>Style color</th>
+                <th className={whTh}>Fabric</th>
+                <th className={whTh}>Fabric color</th>
+                <th className={whTh}>UOM</th>
+                <th className={whThNeed}>Required</th>
+                <th className={whThDone}>Allocated</th>
+                <th className={whThRolls}>Booked</th>
+                <th className={whThQty}>Ready to dispatch</th>
+                <th className={`${whTh} !text-center`}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {(query.data?.rows ?? []).length === 0 && (
+              {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-10 text-center text-[11px] text-slate-400">
-                    No fabrics match this filter.
-                  </td>
+                  <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">No style lines.</td>
                 </tr>
-              )}
-              {(query.data?.rows ?? []).map((row) => {
-                const word = statusLabel(row.status);
-                const typeCategory = fabricTypeCategoryLine(row.fabric_type, row.fabric_category);
+              ) : rows.map((row) => {
+                const id = lineIdOf(row);
+                const typeLine = fabricTypeCategoryLine(row.fabric_type ?? row.fabric?.fabric_type, row.fabric_category);
+                const allocatedRolls = Number(row.at_processing?.rolls ?? 0) + Number(row.in_warehouse?.rolls ?? 0);
+                const allocatedLaps = Number(row.at_processing?.laps ?? 0) + Number(row.in_warehouse?.laps ?? 0);
                 return (
                   <tr
-                    key={`${row.order_id}-${row.colorway_id}-${row.fabric_line_id}`}
-                    className="hover:bg-slate-50/80 cursor-pointer"
-                    onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLE, { orderId: row.order_id })}
+                    key={`${row.order_id}-${row.colorway_id}-${id}-${row.fabric?.id ?? ''}`}
+                    className={id ? 'hover:bg-slate-50/80 cursor-pointer' : undefined}
+                    onClick={() => {
+                      if (id) requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC, { lineId: id });
+                    }}
                   >
-                    <td className={`${tdCls} font-semibold text-slate-800`}>
-                      <span className="block truncate">{row.style_name}</span>
-                      {row.style_ref ? (
-                        <span className="block text-[10px] font-medium text-slate-400 truncate">{row.style_ref}</span>
-                      ) : null}
+                    <td className={whTd}>
+                      <span className="block truncate">{row.style_name || '—'}</span>
+                      {row.style_ref ? <span className={`block truncate ${whMuted}`}>{row.style_ref}</span> : null}
                     </td>
-                    <td className={tdCls}>
+                    <td className={whTd}>
                       <span className="block truncate">{row.buyer_name || '—'}</span>
-                      {row.po_number ? (
-                        <span className="block text-[10px] text-slate-400 truncate">{row.po_number}</span>
-                      ) : null}
+                      <span className={`block truncate ${whMuted}`}>{row.po_number || '—'}</span>
                     </td>
-                    <td className={`${tdCls} truncate`}>{row.color_name || '—'}</td>
-                    <td className={tdCls}>
-                      <span className="block truncate">{row.fabric_name || '—'}</span>
-                      {typeCategory ? (
-                        <span className="block text-[10px] text-slate-400 truncate">{typeCategory}</span>
-                      ) : null}
+                    <td className={`${whTd} truncate`}>{row.colorway_name || '—'}</td>
+                    <td className={whTd}>
+                      <span className="block truncate">{row.fabric?.name || row.line_name || '—'}</span>
+                      {typeLine !== '—' ? <span className={`block truncate ${whMuted}`}>{typeLine}</span> : null}
                     </td>
-                    <td className={`${tdCenterCls} text-slate-500`}>{row.uom || '—'}</td>
-                    <td className={tdReqCls}>
-                      <span className="block text-[11px] font-semibold text-blue-800 tabular-nums">{fmtQty(row.required_m)}</span>
-                    </td>
-                    <td className={tdInCls}>
-                      <span className="block text-[11px] font-semibold text-yellow-900 tabular-nums">{fmtQty(row.qty_incoming_m)}</span>
-                    </td>
-                    <td className={tdRecvCls}>
-                      <span className="block text-[11px] font-semibold text-emerald-900 tabular-nums">{fmtQty(row.qty_received_m)}</span>
-                    </td>
-                    <td className={tdRecvCls}>
-                      <span className="block text-[10px] font-semibold text-emerald-900 tabular-nums">
-                        {unitsText(row.rolls_received, row.unit_form_received)}
-                      </span>
-                    </td>
-                    <td className={tdPassCls}>
-                      <span className="block text-[11px] font-semibold text-green-900 tabular-nums">
-                        {fmtQty(row.qty_passed_m)}
-                      </span>
-                    </td>
-                    <td className={tdPassCls}>
-                      <span className="block text-[10px] font-semibold text-green-900 tabular-nums">
-                        {unitsText(row.rolls_passed, row.unit_form_passed)}
-                      </span>
-                    </td>
-                    <td className={`${tdCenterCls} tabular-nums font-semibold`}>{fmtQty(row.qty_still_due_m)}</td>
-                    <td className={tdCenterCls}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(word === 'Open' ? 'Due' : word)}`} />
-                        <span className={`text-[10px] font-bold ${millWordText(word === 'Open' ? 'Due' : word)}`}>{word}</span>
-                      </span>
+                    <td className={`${whTd} truncate`}>{row.fabric_color || '—'}</td>
+                    <td className={`${whTd} text-slate-500`}>{row.uom === 'kg' ? 'kg' : row.uom === 'm' ? 'm' : (row.uom || '—')}</td>
+                    <td className={whTdNeed}>{qtyCell(row.required)}</td>
+                    <QtyUnits
+                      qty={row.allocated}
+                      rolls={allocatedRolls}
+                      laps={allocatedLaps}
+                      tdClass={whTdDone}
+                      qtyClass="text-emerald-900"
+                      subClass="text-emerald-800/80"
+                    />
+                    <QtyUnits
+                      qty={row.booked?.qty}
+                      rolls={Number(row.booked?.rolls ?? 0)}
+                      laps={Number(row.booked?.laps ?? 0)}
+                      tdClass={whTdRolls}
+                      qtyClass="text-yellow-900"
+                      subClass="text-yellow-800/80"
+                    />
+                    <QtyUnits
+                      qty={row.in_warehouse?.ready_to_cut}
+                      rolls={Number(row.in_warehouse?.ready_rolls ?? 0)}
+                      laps={Number(row.in_warehouse?.ready_laps ?? 0)}
+                      tdClass={whTdQty}
+                      qtyClass="text-green-900"
+                      subClass="text-green-800/80"
+                    />
+                    <td className={`${whTd} text-center`}>
+                      <MmStatusDot label={sentence(row.status)} />
+                      {row.release_suggested ? <span className={`block ${whMuted}`}>Release suggested</span> : null}
                     </td>
                   </tr>
                 );
@@ -228,7 +265,6 @@ export default function MmWarehouseExpectedPage() {
             </tbody>
           </table>
         </div>
-        <Pagination {...pagination} />
       </Card>
     </PageShell>
   );

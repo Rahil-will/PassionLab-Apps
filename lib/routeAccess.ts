@@ -42,35 +42,24 @@ const ADMIN_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.WORK_CENTER_DEPARTMENTS,
   RoutePath.WORK_CENTER_PROCESS_FLOWS,
   RoutePath.MATERIAL_MANAGEMENT,
-  RoutePath.WORK_CENTER_MATERIAL,
   RoutePath.MATERIAL_FABRICS,
   RoutePath.MATERIAL_FABRIC_DETAIL,
   RoutePath.MATERIAL_FABRICS_SETUP,
-  RoutePath.MATERIAL_MILL,
-  RoutePath.MATERIAL_MILL_BATCHES,
-  RoutePath.MATERIAL_MILL_BATCH_NEW,
-  RoutePath.MATERIAL_MILL_BATCH_DETAIL,
-  RoutePath.MATERIAL_MILL_QC,
-  RoutePath.MATERIAL_MILL_STYLES,
-  RoutePath.MATERIAL_MILL_HISTORY,
-  RoutePath.MATERIAL_MILL_STOCK,
-  RoutePath.MATERIAL_MILL_PROCESS_SEND,
-  RoutePath.MATERIAL_MILL_LINE,
-  RoutePath.MATERIAL_MILL_ASSIGN,
-  RoutePath.MATERIAL_MILL_DISPATCH,
-  RoutePath.MATERIAL_MILL_CHALLAN,
-  RoutePath.MATERIAL_MILL_UNALLOCATED,
-  RoutePath.MATERIAL_MILL_UNALLOCATED_DISPATCH,
-  RoutePath.MATERIAL_MILL_UNALLOCATED_ALLOCATE,
-  RoutePath.MATERIAL_MILL_UNALLOCATED_LINE,
-  RoutePath.MATERIAL_MILL_UNALLOCATED_LINE_ALLOCATE,
   RoutePath.MATERIAL_PROCESS,
   RoutePath.MATERIAL_PROCESS_DETAIL,
   RoutePath.MATERIAL_WAREHOUSE,
+  RoutePath.MATERIAL_WAREHOUSE_RECEIVE,
+  RoutePath.MATERIAL_WAREHOUSE_RECEIPTS,
+  RoutePath.MATERIAL_WAREHOUSE_RECEIPT,
   RoutePath.MATERIAL_WAREHOUSE_EXPECTED,
-  RoutePath.MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED,
   RoutePath.MATERIAL_WAREHOUSE_INTERNAL,
   RoutePath.MATERIAL_WAREHOUSE_EXTERNAL,
+  RoutePath.MATERIAL_WAREHOUSE_PROCESS_RETURNS,
+  RoutePath.MATERIAL_WAREHOUSE_FABRICS,
+  RoutePath.MATERIAL_WAREHOUSE_FABRIC,
+  RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRICS,
+  RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC,
+  RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC_ALLOCATE,
   RoutePath.MATERIAL_WAREHOUSE_ROLL,
   RoutePath.MATERIAL_WAREHOUSE_STYLE,
   RoutePath.MATERIAL_WAREHOUSE_STYLES,
@@ -83,6 +72,8 @@ const ADMIN_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.MATERIAL_WAREHOUSE_DISPATCH_SEND,
   RoutePath.MATERIAL_WAREHOUSE_TESTING,
   RoutePath.MATERIAL_WAREHOUSE_QC,
+  RoutePath.MATERIAL_WAREHOUSE_PROCESS,
+  RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL,
   RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND,
   RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL,
   RoutePath.MATERIAL_WAREHOUSE_STOCK,
@@ -134,7 +125,6 @@ const VIEWER_ROUTE_PREFIXES = [
 
 export interface MmFeatureFlags {
   fabric_warehouse: boolean;
-  fabric_mill: boolean;
   trims: boolean;
 }
 
@@ -193,7 +183,7 @@ function hasAssignedPermission(
 function mmFeatureEnabled(flags: MmFeatureFlags, route: string): boolean {
   const feature = mmFeatureForRoute(route);
   if (!feature) return true;
-  if (feature === 'fabric') return flags.fabric_warehouse || flags.fabric_mill;
+  if (feature === 'fabric') return flags.fabric_warehouse;
   return flags[feature];
 }
 
@@ -211,7 +201,6 @@ export function mmFeatureDeniedLabel(
   const withoutFeatures: RouteAccessContext = { ...ctx, mmFeatures: undefined };
   if (!canAccessRoute(role, route, withoutFeatures)) return null;
   const feature = mmFeatureForRoute(route);
-  if (feature === 'fabric_mill') return 'Fabric mill';
   if (feature === 'trims') return 'Trims warehouse';
   if (feature === 'fabric') return 'Fabric';
   return 'Fabric warehouse';

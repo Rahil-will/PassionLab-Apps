@@ -410,7 +410,7 @@ const MmRackMasterPage = forwardRef<MmRackMasterHandle, { onDirtyChange?: (dirty
                 {editingLocalId ? <Pencil size={14} /> : <Plus size={14} />}
                 {editingLocalId ? 'Edit location' : 'Add zone, rack, or bin'}
               </h4>
-              <SelectDropdown
+              <SelectDropdown size="compact"
                 label="Type"
                 value={kind}
                 disabled={saving || Boolean(editingLocalId)}
@@ -427,7 +427,7 @@ const MmRackMasterPage = forwardRef<MmRackMasterHandle, { onDirtyChange?: (dirty
                 }}
               />
               {kind !== 'zone' && (
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   label={kind === 'bin' ? 'Rack' : 'Zone (optional)'}
                   value={parentId}
                   disabled={saving}

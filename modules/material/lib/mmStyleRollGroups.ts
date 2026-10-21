@@ -83,7 +83,7 @@ export function inboundChallanInspected(
   rolls: Array<{ in_challan_id: string | null; bucket: string; qc_result: string | null }>,
 ): boolean {
   const onChallan = rolls.filter(
-    (row) => row.in_challan_id === challanId && row.bucket !== 'mill' && row.bucket !== 'transit',
+    (row) => row.in_challan_id === challanId && row.bucket !== 'transit',
   );
   return onChallan.length > 0 && onChallan.every((row) => row.qc_result === 'pass' || row.qc_result === 'fail');
 }

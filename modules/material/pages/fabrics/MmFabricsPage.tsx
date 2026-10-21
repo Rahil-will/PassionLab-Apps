@@ -17,15 +17,46 @@ import { useMmConfigRights } from '../../lib/useMmConfigRights';
 import { useMmFabrics, useMmFabricConstructions } from '../../lib/useMmFabrics';
 import { useMmRequirementCatalog } from '../../lib/useMmRequirementCatalog';
 import { setFabricStatus, type MmFabric, type MmFabricStatus } from '../../lib/mmFabricRpc';
-import { colorMethodLabel, suggestFabricName, uomLabel, widthFormLabel } from '../../lib/fabricLabels';
-import { fmtUomQty } from '../../lib/fabricStock';
+import { colorMethodLabel, suggestFabricName, widthFormLabel } from '../../lib/fabricLabels';
+import { formatStoredQty, formatStoredWidth, toDisplayWidth, useFabricUnits } from '../../lib/units';
 import { FabricFormDrawer } from '../../components/FabricFormDrawer';
 import { FabricMergeModal } from '../../components/FabricMergeModal';
+import { MmStatusDot } from '../../components/MmStatusDot';
+
+function FabricName({ fabric, archived }: { fabric: MmFabric; archived: boolean }) {
+  const units = useFabricUnits(fabric);
+  const shown = toDisplayWidth(fabric.width_in, units.widthUnit);
+  const autoName = suggestFabricName({
+    constructionName: fabric.construction?.name,
+    compositionText: fabric.composition_text,
+    gsm: fabric.gsm,
+    widthIn: shown,
+    widthForm: fabric.width_form,
+    widthUnit: units.widthUnit,
+  }) || fabric.name;
+  return (
+    <span className={`block truncate font-semibold ${archived ? 'text-slate-400' : 'text-slate-800'}`} title={autoName}>
+      {autoName}
+    </span>
+  );
+}
+
+function FabricWidth({ fabric }: { fabric: MmFabric }) {
+  const units = useFabricUnits(fabric);
+  const fullWidth = fabric.spec_values?.full_width?.trim();
+  const cut = fabric.width_in != null ? `Cut ${formatStoredWidth(fabric.width_in, units.widthUnit)}` : null;
+  const width = [fullWidth ? `Full ${fullWidth}` : null, cut].filter(Boolean).join(' · ') || '—';
+  return <>{width}</>;
+}
+
+function qtyText(value: number, uom: string, qtyUnit?: string | null): string {
+  return formatStoredQty(value, qtyUnit ?? uom);
+}
 
 const PAGE_SIZE = 20;
 const FABRIC_COL = '26%';
 const ACTION_COL = '2.75rem';
-const EQUAL_COL_COUNT = 13;
+const EQUAL_COL_COUNT = 12;
 const equalCol = `calc((100% - ${FABRIC_COL} - ${ACTION_COL}) / ${EQUAL_COL_COUNT})`;
 
 const thCls =
@@ -37,6 +68,22 @@ const thCenterCls =
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
 const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
 const tdCenterCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center max-w-0 overflow-hidden';
+const thAvailCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-green-800 uppercase tracking-wide border-b border-green-100 bg-green-100 text-center whitespace-nowrap overflow-hidden';
+const thShortCls =
+  'px-2.5 py-2 text-[10px] font-semibold text-red-800 uppercase tracking-wide border-b border-red-100 bg-red-50 text-center whitespace-nowrap overflow-hidden';
+const tdAvailCls = 'px-2.5 py-2.5 text-[11px] text-center border-b border-green-50 bg-green-50 max-w-0 overflow-hidden';
+const tdShortCls = 'px-2.5 py-2.5 text-[11px] text-center border-b border-red-50 bg-red-50/70 max-w-0 overflow-hidden';
+
+/** One available figure. Non-cuttable stock stays in the number. */
+function listedAvailable(stock: { available?: number; available_cuttable?: number; not_cuttable?: number } | undefined): number {
+  const cuttable = Number(stock?.available_cuttable ?? 0);
+  const available = Number(stock?.available ?? 0);
+  const notCuttable = Number(stock?.not_cuttable ?? 0);
+  const alreadyCounted = Math.max(0, available - cuttable);
+  return available + Math.max(0, notCuttable - alreadyCounted);
+}
+
 function RowMenu({
   fabric,
   onArchive,
@@ -107,7 +154,7 @@ function RowMenu({
   );
 }
 
-export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
+export default function MmFabricsPage() {
   const { showNotification } = useNotificationStore();
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const isConfig = useMmConfigRights();
@@ -176,7 +223,7 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
 
   usePageHeader({});
 
-  const drawerOpen = createOpen || Boolean(fabricId);
+  const drawerOpen = createOpen;
 
   return (
     <PageShell
@@ -198,15 +245,15 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
             />
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
-            <SelectDropdown
+            <SelectDropdown size="compact"
               options={archiveOptions}
               value={archiveView}
               onChange={(value) => setArchiveView(value === 'all' || value === 'inactive' ? value : 'active')}
               className="w-40"
             />
-            <SelectDropdown options={typeOptions} value={typeId} onChange={setTypeId} icon={Filter} className="w-36" />
+            <SelectDropdown size="compact" options={typeOptions} value={typeId} onChange={setTypeId} icon={Filter} className="w-36" />
             {typeId && (
-              <SelectDropdown options={constructionOptions} value={constructionId} onChange={setConstructionId} icon={Filter} className="w-44" />
+              <SelectDropdown size="compact" options={constructionOptions} value={constructionId} onChange={setConstructionId} icon={Filter} className="w-44" />
             )}
             {isConfig && (
               <DesktopWriteGate>
@@ -239,11 +286,10 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
                 <th className={thCenterCls}>GSM</th>
                 <th className={thCls}>Width</th>
                 <th className={thCls}>Width type</th>
-                <th className={thCls}>UOM</th>
                 <th className={thCls}>Colour</th>
                 <th className={thCenterCls}>Used on</th>
-                <th className={thCenterCls}>Available</th>
-                <th className={thCenterCls} title="Demand − cuttable in stock">Short</th>
+                <th className={thAvailCls}>Available</th>
+                <th className={thShortCls} title="Demand − cuttable in stock">Short</th>
                 <th className={thCenterCls}>Status</th>
                 <th className={`${thCenterCls} sticky right-0 z-20`} aria-label="Actions" />
               </tr>
@@ -251,27 +297,14 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
             <tbody>
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                  <td colSpan={14} className="px-4 py-10 text-center text-[11px] text-slate-400">
                     No fabrics match this filter.
                   </td>
                 </tr>
               )}
               {pageRows.map((fabric) => {
                 const archived = fabric.status === 'inactive';
-                const autoName = suggestFabricName({
-                  constructionName: fabric.construction?.name,
-                  compositionText: fabric.composition_text,
-                  gsm: fabric.gsm,
-                  widthIn: fabric.width_in,
-                  widthForm: fabric.width_form,
-                }) || fabric.name;
-                const fullWidth = fabric.spec_values?.full_width?.trim();
-                const width = [
-                  fullWidth ? `Full ${fullWidth}"` : null,
-                  fabric.width_in != null ? `Cut ${fabric.width_in}"` : null,
-                ].filter(Boolean).join(' · ') || '—';
                 const widthType = widthFormLabel(fabric.width_form) || '—';
-                const uom = uomLabel(fabric.uom) || '—';
                 return (
                   <tr
                     key={fabric.id}
@@ -279,7 +312,7 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
                     onClick={() => requestNavigate(RoutePath.MATERIAL_FABRIC_DETAIL, { fabricId: fabric.id })}
                   >
                     <td className={tdFirstCls}>
-                      <span className={`block truncate font-semibold ${archived ? 'text-slate-400' : 'text-slate-800'}`} title={autoName}>{autoName}</span>
+                      <FabricName fabric={fabric} archived={archived} />
                     </td>
                     <td className={`${tdCls} font-mono text-slate-500`}>
                       <span className="block truncate">{fabric.code}</span>
@@ -288,32 +321,22 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
                     <td className={`${tdCls} truncate`}>{fabric.construction?.name ?? '—'}</td>
                     <td className={`${tdCls} truncate`} title={fabric.composition_text}>{fabric.composition_text || '—'}</td>
                     <td className={`${tdCenterCls} tabular-nums`}>{fabric.gsm ?? '—'}</td>
-                    <td className={`${tdCls} truncate`} title={width}>{width}</td>
+                    <td className={`${tdCls} truncate`}><FabricWidth fabric={fabric} /></td>
                     <td className={`${tdCls} truncate`}>{widthType}</td>
-                    <td className={`${tdCls} truncate`}>{uom}</td>
                     <td className={`${tdCls} truncate`}>{colorMethodLabel(fabric.color_method) || '—'}</td>
                     <td className={`${tdCenterCls} tabular-nums`}>
                       {fabric.used_on_orders > 0 ? fabric.used_on_orders : '—'}
                     </td>
-                    <td className={tdCenterCls}>
-                      <span className="block tabular-nums font-semibold text-slate-800">
-                        {fmtUomQty(fabric.stock?.available_cuttable ?? fabric.stock?.available ?? 0, fabric.uom)}
-                      </span>
-                      {(fabric.stock?.not_cuttable ?? 0) > 0 ? (
-                        <span className="block text-[10px] text-slate-400">
-                          + {fmtUomQty(fabric.stock?.not_cuttable ?? 0, fabric.uom)} not cuttable
-                        </span>
-                      ) : null}
+                    <td className={`${tdAvailCls} tabular-nums text-slate-700 whitespace-nowrap`}>
+                      {qtyText(listedAvailable(fabric.stock), fabric.uom, fabric.qty_unit)}
                     </td>
-                    <td className={`${tdCenterCls} tabular-nums`} title="Demand − cuttable in stock">
-                      <span className={(fabric.position?.short ?? 0) > 0 ? 'font-semibold text-red-600' : ''}>
-                        {(fabric.position?.short ?? 0) > 0 ? fmtUomQty(fabric.position?.short ?? 0, fabric.uom) : '—'}
+                    <td className={`${tdShortCls} tabular-nums`} title="Demand − cuttable in stock">
+                      <span className={(fabric.position?.short ?? 0) > 0 ? 'text-red-700' : 'text-slate-500'}>
+                        {(fabric.position?.short ?? 0) > 0 ? qtyText(fabric.position?.short ?? 0, fabric.uom, fabric.qty_unit) : '—'}
                       </span>
                     </td>
                     <td className={tdCenterCls}>
-                      <span className={`text-[10px] font-semibold ${archived ? 'text-slate-500' : 'text-emerald-700'}`}>
-                        {archived ? 'Inactive' : 'Active'}
-                      </span>
+                      <MmStatusDot label={archived ? 'Inactive' : 'Active'} />
                     </td>
                     <td
                       className={`sticky right-0 z-[1] w-11 px-1 py-2.5 border-b border-slate-100 text-center whitespace-nowrap ${archived ? 'bg-slate-50' : 'bg-white group-hover:bg-slate-50'}`}
@@ -343,13 +366,8 @@ export default function MmFabricsPage({ fabricId }: { fabricId?: string }) {
 
       <FabricFormDrawer
         open={drawerOpen}
-        mode={fabricId ? 'edit' : 'create'}
-        fabricId={fabricId}
-        readOnly={Boolean(fabricId) && !isConfig}
-        onClose={() => {
-          setCreateOpen(false);
-          if (fabricId) requestNavigate(RoutePath.MATERIAL_FABRICS);
-        }}
+        mode="create"
+        onClose={() => setCreateOpen(false)}
         onSaved={() => { void refetch(); }}
       />
       {mergeFrom && (

@@ -3,6 +3,16 @@ import { persist } from "zustand/middleware";
 import { RoutePath } from "../types";
 import { getRouteEntry } from "../lib/routeMap";
 import { buildRouteHash, parseRouteHash } from "../lib/routeHash";
+import { unsavedRouteGuard } from "../lib/unsavedRouteGuard";
+
+export type UnsavedPromptCopy = {
+  title?: string;
+  body?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  discardLabel?: string;
+  hideSave?: boolean;
+};
 
 // --- NAVIGATION STORE ---
 export interface UserProfile {
@@ -36,6 +46,7 @@ interface NavigationState {
   pendingSaveAction: (() => Promise<boolean | void>) | null;
   pendingDiscardAction: (() => void) | null;
   pendingNavigation: PendingNavigation | null;
+  unsavedPrompt: UnsavedPromptCopy | null;
   navigate: (route: RoutePath, params?: Record<string, string>) => void;
   requestNavigate: (route: RoutePath, params?: Record<string, string>) => boolean;
   clearPendingNavigation: () => void;
@@ -47,6 +58,7 @@ interface NavigationState {
   setUserProfile: (profile: UserProfile | null) => void;
   setPendingSaveAction: (action: (() => Promise<boolean | void>) | null) => void;
   setPendingDiscardAction: (action: (() => void) | null) => void;
+  setUnsavedPrompt: (prompt: UnsavedPromptCopy | null) => void;
 }
 
 export const useNavigationStore = create<NavigationState>()(
@@ -63,6 +75,7 @@ export const useNavigationStore = create<NavigationState>()(
       pendingSaveAction: null,
       pendingDiscardAction: null,
       pendingNavigation: null,
+      unsavedPrompt: null,
       navigate: (route, params = {}) => {
         // Extract internal flag before storing in routeParams
         const { _preserveHistory, ...cleanParams } = params as Record<string, string> & { _preserveHistory?: string };
@@ -104,7 +117,7 @@ export const useNavigationStore = create<NavigationState>()(
       },
       requestNavigate: (route, params = {}) => {
         const state = get();
-        if (state.isUnsaved) {
+        if (unsavedRouteGuard(state.isUnsaved) === 'block') {
           set({ pendingNavigation: { route, params } });
           return false;
         }
@@ -132,6 +145,7 @@ export const useNavigationStore = create<NavigationState>()(
         set({ pendingSaveAction: action });
       },
       setPendingDiscardAction: (action) => set({ pendingDiscardAction: action }),
+      setUnsavedPrompt: (prompt) => set({ unsavedPrompt: prompt }),
     }),
     {
       name: "navigation-storage",

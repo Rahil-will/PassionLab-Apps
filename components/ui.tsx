@@ -241,8 +241,8 @@ interface SelectDropdownBaseProps {
 }
 
 type SelectDropdownProps = SelectDropdownBaseProps & (
-  | { multiple?: false; value: string; onChange: (value: string) => void }
-  | { multiple: true; value: string[]; onChange: (value: string[]) => void }
+  | { multiple?: false; value: string; onChange: (value: string) => void; closeOnSelect?: boolean; collapseWhenAll?: boolean }
+  | { multiple: true; value: string[]; onChange: (value: string[]) => void; closeOnSelect?: boolean; collapseWhenAll?: boolean }
 );
 
 const dropdownMenuBaseCls =
@@ -267,6 +267,8 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
     variant = 'default',
     menuExpand = false,
     searchable = false,
+    closeOnSelect = false,
+    collapseWhenAll = true,
   } = props;
   const isMulti = props.multiple === true;
   const selectedValues = isMulti ? props.value : (props.value ? [props.value] : []);
@@ -350,7 +352,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
         .filter((label): label is string => Boolean(label));
       return labels.join(', ') || placeholder;
     }
-    return options.find((opt) => opt.value === props.value)?.label || placeholder;
+    return options.find((opt) => opt.value === props.value)?.label || (props.value ? props.value : placeholder);
   })();
   const hasValue = isMulti ? selectedValues.length > 0 : props.value !== '';
   const hasError = Boolean(error);
@@ -377,7 +379,8 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = (props) => {
         ? selectedValues.filter((v) => v !== opt.value)
         : [...selectedValues, opt.value];
       const realCount = options.filter((o) => o.value !== '').length;
-      props.onChange(next.length === realCount ? [] : next);
+      props.onChange(collapseWhenAll && next.length === realCount ? [] : next);
+      if (closeOnSelect) setIsOpen(false);
       return;
     }
     props.onChange(opt.value);

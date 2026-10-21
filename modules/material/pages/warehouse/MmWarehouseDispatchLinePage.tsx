@@ -12,13 +12,13 @@ import { MmLockedRollsTable } from '../../components/MmLockedRollsTable';
 import { MmChallanPrintDocument } from '../../components/MmChallanPrintDocument';
 import { storeChallanPrintDoc } from '../../lib/mmChallanPrint';
 import { useMmChallanPrint } from '../../lib/useMmChallanPrint';
-import { millLineDispatchedStatus, millWordDot, millWordText } from '../mill/millStatus';
+import { lineDispatchedStatus, wordDot, wordText } from '../../lib/fabricLineStatus';
 import { inboundStatusDot, inboundStatusText, storeDispatchStatusLabel } from '../../lib/inboundDisplay';
 import { useMmStyleWarehouse } from '../../lib/useMmOps';
-import { fieldsForType, formatQtyM, millDateTimeParts } from '../../lib/mmRollDraft';
+import { fieldsForType, formatQtyM, dateTimeParts } from '../../lib/mmRollDraft';
 
 function WhenCell({ iso }: { iso: string | null | undefined }) {
-  const parts = millDateTimeParts(iso);
+  const parts = dateTimeParts(iso);
   if (parts.date === '—') return <span className="text-slate-400">—</span>;
   return (
     <span className="whitespace-nowrap">
@@ -83,7 +83,7 @@ export default function MmWarehouseDispatchLinePage() {
   const rollsRacked = Number(fabric?.rolls_racked ?? 0);
   const qtyIssued = Number(fabric?.qty_issued ?? 0);
   const rollsIssued = Number(fabric?.rolls_issued ?? 0);
-  const dispatchedStatus = millLineDispatchedStatus(qtyIssued, fabric?.required_m);
+  const dispatchedStatus = lineDispatchedStatus(qtyIssued, fabric?.required_m);
 
   const printDoc = useMemo(() => {
     if (!openChallan || !data?.order) return null;
@@ -178,8 +178,8 @@ export default function MmWarehouseDispatchLinePage() {
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-900">Status</p>
                 <div className="mt-1 flex items-center justify-between gap-2">
                   <span className="text-[10px] font-medium text-slate-900">Cutting</span>
-                  <span className={`inline-flex items-center gap-1.5 text-[12px] font-bold ${millWordText(dispatchedStatus.key)}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(dispatchedStatus.key)}`} />
+                  <span className={`inline-flex items-center gap-1.5 text-[12px] font-bold ${wordText(dispatchedStatus.key)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${wordDot(dispatchedStatus.key)}`} />
                     {dispatchedStatus.label}
                   </span>
                 </div>

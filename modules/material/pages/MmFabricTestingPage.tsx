@@ -2,9 +2,7 @@ import React, { forwardRef, useCallback, useMemo, useRef, useImperativeHandle } 
 import { Loader2 } from 'lucide-react';
 import { useNotificationStore } from '../../../stores';
 import { useMmConfigBundle, useRefreshMmConfig } from '../lib/useMmConfigBundle';
-import { mmGetConfigBundle, mmSaveTypeTestFields } from '../lib/mmRpc';
-import { mmSaveTestFieldRules } from '../lib/mmV4Rpc';
-import { useMmV4Config } from '../lib/useMmV4Config';
+import { mmSaveTypeTestFields } from '../lib/mmRpc';
 import {
   MmTypeFieldsEditor,
   type MmFieldRow,
@@ -18,7 +16,6 @@ const MmFabricTestingPage = forwardRef<
   { onDirtyChange?: (dirty: boolean) => void }
 >(function MmFabricTestingPage({ onDirtyChange }, ref) {
   const { data, isLoading } = useMmConfigBundle();
-  const v4 = useMmV4Config();
   const refresh = useRefreshMmConfig();
   const { showNotification } = useNotificationStore();
   const editorRef = useRef<MmTypeFieldsHandle>(null);
@@ -36,15 +33,6 @@ const MmFabricTestingPage = forwardRef<
     [data?.types],
   );
 
-  const stageOptions = useMemo(
-    () =>
-      (v4.data?.stages ?? [])
-        .filter((s) => s.is_active !== false)
-        .sort((a, b) => Number(a.seq ?? 0) - Number(b.seq ?? 0))
-        .map((s) => ({ value: s.code, label: s.label || s.code })),
-    [v4.data?.stages],
-  );
-
   const savedRows = useCallback(
     (typeId: string): MmFieldRow[] =>
       (data?.test_fields ?? [])
@@ -58,11 +46,23 @@ const MmFabricTestingPage = forwardRef<
           dataType: String(a.data_type ?? 'text'),
           options: Array.isArray(a.options) ? (a.options as unknown[]).map(String) : [],
           remarks: a.remarks != null ? String(a.remarks) : '',
-          captureSite: String(a.capture_site ?? 'either'),
-          testLevel: a.test_level === 'lot' ? 'lot' : 'roll',
-          requiredAtStages: Array.isArray(a.required_at_stages)
-            ? (a.required_at_stages as unknown[]).map(String)
-            : [],
+          captureSite: 'either',
+          toleranceOn: a.tolerance_on === true,
+          toleranceMode: a.tolerance_mode === 'range' ? 'range' : 'pm',
+          tolerance: a.tolerance != null && a.tolerance !== '' && Number.isFinite(Number(a.tolerance))
+            ? Number(a.tolerance)
+            : null,
+          toleranceUnit: a.tolerance_unit === 'pct' ? 'pct' : 'abs',
+          toleranceTarget: a.tolerance_target != null && Number.isFinite(Number(a.tolerance_target))
+            ? Number(a.tolerance_target)
+            : null,
+          toleranceMin: a.tolerance_min != null && Number.isFinite(Number(a.tolerance_min))
+            ? Number(a.tolerance_min)
+            : null,
+          toleranceMax: a.tolerance_max != null && Number.isFinite(Number(a.tolerance_max))
+            ? Number(a.tolerance_max)
+            : null,
+          toleranceText: a.tolerance_text != null ? String(a.tolerance_text) : '',
         })),
     [data?.test_fields],
   );
@@ -71,46 +71,26 @@ const MmFabricTestingPage = forwardRef<
     async (typeId: string, rows: MmFieldRow[]) => {
       const res = await mmSaveTypeTestFields(
         typeId,
-        rows.map((row, i) => ({
+        rows.map((row) => ({
           ...(row.id ? { id: row.id } : {}),
           label: row.label,
           data_type: row.dataType,
           options: row.dataType === 'select' ? row.options : [],
-          seq: i + 1,
-          capture_site: row.captureSite || 'either',
+          tolerance_on: row.toleranceOn === true,
+          tolerance_mode: row.toleranceMode === 'range' ? 'range' : 'pm',
+          tolerance: row.tolerance != null && Number.isFinite(row.tolerance) ? row.tolerance : null,
+          tolerance_unit: row.toleranceUnit === 'pct' ? 'pct' : 'abs',
+          tolerance_target: row.toleranceTarget != null && Number.isFinite(row.toleranceTarget) ? row.toleranceTarget : null,
+          tolerance_min: row.toleranceMin != null && Number.isFinite(row.toleranceMin) ? row.toleranceMin : null,
+          tolerance_max: row.toleranceMax != null && Number.isFinite(row.toleranceMax) ? row.toleranceMax : null,
         })),
       );
       if (res.ok === false) throw new Error(res.message);
-
-      const cfg = await mmGetConfigBundle();
-      if (cfg.ok === false) throw new Error(cfg.message);
-
-      const fields = (cfg.data.test_fields ?? []).filter(
-        (a) => a.is_active !== false && String(a.type_id ?? '') === typeId,
-      );
-      const rules = rows
-        .map((row) => {
-          const match = fields.find((f) =>
-            row.id ? String(f.id) === row.id : String(f.label ?? '') === row.label,
-          );
-          if (!match?.id) return null;
-          return {
-            field_id: String(match.id),
-            test_level: (row.testLevel === 'lot' ? 'lot' : 'roll') as 'roll' | 'lot',
-            required_at_stages: row.requiredAtStages ?? [],
-          };
-        })
-        .filter((r): r is { field_id: string; test_level: 'roll' | 'lot'; required_at_stages: string[] } => r != null);
-
-      if (rules.length > 0) {
-        const rulesRes = await mmSaveTestFieldRules(rules);
-        if (rulesRes.ok === false) throw new Error(rulesRes.message);
-      }
     },
     [],
   );
 
-  if (isLoading || v4.isLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[280px]">
         <Loader2 size={24} className="animate-spin text-slate-400" />
@@ -133,10 +113,9 @@ const MmFabricTestingPage = forwardRef<
       savedRows={savedRows}
       persist={persist}
       fieldNoun="KPI"
-      tableSubtitle="Measurement parameters. Separate from 4-point inspection. Level and required stages apply when Fabric v4 quality gate is used."
+      tableSubtitle="Measurement parameters. Turn tolerance on for a number or a decimal."
       namePlaceholder="e.g. Shrinkage %"
       variant="test"
-      stageOptions={stageOptions}
       onError={(message) => showNotification(message, 'error')}
       onDirtyChange={onDirtyChange}
       onSaved={async () => {

@@ -20,7 +20,7 @@ const SETTINGS_ONLY_ROUTES: ReadonlySet<string> = new Set([
 const ORDERS_LIST_PREFETCH_ROUTES: ReadonlySet<string> = new Set([
   RoutePath.STATUS_TRACKER,
   RoutePath.LINE_ASSIGNMENT,
-  RoutePath.MATERIAL_MILL_STYLES,
+  RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRICS,
   RoutePath.MATERIAL_WAREHOUSE_STYLES,
 ]);
 

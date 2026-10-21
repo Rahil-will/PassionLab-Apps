@@ -35,12 +35,8 @@ export const queryKeys = {
     ['mm', factoryId, 'ops', 'storeStock', styleMaterialId] as const,
   mmOrderFabricLines: (factoryId: string, orderId: string) =>
     ['mm', factoryId, 'ops', 'fabricLines', orderId] as const,
-  mmMillBoard: (factoryId: string, orderIds: string) =>
-    ['mm', factoryId, 'ops', 'millBoard', orderIds] as const,
   mmWarehouseBoard: (factoryId: string, orderIds: string) =>
     ['mm', factoryId, 'ops', 'warehouseBoard', orderIds] as const,
-  mmMillLine: (factoryId: string, orderId: string, colorwayId: string, fabricLineId: string) =>
-    ['mm', factoryId, 'ops', 'millLine', 'cat', orderId, colorwayId, fabricLineId] as const,
   mmStyleWarehouse: (factoryId: string, orderId: string) =>
     ['mm', factoryId, 'ops', 'styleWarehouse', orderId] as const,
   mmStyleReconciliation: (factoryId: string, orderId: string) =>
@@ -59,11 +55,6 @@ export const queryKeys = {
   ) => ['mm', factoryId, 'ops', 'warehouseStock', search, location, buyer, page, pageSize ?? 50] as const,
   mmStockMovements: (factoryId: string, search: string, kind: string, page: number) =>
     ['mm', factoryId, 'ops', 'stockMovements', search, kind, page] as const,
-  mmExpectedBoard: (factoryId: string, status: string, search: string, page: number) =>
-    ['mm', factoryId, 'ops', 'expectedBoard', status, search, page] as const,
-  mmUnallocatedMill: (factoryId: string) => ['mm', factoryId, 'ops', 'unallocatedMill'] as const,
-  mmMillStock: (factoryId: string, search: string, alloc: string, place: string, page: number) =>
-    ['mm', factoryId, 'ops', 'millStock', search, alloc, place, page] as const,
   mmFptSummary: (factoryId: string) => ['mm', factoryId, 'ops', 'fptSummary'] as const,
 
   resources: (factoryId: string) => ['resources', factoryId] as const,

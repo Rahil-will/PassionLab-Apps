@@ -1,20 +1,26 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Filter, Search } from 'lucide-react';
-import { Badge, Card, SelectDropdown } from '../../../../components/ui';
+import { Card, SelectDropdown } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
-import { usePageHeader } from '../../../../components/Breadcrumb';
 import { MmSegmentControl } from '../../components/MmSegmentControl';
 import { MmProcReportsV4Panel } from './MmProcReportsV4Panel';
 import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore } from '../../../../stores';
-import { RoutePath } from '../../../../types';
 import {
   mmProcListChallans,
+  type MmV4ProcChallanListRow,
   type MmV4ProcPurpose,
-  type MmV4ProcSide,
 } from '../../lib/mmV4Rpc';
 import { useMmPartners, useMmProcesses } from '../../lib/useMmV4Config';
+import { processHistoryDetailRoute } from './processHistoryRoute';
+import {
+  emptyProcChallanFacts,
+  loadProcChallanFacts,
+  procChallanStatus,
+  processorLabel,
+} from '../../lib/procChallanFacts';
+import { dateLabel } from '../../lib/mmRollDraft';
 
 const th =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
@@ -35,47 +41,28 @@ function processLabel(value: unknown): string {
   return '—';
 }
 
-function measureText(metres: number, kg: number, count: number): string {
-  const qty = [
-    metres > 0 ? `${metres.toLocaleString(undefined, { maximumFractionDigits: 1 })} m` : '',
-    kg > 0 ? `${kg.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg` : '',
-  ].filter(Boolean).join(' · ');
-  const pieces = count > 0 ? `${count}` : '';
-  return [qty || '—', pieces].filter(Boolean).join(' · ');
+function rowPlace(row: MmV4ProcChallanListRow): 'inhouse' | 'external' | '' {
+  const place = String(row.place ?? '').toLowerCase();
+  if (place === 'inhouse' || place === 'external') return place;
+  if (row.unit?.ownership === 'external') return 'external';
+  if (row.unit?.ownership) return 'inhouse';
+  return '';
 }
 
-function lossText(row: { qty_in?: number | null; kg_in?: number | null; counts?: Record<string, number> }): string {
-  const metres = (Number(row.counts?.qty_out) || 0) - (Number(row.qty_in) || 0);
-  const kg = (Number(row.counts?.kg_out) || 0) - (Number(row.kg_in) || 0);
-  const pieces = (Number(row.counts?.out) || 0) - (Number(row.counts?.returned) || 0);
-  const qty = measureText(metres > 0 ? metres : 0, kg > 0 ? kg : 0, pieces > 0 ? pieces : 0);
-  const out = Number(row.counts?.qty_out ?? 0);
-  const back = Number(row.qty_in ?? 0);
-  if (!(out > 0)) return qty === '—' ? '—' : qty;
-  const pct = ((out - back) / out) * 100;
-  return Number.isFinite(pct) ? `${qty} (${pct.toFixed(1)}%)` : qty;
-}
 
 export default function MmProcChallanListV4Page() {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-  const routeSide = useNavigationStore((s) => s.routeParams.side);
+  const sentBy = 'warehouse' as const;
   const processesQ = useMmProcesses();
 
   const [pageTab, setPageTab] = useState<PageTab>('challans');
   const [status, setStatus] = useState<StatusFilter>('pending');
-  const [side, setSide] = useState<'' | MmV4ProcSide>(
-    routeSide === 'mill' || routeSide === 'warehouse' ? routeSide : '',
-  );
   const [unitId, setUnitId] = useState('');
   const [processTypeId, setProcessTypeId] = useState('');
   const [purpose, setPurpose] = useState<'' | MmV4ProcPurpose>('');
   const [search, setSearch] = useState('');
   const [unitType, setUnitType] = useState<'' | 'internal' | 'external'>('');
-
-  usePageHeader({
-    subtitle: 'Process challans already sent. Open a row for returns, lots, and loss.',
-  });
 
   const vendorsQ = useMmPartners('process_vendor', false);
   const units = vendorsQ.data ?? [];
@@ -89,7 +76,7 @@ export default function MmProcChallanListV4Page() {
       ...queryKeys.mmOps(factoryId ?? ''),
       'procChallansV4',
       status,
-      side,
+      sentBy,
       unitId,
       processTypeId,
       purpose,
@@ -97,7 +84,7 @@ export default function MmProcChallanListV4Page() {
     ] as const,
     queryFn: async () => {
       const res = await mmProcListChallans({
-        side: side || null,
+        side: sentBy,
         status: status === 'returned' ? 'returned' : null,
         unit_facility_id: unitId || null,
         process_type_id: processTypeId || null,
@@ -111,7 +98,12 @@ export default function MmProcChallanListV4Page() {
   });
 
   const rows = useMemo(() => {
-    const all = (listQ.data ?? []).filter((row) => !unitType || row.unit?.ownership === unitType);
+    const all = (listQ.data ?? []).filter((row) => {
+      if (!unitType) return true;
+      const place = rowPlace(row);
+      if (unitType === 'external') return place === 'external';
+      return place === 'inhouse';
+    });
     if (status === 'pending') {
       return all.filter((r) => {
         const s = String(r.status ?? '').toLowerCase();
@@ -123,6 +115,13 @@ export default function MmProcChallanListV4Page() {
     }
     return all;
   }, [listQ.data, status, unitType]);
+
+  const factIds = rows.map((row) => row.id).join(',');
+  const factsQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'procChallanFacts', factIds] as const,
+    queryFn: () => loadProcChallanFacts(rows.map((row) => row.id)),
+    enabled: Boolean(factoryId && pageTab === 'challans' && rows.length > 0),
+  });
 
   return (
     <PageShell loading={pageTab === 'challans' && listQ.isLoading} skeleton="table" className="w-full pb-20">
@@ -151,29 +150,18 @@ export default function MmProcChallanListV4Page() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   value={status}
                   onChange={(v) => setStatus(v as StatusFilter)}
                   options={[
-                    { value: 'pending', label: 'Pending' },
-                    { value: 'returned', label: 'Returned' },
+                    { value: 'pending', label: 'Still out' },
+                    { value: 'returned', label: 'Came back' },
                     { value: 'all', label: 'All' },
                   ]}
                   icon={Filter}
                   className="w-32"
                 />
-                <SelectDropdown
-                  value={side}
-                  onChange={(v) => setSide((v as MmV4ProcSide | '') || '')}
-                  options={[
-                    { value: '', label: 'From: all' },
-                    { value: 'mill', label: 'Mill' },
-                    { value: 'warehouse', label: 'Warehouse' },
-                  ]}
-                  icon={Filter}
-                  className="w-36"
-                />
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   value={unitId}
                   onChange={setUnitId}
                   options={[
@@ -183,7 +171,7 @@ export default function MmProcChallanListV4Page() {
                   icon={Filter}
                   className="w-40"
                 />
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   value={processTypeId}
                   onChange={setProcessTypeId}
                   options={[
@@ -193,7 +181,7 @@ export default function MmProcChallanListV4Page() {
                   icon={Filter}
                   className="w-40"
                 />
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   value={unitType}
                   onChange={(v) => setUnitType((v as '' | 'internal' | 'external') || '')}
                   options={[
@@ -204,7 +192,7 @@ export default function MmProcChallanListV4Page() {
                   icon={Filter}
                   className="w-36"
                 />
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   value={purpose}
                   onChange={(v) => setPurpose((v as MmV4ProcPurpose | '') || '')}
                   options={[
@@ -224,70 +212,69 @@ export default function MmProcChallanListV4Page() {
               </p>
             ) : null}
 
+            {factsQ.isError ? (
+              <p className="px-4 py-2 text-[12px] text-red-600">
+                {factsQ.error instanceof Error ? factsQ.error.message : 'Could not load fabric and quantities'}
+              </p>
+            ) : null}
+
             <div className="overflow-auto">
-              <table className="w-full table-fixed border-collapse">
+              <table className="w-full min-w-[980px] border-collapse">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    <th className={thFirst}>Challan</th>
-                    <th className={th}>Vendor</th>
+                    <th className={thFirst}>Date</th>
+                    <th className={th}>Fabric</th>
                     <th className={th}>Process</th>
-                    <th className={th}>From</th>
-                    <th className={`${th} text-right`}>Out</th>
-                    <th className={`${th} text-right`}>Returned</th>
-                    <th className={th}>Sent</th>
-                    <th className={`${th} text-right`}>Age</th>
-                    <th className={`${th} text-right`}>Loss</th>
-                    <th className={th}>Tested</th>
+                    <th className={th}>Processor</th>
+                    <th className={`${th} text-center`}>Qty</th>
+                    <th className={`${th} text-center`}>Rolls / laps</th>
+                    <th className={th}>Received at</th>
+                    <th className={`${th} text-center`}>Qty</th>
+                    <th className={`${th} text-center`}>Rolls / laps</th>
+                    <th className={`${th} text-center`}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="px-4 py-10 text-center text-[11px] text-slate-400">
-                        No process challans
+                        No challans sent yet.
                       </td>
                     </tr>
                   ) : (
-                    rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="hover:bg-slate-50/80 cursor-pointer"
-                        onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: row.id })}
-                      >
-                        <td className={`${tdFirst} font-semibold text-slate-900`}>
-                          {row.challan_no}
-                          {row.purpose === 'reprocess' ? (
-                            <Badge variant="warning" className="ml-1">
-                              Reprocess
-                            </Badge>
-                          ) : null}
-                        </td>
-                        <td className={td}>
-                          <span className="inline-flex items-center gap-1">
-                            {row.unit?.name || '—'}
-                            {row.unit?.ownership ? (
-                              <Badge variant="outline">
-                                {row.unit.ownership === 'external' ? 'External' : 'In-house'}
-                              </Badge>
-                            ) : null}
-                          </span>
-                        </td>
-                        <td className={td}>{processLabel(row.process_type)}</td>
-                        <td className={td}>{row.side === 'warehouse' ? 'Warehouse' : 'Mill'}</td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {measureText(Number(row.counts?.qty_out) || 0, Number(row.counts?.kg_out) || 0, Number(row.counts?.out) || 0)}
-                        </td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {measureText(Number(row.qty_in) || 0, Number(row.kg_in) || 0, Number(row.counts?.returned) || 0)}
-                        </td>
-                        <td className={td}>{String(row.sent_at ?? row.created_at ?? '—')}</td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {row.age_days != null ? `${row.age_days}d` : '—'}
-                        </td>
-                        <td className={`${td} text-right tabular-nums`}>{lossText(row)}</td>
-                        <td className={td}>{row.tested ? 'Yes' : 'No'}</td>
-                      </tr>
-                    ))
+                    rows.map((row) => {
+                      const facts = factsQ.data?.get(row.id) ?? emptyProcChallanFacts();
+                      const status = procChallanStatus(row.status);
+                      return (
+                        <tr
+                          key={row.id}
+                          className="hover:bg-slate-50/80 cursor-pointer"
+                          onClick={() => requestNavigate(processHistoryDetailRoute(), { id: row.id })}
+                        >
+                          <td className={`${tdFirst} whitespace-nowrap text-slate-600`}>
+                            <span className="block">{dateLabel(row.sent_at ?? row.created_at)}</span>
+                            <span className="block text-[10px] font-semibold text-slate-900 truncate">
+                              {row.challan_no}
+                              {row.purpose === 'reprocess' ? ' · Reprocess' : ''}
+                            </span>
+                          </td>
+                          <td className={`${td} truncate`}>{facts.fabric}</td>
+                          <td className={`${td} truncate`}>{processLabel(row.process_type)}</td>
+                          <td className={`${td} truncate`}>{processorLabel(row)}</td>
+                          <td className={`${td} text-center tabular-nums font-semibold whitespace-nowrap`}>{facts.sentQty}</td>
+                          <td className={`${td} text-center tabular-nums whitespace-nowrap`}>{facts.sentCount}</td>
+                          <td className={`${td} whitespace-nowrap text-slate-600`}>{facts.receivedAt}</td>
+                          <td className={`${td} text-center tabular-nums font-semibold whitespace-nowrap`}>{facts.receivedQty}</td>
+                          <td className={`${td} text-center tabular-nums whitespace-nowrap`}>{facts.receivedCount}</td>
+                          <td className={`${td} text-center whitespace-nowrap`}>
+                            <span className="inline-flex items-center justify-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${status.dot}`} />
+                              <span className={`text-[9px] font-bold ${status.text}`}>{status.label}</span>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

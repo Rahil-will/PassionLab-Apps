@@ -3,6 +3,7 @@ import { useNavigationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { isDesktopWriteRole } from '../../../../lib/routeAccess';
 import MmFabricsPage from './MmFabricsPage';
+import MmFabricDetailPage from './MmFabricDetailPage';
 import FabricRequirementPage from './FabricRequirementPage';
 
 /** Admins edit the requirement form in Material Management. Other config users stay on this route. */
@@ -23,7 +24,9 @@ export default function MmFabricsRouter() {
     return <FabricRequirementPage />;
   }
 
-  const openId = route === RoutePath.MATERIAL_FABRIC_DETAIL ? fabricId : undefined;
-  return <MmFabricsPage fabricId={openId} />;
+  if (route === RoutePath.MATERIAL_FABRIC_DETAIL && fabricId) {
+    return <MmFabricDetailPage fabricId={fabricId} />;
+  }
+  return <MmFabricsPage />;
 }
 

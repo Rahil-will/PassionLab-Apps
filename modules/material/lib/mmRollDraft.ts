@@ -1,12 +1,12 @@
-import type { MmMillLineRoll, MmRollWrite, MmTestField } from './mmRpc';
+import type { MmLineRoll, MmRollWrite, MmTestField } from './mmRpc';
 
-export type MmMillRollWorkStatus = 'new' | 'not_sent' | 'sent' | 'received';
+export type MmRollWorkStatus = 'new' | 'not_sent' | 'sent' | 'received';
 
 export interface MmDraftRoll {
   localId: string;
   id?: string;
   locked?: boolean;
-  millWorkStatus?: MmMillRollWorkStatus;
+  rollWorkStatus?: MmRollWorkStatus;
   roll_no: string;
   length_m: string;
   weight_kg: string;
@@ -15,9 +15,9 @@ export interface MmDraftRoll {
   attributes: Record<string, string>;
 }
 
-export const MAX_MILL_BATCH_ROLLS = 500;
+export const MAX_RECEIPT_ROLLS = 500;
 
-export function formatMillRollNo(n: number): string {
+export function formatRollNo(n: number): string {
   return `ROL-${String(n).padStart(3, '0')}`;
 }
 
@@ -37,7 +37,7 @@ export function nextRollNo(rows: MmDraftRoll[]): string {
     const n = rollNoSequence(row.roll_no);
     if (n > max) max = n;
   }
-  return formatMillRollNo(max + 1);
+  return formatRollNo(max + 1);
 }
 
 export function blankDraftRoll(fields: MmTestField[] = [], rollNo = ''): MmDraftRoll {
@@ -45,7 +45,7 @@ export function blankDraftRoll(fields: MmTestField[] = [], rollNo = ''): MmDraft
   for (const field of fields) attributes[field.key] = '';
   return {
     localId: crypto.randomUUID(),
-    millWorkStatus: 'new',
+    rollWorkStatus: 'new',
     roll_no: rollNo,
     length_m: '',
     weight_kg: '',
@@ -55,7 +55,7 @@ export function blankDraftRoll(fields: MmTestField[] = [], rollNo = ''): MmDraft
   };
 }
 
-export function parseRollCount(raw: string, max = MAX_MILL_BATCH_ROLLS): number | null {
+export function parseRollCount(raw: string, max = MAX_RECEIPT_ROLLS): number | null {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1 || n > max) return null;
   return n;
@@ -73,8 +73,7 @@ export function fieldRole(field: MmTestField): MmFieldRole {
   const token = `${key} ${label}`;
   if (token.includes('shrink')) return 'attr';
   if (
-    key === 'lengthm' || key === 'length' || key.includes('length')
-    || label.includes('length') || label.includes('metre') || label.includes('meter')
+    key === 'lengthm'
     || key === 'qty' || key.startsWith('qty') || label === 'qty' || label.startsWith('qty')
   ) {
     return 'length';
@@ -183,7 +182,7 @@ export type MmMeasureSpec = {
   actualKey: string;
 };
 
-export const MILL_ROLL_MEASURES: MmMeasureSpec[] = [
+export const ROLL_MEASURES: MmMeasureSpec[] = [
   { id: 'width', label: 'Width', targetKey: 'target_width_in', tolKey: 'width_tol_pct', actualKey: 'actual_width_in' },
   { id: 'gsm', label: 'GSM', targetKey: 'target_gsm', tolKey: 'gsm_tol_pct', actualKey: 'actual_gsm' },
 ];
@@ -197,7 +196,7 @@ export function measureOutOfSpec(target: string, actual: string, tolerance: stri
   return (Math.abs(measured - spec) / Math.abs(spec)) * 100 > band;
 }
 
-export function rollOutOfSpec(row: MmDraftRoll, measures: MmMeasureSpec[] = MILL_ROLL_MEASURES): boolean {
+export function rollOutOfSpec(row: MmDraftRoll, measures: MmMeasureSpec[] = ROLL_MEASURES): boolean {
   return measures.some((measure) => measureOutOfSpec(
     row.attributes[measure.targetKey] ?? '',
     row.attributes[measure.actualKey] ?? '',
@@ -205,7 +204,7 @@ export function rollOutOfSpec(row: MmDraftRoll, measures: MmMeasureSpec[] = MILL
   ));
 }
 
-export function applyMeasureQc(row: MmDraftRoll, measures: MmMeasureSpec[] = MILL_ROLL_MEASURES): MmDraftRoll {
+export function applyMeasureQc(row: MmDraftRoll, measures: MmMeasureSpec[] = ROLL_MEASURES): MmDraftRoll {
   const out = rollOutOfSpec(row, measures);
   const current = row.attributes.qc_status || 'pass';
   const next = out
@@ -224,7 +223,7 @@ export function stampMeasureTargets(
   const next = rows.map((row) => {
     const attributes = { ...row.attributes };
     let rowChanged = false;
-    for (const measure of MILL_ROLL_MEASURES) {
+    for (const measure of ROLL_MEASURES) {
       const target = targets[measure.id] ?? '';
       if ((attributes[measure.targetKey] ?? '') !== target) {
         attributes[measure.targetKey] = target;
@@ -243,45 +242,106 @@ export function stampMeasureTargets(
   return changed ? next : rows;
 }
 
-/** Warehouse re-measure columns: mill type test fields except stock qty and shade. */
+/** Warehouse re-measure columns: type test fields except stock qty and shade. */
 export function warehouseTestFields(fields: MmTestField[] | null | undefined): MmTestField[] {
   const list = Array.isArray(fields) ? fields : [];
   return list.filter((field) => fieldRole(field) !== 'length' && fieldRole(field) !== 'shade');
 }
 
-export function applyFieldValue(row: MmDraftRoll, field: MmTestField, value: string): MmDraftRoll {
-  const next: MmDraftRoll = { ...row, attributes: { ...row.attributes, [field.key]: value } };
+export function applyFieldValue(row: MmDraftRoll, field: MmTestField, value: string, uom?: string | null): MmDraftRoll {
   const role = fieldRole(field);
-  if (role === 'length') next.length_m = value;
+  const attributes = { ...row.attributes };
+  if (isKgUom(uom) && field.key === 'length_m') delete attributes.length_m;
+  else attributes[field.key] = value;
+  const next: MmDraftRoll = { ...row, attributes };
+  if (role === 'length') {
+    if (isKgUom(uom)) {
+      next.weight_kg = value;
+      next.length_m = '';
+    } else {
+      next.length_m = value;
+    }
+  }
   if (role === 'weight') next.weight_kg = value;
   if (role === 'shade') next.shade = value;
   if (role === 'lot') next.lot_no = value;
   return next;
 }
 
-function sampleForField(field: MmTestField, index: number): string {
-  const options = parseTestOptions(field.options);
-  if (field.data_type === 'select' && options.length > 0) return options[index % options.length];
-  const role = fieldRole(field);
-  if (role === 'length') return (42 + index * 1.5).toFixed(2);
-  if (role === 'weight') return (11 + index * 0.35).toFixed(2);
-  if (role === 'shade') return String.fromCharCode(65 + (index % 6));
-  if (role === 'lot') return `L${String(index + 1).padStart(2, '0')}`;
-  if (field.data_type === 'number') return String(100 + index);
-  if (field.data_type === 'decimal') return (10 + index * 0.25).toFixed(2);
-  return `${field.label} ${index + 1}`;
+function randBetween(min: number, max: number): number {
+  return min + Math.random() * (max - min);
 }
 
-export function autoFillDraftRolls(rows: MmDraftRoll[], fields: MmTestField[]): MmDraftRoll[] {
-  const cols = withLengthField(fields);
-  return rows.map((row, i) => {
+function fieldAlreadySet(row: MmDraftRoll, field: MmTestField): boolean {
+  if ((row.attributes[field.key] ?? '').trim() !== '') return true;
+  const role = fieldRole(field);
+  if (role === 'length') return row.length_m.trim() !== '';
+  if (role === 'weight') return row.weight_kg.trim() !== '';
+  if (role === 'shade') return row.shade.trim() !== '';
+  if (role === 'lot') return row.lot_no.trim() !== '';
+  return false;
+}
+
+function randomForField(field: MmTestField): string {
+  const options = parseTestOptions(field.options);
+  if (field.data_type === 'select' && options.length > 0) {
+    return options[Math.floor(Math.random() * options.length)] ?? '';
+  }
+  const role = fieldRole(field);
+  const token = `${normKey(field.key)} ${normKey(field.label)}`;
+  if (role === 'length') return randBetween(25, 120).toFixed(2);
+  if (role === 'weight') return randBetween(8, 40).toFixed(2);
+  if (role === 'shade') return String.fromCharCode(65 + Math.floor(Math.random() * 6));
+  if (role === 'lot') return LOT_TYPE_OPTIONS[Math.floor(Math.random() * LOT_TYPE_OPTIONS.length)] ?? 'A1';
+  if (token.includes('shrink')) return randBetween(0.2, 4).toFixed(2);
+  if (field.data_type === 'number') return String(Math.floor(randBetween(1, 100)));
+  if (field.data_type === 'decimal') return randBetween(0.5, 20).toFixed(2);
+  return `${field.label} ${Math.floor(randBetween(1, 99))}`;
+}
+
+/** Random actual inside the tolerance band. Rounding never lands outside the band. */
+function randomActualInTolerance(targetRaw: string, tolRaw: string): string | null {
+  const target = Number(targetRaw);
+  if (!targetRaw.trim() || !Number.isFinite(target) || target === 0) return null;
+  const pct = Number(tolRaw);
+  const band = Number.isFinite(pct) ? Math.abs(pct) : Number(DEFAULT_MEASURE_TOLERANCE);
+  const span = Math.abs(target) * (band / 100) * 0.9;
+  const rounded = (target + (Math.random() * 2 - 1) * span).toFixed(2);
+  if (measureOutOfSpec(targetRaw, rounded, String(band))) return target.toFixed(2);
+  return rounded;
+}
+
+export function autoFillDraftRolls(
+  rows: MmDraftRoll[],
+  fields: MmTestField[],
+  options?: { measures?: MmMeasureSpec[]; fillLotType?: boolean },
+): MmDraftRoll[] {
+  const measures = options?.measures ?? [];
+  const reserved = new Set(measures.flatMap((measure) => [measure.targetKey, measure.tolKey, measure.actualKey]));
+  return rows.map((row) => {
+    if (row.locked) return row;
     let next = row;
-    for (const field of cols) {
-      const current = (next.attributes[field.key] ?? '').trim();
-      if (current !== '') continue;
-      next = applyFieldValue(next, field, sampleForField(field, i));
+    for (const field of fields) {
+      if (reserved.has(field.key) || fieldAlreadySet(next, field)) continue;
+      next = applyFieldValue(next, field, randomForField(field));
     }
-    return next;
+    if (options?.fillLotType && !next.lot_no.trim()) {
+      next = {
+        ...next,
+        lot_no: LOT_TYPE_OPTIONS[Math.floor(Math.random() * LOT_TYPE_OPTIONS.length)] ?? 'A1',
+      };
+    }
+    if (measures.length === 0) return next;
+    const attributes = { ...next.attributes };
+    for (const measure of measures) {
+      if ((attributes[measure.actualKey] ?? '').trim() !== '') continue;
+      const actual = randomActualInTolerance(
+        attributes[measure.targetKey] ?? '',
+        attributes[measure.tolKey] || DEFAULT_MEASURE_TOLERANCE,
+      );
+      if (actual != null) attributes[measure.actualKey] = actual;
+    }
+    return applyMeasureQc({ ...next, attributes }, measures);
   });
 }
 
@@ -293,12 +353,12 @@ export function formatQtyM(value: number | null | undefined, uom?: string | null
   return unit ? `${qty} ${unit}` : qty;
 }
 
-export function millTransferSummary(rollCount: number, qtyM: number, uom?: string | null): string {
+export function transferSummary(rollCount: number, qtyM: number, uom?: string | null): string {
   const rolls = `${rollCount} ${rollCount === 1 ? 'roll' : 'rolls'}`;
-  return `${rolls} · ${formatQtyM(qtyM, uom)} transferred from mill to warehouse`;
+  return `${rolls} · ${formatQtyM(qtyM, uom)} transferred to the warehouse`;
 }
 
-export function millChallanStatusLabel(status: string | null | undefined): string {
+export function challanStatusLabel(status: string | null | undefined): string {
   if (status === 'received') return 'Received';
   if (status === 'pending' || status === 'in_transit') return 'In transit';
   if (status === 'partial') return 'Partial';
@@ -310,37 +370,34 @@ export function millChallanStatusLabel(status: string | null | undefined): strin
   return status.replace(/_/g, ' ');
 }
 
-export function millRollWorkStatus(roll: {
+export function rollWorkStatus(roll: {
   id?: string | null;
-  at_mill?: boolean;
   in_challan_id?: string | null;
   challan_status?: string | null;
   status?: string | null;
-}): MmMillRollWorkStatus {
+}): MmRollWorkStatus {
   if (!roll.id) return 'new';
-  const atMill = roll.at_mill === true
-    || (roll.at_mill !== false && roll.status === 'draft' && !roll.in_challan_id);
-  if (atMill) return 'not_sent';
+  if (roll.status === 'draft' && !roll.in_challan_id) return 'not_sent';
   if ((roll.challan_status ?? '') === 'received') return 'received';
   return 'sent';
 }
 
-export function millRollWorkStatusLabel(status: MmMillRollWorkStatus): string {
+export function rollWorkStatusLabel(status: MmRollWorkStatus): string {
   if (status === 'new') return 'New';
   if (status === 'not_sent') return 'Not sent';
   if (status === 'sent') return 'Sent';
   return 'Received';
 }
 
-export function millRollWorkStatusClass(status: MmMillRollWorkStatus): string {
+export function rollWorkStatusClass(status: MmRollWorkStatus): string {
   if (status === 'new') return 'bg-blue-50 text-blue-700 border-blue-200';
   if (status === 'not_sent') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
   if (status === 'sent') return 'bg-slate-100 text-slate-700 border-slate-200';
   return 'bg-emerald-50 text-emerald-700 border-emerald-200';
 }
 
-export function millChallanStatusClass(status: string | null | undefined): string {
-  const label = millChallanStatusLabel(status);
+export function challanStatusClass(status: string | null | undefined): string {
+  const label = challanStatusLabel(status);
   if (label === 'Received' || label === 'In stock') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   if (label === 'In transit' || label === 'Pending test') return 'bg-amber-50 text-amber-700 border-amber-200';
   if (label === 'Rejected') return 'bg-red-50 text-red-700 border-red-200';
@@ -354,39 +411,45 @@ function attrText(attrs: Record<string, unknown> | null | undefined, key: string
   return String(value).trim();
 }
 
-export function millRollFieldText(
+export function rollFieldText(
   roll: {
     length_m: number | null;
     weight_kg?: number | null;
     shade?: string | null;
     lot_no?: string | null;
     attributes?: Record<string, unknown> | null;
-    mill_snapshot?: Record<string, unknown> | null;
   },
   field: MmTestField,
+  uom?: string | null,
 ): string {
   const values = lockedRollValues(roll);
   const fromAttr = attrText(values.attributes, field.key);
   const role = fieldRole(field);
   if (role === 'shade') return values.shade || fromAttr || '—';
+  if (role === 'length') {
+    const qty = declaredQty(roll, uom);
+    return qty > 0 ? String(qty) : '—';
+  }
   if (fromAttr) return fromAttr;
-  if (role === 'length') return values.length_m == null ? '—' : String(values.length_m);
-  if (role === 'weight') return values.weight_kg == null ? '—' : String(values.weight_kg);
+  if (role === 'weight') {
+    const qty = isKgUom(uom) ? declaredQty(roll, uom) : positiveQty(values.weight_kg);
+    return qty > 0 ? String(qty) : '—';
+  }
   if (role === 'lot') return values.lot_no || '—';
   return '—';
 }
 
-export function millFieldSeedText(
-  roll: Parameters<typeof millRollFieldText>[0],
+export function fieldSeedText(
+  roll: Parameters<typeof rollFieldText>[0],
   field: MmTestField,
 ): string {
-  const text = millRollFieldText(roll, field);
+  const text = rollFieldText(roll, field);
   return text === '—' ? '' : text;
 }
 
-/** Catalog cells: warehouse JSON if already tested, else mill declared, else blank. */
+/** Catalog cells: warehouse JSON if already tested, else declared values, else blank. */
 export function seedWarehouseFieldValues(
-  mill: Parameters<typeof millRollFieldText>[0] | null | undefined,
+  declared: Parameters<typeof rollFieldText>[0] | null | undefined,
   saved: Record<string, string> | null | undefined,
   fields: MmTestField[] | null | undefined,
 ): Record<string, string> {
@@ -398,55 +461,93 @@ export function seedWarehouseFieldValues(
       out[field.key] = String(recorded).trim();
       continue;
     }
-    out[field.key] = mill ? millFieldSeedText(mill, field) : '';
+    out[field.key] = declared ? fieldSeedText(declared, field) : '';
   }
   return out;
 }
 
-/** Persist warehouse edits only. Mill copies and blanks stay off mm_warehouse_inspections. */
+/** Persist warehouse edits only. Unchanged copies and blanks stay off mm_warehouse_inspections. */
 export function warehouseMeasuredFieldValues(
-  millSeeds: Record<string, string> | null | undefined,
+  declaredSeeds: Record<string, string> | null | undefined,
   current: Record<string, string> | null | undefined,
   fields?: MmTestField[] | null,
 ): Record<string, string> {
-  const mill = millSeeds && typeof millSeeds === 'object' && !Array.isArray(millSeeds) ? millSeeds : {};
+  const declared = declaredSeeds && typeof declaredSeeds === 'object' && !Array.isArray(declaredSeeds) ? declaredSeeds : {};
   const src = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
   const keys = fields != null ? warehouseTestFields(fields).map((field) => field.key) : Object.keys(src);
   const out: Record<string, string> = {};
   for (const key of keys) {
     const now = String(src[key] ?? '').trim();
     if (!now) continue;
-    if (now === String(mill[key] ?? '').trim()) continue;
+    if (now === String(declared[key] ?? '').trim()) continue;
     out[key] = now;
   }
   return out;
 }
 
-export function millDeclaredQty(roll: {
-  length_m: number | null;
-  mill_snapshot?: Record<string, unknown> | null;
-}): number {
-  return Number(lockedRollValues(roll).length_m ?? 0);
-}
-
-function snapNum(value: unknown): number | null {
+function positiveQty(value: unknown): number {
   const n = Number(value);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function snapText(value: unknown): string | null {
-  if (value == null) return null;
-  const text = String(value).trim();
-  return text.length > 0 ? text : null;
+export function isKgUom(uom?: string | null): boolean {
+  const unit = (uom ?? '').trim().toLowerCase();
+  return unit === 'kg' || unit === 'kgs';
+}
+
+export function isMetreUom(uom?: string | null): boolean {
+  const unit = (uom ?? '').trim().toLowerCase();
+  return unit === 'm' || unit === 'mtr' || unit === 'meter' || unit === 'metre' || unit === 'meters' || unit === 'metres';
+}
+
+function attrQty(attrs: Record<string, unknown> | null, role: 'length' | 'weight'): number {
+  if (!attrs) return 0;
+  for (const [key, value] of Object.entries(attrs)) {
+    const field: MmTestField = { id: key, key, label: key, data_type: 'decimal', options: null };
+    if (fieldRole(field) !== role) continue;
+    const n = positiveQty(value);
+    if (n > 0) return n;
+  }
+  return 0;
+}
+
+/** One quantity. Metres read length_m. Kilograms read weight_kg. The two columns are never added. */
+export function declaredQty(roll: {
+  length_m?: number | null;
+  weight_kg?: number | null;
+  attributes?: Record<string, unknown> | null;
+}, uom?: string | null): number {
+  const values = lockedRollValues(roll);
+  const metres = positiveQty(values.length_m);
+  const kilos = positiveQty(values.weight_kg);
+  if (isKgUom(uom)) return kilos || metres || attrQty(values.attributes, 'weight');
+  if (isMetreUom(uom)) return metres || kilos || attrQty(values.attributes, 'length');
+  if (kilos > 0 && (metres === 0 || metres === kilos)) return kilos;
+  if (metres > 0) return metres;
+  return attrQty(values.attributes, 'weight') || attrQty(values.attributes, 'length');
+}
+
+/** Unit for a roll when the fabric unit was not passed in. A kilogram copied into both columns stays kg. */
+export function shownUnit(roll: {
+  length_m?: number | null;
+  weight_kg?: number | null;
+  attributes?: Record<string, unknown> | null;
+}, uom?: string | null): string {
+  const given = (uom ?? '').trim();
+  if (given) return given;
+  const values = lockedRollValues(roll);
+  const metres = positiveQty(values.length_m);
+  const kilos = positiveQty(values.weight_kg);
+  if (kilos > 0 && (metres === 0 || metres === kilos)) return 'kg';
+  return 'm';
 }
 
 export function lockedRollValues(roll: {
-  length_m: number | null;
+  length_m?: number | null;
   weight_kg?: number | null;
   shade?: string | null;
   lot_no?: string | null;
   attributes?: Record<string, unknown> | null;
-  mill_snapshot?: Record<string, unknown> | null;
 }): {
   length_m: number | null;
   weight_kg: number | null;
@@ -454,17 +555,12 @@ export function lockedRollValues(roll: {
   lot_no: string | null;
   attributes: Record<string, unknown> | null;
 } {
-  const snap = roll.mill_snapshot;
-  const snapAttrs =
-    snap && snap.attributes && typeof snap.attributes === 'object' && !Array.isArray(snap.attributes)
-      ? (snap.attributes as Record<string, unknown>)
-      : null;
   return {
-    length_m: snapNum(snap?.length_m) ?? roll.length_m,
-    weight_kg: snapNum(snap?.weight_kg) ?? roll.weight_kg ?? null,
-    shade: snapText(snap?.shade) ?? roll.shade ?? null,
-    lot_no: snapText(snap?.lot_no) ?? roll.lot_no ?? null,
-    attributes: snapAttrs ?? roll.attributes ?? null,
+    length_m: roll.length_m ?? null,
+    weight_kg: roll.weight_kg ?? null,
+    shade: roll.shade ?? null,
+    lot_no: roll.lot_no ?? null,
+    attributes: roll.attributes ?? null,
   };
 }
 
@@ -475,11 +571,11 @@ export function lockedRollFieldText(
     shade?: string | null;
     lot_no?: string | null;
     attributes?: Record<string, unknown> | null;
-    mill_snapshot?: Record<string, unknown> | null;
   },
   field: MmTestField,
+  uom?: string | null,
 ): string {
-  return millRollFieldText(roll, field);
+  return rollFieldText(roll, field, uom);
 }
 
 export function fieldsForType(
@@ -491,10 +587,10 @@ export function fieldsForType(
   return Array.isArray(pack?.fields) ? pack.fields : [];
 }
 
-export function millRollSearchBlob(roll: MmMillLineRoll, fields: MmTestField[]): string {
+export function rollSearchBlob(roll: MmLineRoll, fields: MmTestField[]): string {
   const values = lockedRollValues(roll);
   const parts = [roll.unit_code, values.lot_no, values.shade, roll.batch_no, roll.challan_no];
-  for (const field of fields) parts.push(millRollFieldText(roll, field));
+  for (const field of fields) parts.push(rollFieldText(roll, field));
   return parts.map((part) => (part ?? '').toLowerCase()).join(' ');
 }
 
@@ -508,18 +604,18 @@ export interface MmDispatchedChallanGroup {
   to_location: string;
   roll_count: number;
   qty_m: number;
-  rolls: MmMillLineRoll[];
+  rolls: MmLineRoll[];
 }
 
-export function groupMillDispatchedChallans(rolls: MmMillLineRoll[]): MmDispatchedChallanGroup[] {
+export function groupDispatchedChallans(rolls: MmLineRoll[], uom?: string | null): MmDispatchedChallanGroup[] {
   const byId = new Map<string, MmDispatchedChallanGroup>();
   for (const roll of rolls) {
-    if (roll.at_mill || !roll.in_challan_id) continue;
+    if (!roll.in_challan_id) continue;
     const existing = byId.get(roll.in_challan_id);
     if (existing) {
       existing.rolls.push(roll);
       existing.roll_count += 1;
-      existing.qty_m += millDeclaredQty(roll);
+      existing.qty_m += declaredQty(roll, uom);
       continue;
     }
     byId.set(roll.in_challan_id, {
@@ -531,7 +627,7 @@ export function groupMillDispatchedChallans(rolls: MmMillLineRoll[]): MmDispatch
       received_at: roll.challan_received_at ?? null,
       to_location: roll.challan_to_location || 'Warehouse',
       roll_count: 1,
-      qty_m: millDeclaredQty(roll),
+      qty_m: declaredQty(roll, uom),
       rolls: [roll],
     });
   }
@@ -543,7 +639,7 @@ export function resizeDraftRolls(
   count: number,
   fields: MmTestField[] = [],
 ): MmDraftRoll[] {
-  const n = parseRollCount(String(count), MAX_MILL_BATCH_ROLLS);
+  const n = parseRollCount(String(count), MAX_RECEIPT_ROLLS);
   if (n == null) return rows;
   if (n === rows.length) return rows;
   if (n < rows.length) return rows.slice(0, n);
@@ -553,29 +649,29 @@ export function resizeDraftRolls(
   return next;
 }
 
-export function growMillBatchRolls(
+export function growReceiptRolls(
   rows: MmDraftRoll[],
   count: number,
   fields: MmTestField[] = [],
 ): MmDraftRoll[] {
-  const n = parseRollCount(String(count), MAX_MILL_BATCH_ROLLS);
+  const n = parseRollCount(String(count), MAX_RECEIPT_ROLLS);
   if (n == null) return rows;
   const locked = rows.filter((row) => Boolean(row.locked));
   const open = rows.filter((row) => !row.locked);
-  if (n < locked.length) return sortMillAssignDrafts(rows);
-  if (n === rows.length) return sortMillAssignDrafts(rows);
+  if (n < locked.length) return sortAssignDrafts(rows);
+  if (n === rows.length) return sortAssignDrafts(rows);
   const cols = withLengthField(fields);
   if (n < rows.length) {
-    return sortMillAssignDrafts([...open.slice(0, n - locked.length), ...locked]);
+    return sortAssignDrafts([...open.slice(0, n - locked.length), ...locked]);
   }
   const next = open.slice();
   while (next.length + locked.length < n) {
     next.push(blankDraftRoll(cols, nextRollNo([...next, ...locked])));
   }
-  return sortMillAssignDrafts([...next, ...locked]);
+  return sortAssignDrafts([...next, ...locked]);
 }
 
-export function sortMillAssignDrafts(rows: MmDraftRoll[]): MmDraftRoll[] {
+export function sortAssignDrafts(rows: MmDraftRoll[]): MmDraftRoll[] {
   const open = rows.filter((row) => !row.locked);
   const locked = rows.filter((row) => Boolean(row.locked));
   return [...open, ...locked];
@@ -599,6 +695,7 @@ export function attrRecord(raw: unknown): Record<string, string> {
 export function draftsToRollWrites(
   rows: MmDraftRoll[],
   fields: MmTestField[] = [],
+  uom?: string | null,
 ): { rolls: MmRollWrite[]; error: string | null } {
   const cols = withLengthField(fields);
   const lengthField = cols.find((field) => fieldRole(field) === 'length');
@@ -617,7 +714,10 @@ export function draftsToRollWrites(
       return { rolls: [], error: `Roll ${rollNo} is already used in this batch` };
     }
     seen.add(key);
-    const lengthRaw = row.length_m.trim() || (lengthField ? (row.attributes[lengthField.key] ?? '').trim() : '');
+    const attrQty = lengthField ? (row.attributes[lengthField.key] ?? '').trim() : '';
+    const lengthRaw = isKgUom(uom)
+      ? (row.weight_kg.trim() || row.length_m.trim() || attrQty)
+      : (row.length_m.trim() || attrQty);
     const length = Number(lengthRaw);
     if (!Number.isFinite(length) || length <= 0) {
       return { rolls: [], error: 'Each roll needs quantity greater than 0' };
@@ -637,7 +737,7 @@ export function draftsToRollWrites(
       id: row.id,
       unit_code: rollNo,
       length_m: length,
-      weight_kg: weight,
+      weight_kg: isKgUom(uom) ? length : weight,
       shade: shade || null,
       lot_no: lotNo || null,
       attributes,
@@ -647,14 +747,15 @@ export function draftsToRollWrites(
   return { rolls, error: null };
 }
 
-export function draftQtySum(rows: MmDraftRoll[]): number {
+export function draftQtySum(rows: MmDraftRoll[], uom?: string | null): number {
   return rows.reduce((sum, row) => {
-    const n = Number(row.length_m);
+    const raw = isKgUom(uom) ? (row.weight_kg.trim() || row.length_m) : (row.length_m.trim() || row.weight_kg);
+    const n = Number(raw);
     return sum + (Number.isFinite(n) && n > 0 ? n : 0);
   }, 0);
 }
 
-export function millLineRollToDraft(
+export function lineRollToDraft(
   roll: {
     id: string;
     unit_code?: string | null;
@@ -663,8 +764,6 @@ export function millLineRollToDraft(
     shade: string | null;
     lot_no: string | null;
     attributes: Record<string, unknown> | null;
-    mill_snapshot?: Record<string, unknown> | null;
-    at_mill: boolean;
     in_challan_id?: string | null;
     challan_status?: string | null;
     status?: string | null;
@@ -673,13 +772,8 @@ export function millLineRollToDraft(
   uom?: string | null,
 ): MmDraftRoll {
   const cols = withLengthField(fields, uom);
-  const values = roll.mill_snapshot ? lockedRollValues(roll) : {
-    length_m: roll.length_m,
-    weight_kg: roll.weight_kg,
-    shade: roll.shade,
-    lot_no: roll.lot_no,
-    attributes: roll.attributes,
-  };
+  const values = lockedRollValues(roll);
+  const workStatus = rollWorkStatus(roll);
   const attributes = attrRecord(values.attributes);
   const length = values.length_m != null ? String(values.length_m) : '';
   const weight = values.weight_kg != null ? String(values.weight_kg) : '';
@@ -696,8 +790,8 @@ export function millLineRollToDraft(
   return {
     localId: roll.id,
     id: roll.id,
-    locked: !roll.at_mill,
-    millWorkStatus: millRollWorkStatus(roll),
+    locked: workStatus === 'sent' || workStatus === 'received',
+    rollWorkStatus: workStatus,
     roll_no: roll.unit_code ?? '',
     length_m: length,
     weight_kg: weight,
@@ -719,7 +813,7 @@ export function formatWhen(iso: string | null | undefined): string {
   });
 }
 
-export function millDateLabel(iso: string | null | undefined): string {
+export function dateLabel(iso: string | null | undefined): string {
   if (!iso) return '—';
   const raw = iso.trim();
   const date = raw.length <= 10 ? new Date(`${raw}T12:00:00`) : new Date(raw);
@@ -727,7 +821,7 @@ export function millDateLabel(iso: string | null | undefined): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
 }
 
-export function millDateTimeParts(iso: string | null | undefined): { date: string; time: string | null } {
+export function dateTimeParts(iso: string | null | undefined): { date: string; time: string | null } {
   if (!iso) return { date: '—', time: null };
   const raw = iso.trim();
   const date = raw.length <= 10 ? new Date(`${raw}T12:00:00`) : new Date(raw);

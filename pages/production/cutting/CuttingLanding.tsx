@@ -12,7 +12,7 @@ import {
   type DayCuttingSessionRpcRow,
 } from '../../../lib/reports/day/cuttingSessionsRpc';
 import { useMmStoreChallans, useMmWarehouseStock } from '../../../modules/material/lib/useMmOps';
-import { formatQtyM, formatWhen, millDateTimeParts } from '../../../modules/material/lib/mmRollDraft';
+import { formatQtyM, formatWhen, dateTimeParts } from '../../../modules/material/lib/mmRollDraft';
 import { storeDispatchStatusLabel } from '../../../modules/material/lib/inboundDisplay';
 import { useFactoryModules } from '../../../core/modules/useModuleEnabled';
 
@@ -219,7 +219,7 @@ export const CuttingLanding: React.FC = () => {
                   </tr>
                 )}
                 {pendingPreview.map((row) => {
-                  const parts = millDateTimeParts(row.sent_at);
+                  const parts = dateTimeParts(row.sent_at);
                   return (
                     <tr
                       key={row.id}

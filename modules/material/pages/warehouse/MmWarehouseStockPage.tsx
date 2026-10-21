@@ -11,11 +11,14 @@ import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { mmDispositionRejected, mmHoldRolls, mmReleaseRolls, type MmStockMovementRow, type MmWarehouseStockRow } from '../../lib/mmRpc';
 import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
-import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
 import { FabricStockPanel } from '../../components/FabricStockPanel';
 import { useMmStockMovements, useMmWarehouseStock } from '../../lib/useMmOps';
 import { mmWhListReadiness, type MmV4RollRow } from '../../lib/mmV4Rpc';
 import { formatQtyM, formatWhen } from '../../lib/mmRollDraft';
+import { MmRollProcessMark } from '../../components/MmProcessStatus';
+import { finishedText, needsColour, rollColour, rollStageLabel } from '../../lib/rollColour';
+import { MmSetRollColourModal } from '../../components/MmSetRollColourModal';
+import { MmStatusDot } from '../../components/MmStatusDot';
 import {
   locationDisplayLine,
   normalizeUnitForm,
@@ -66,14 +69,14 @@ const thCenterCls =
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100';
 const tdCenterCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 text-center';
 
-function stockChip(row: { status: string; status_label: string }): { label: string; dot: string } {
-  if (row.status === 'issued') return { label: 'Issued', dot: 'bg-green-700' };
-  if (row.status_label === 'On rack') return { label: row.status_label, dot: 'bg-emerald-500' };
-  if (row.status_label === 'Pending test') return { label: row.status_label, dot: 'bg-amber-500' };
-  if (row.status_label === 'Receiving') return { label: row.status_label, dot: 'bg-blue-500' };
-  if (row.status_label === 'Red label') return { label: row.status_label, dot: 'bg-red-500' };
-  if (row.status_label === 'Cutting store') return { label: row.status_label, dot: 'bg-green-700' };
-  return { label: row.status_label, dot: 'bg-slate-300' };
+function stockChip(row: { status: string; status_label: string }): { label: string; dot: string; text: string } {
+  if (row.status === 'issued') return { label: 'Issued', dot: 'bg-green-700', text: 'text-green-700' };
+  if (row.status_label === 'On rack') return { label: row.status_label, dot: 'bg-emerald-500', text: 'text-emerald-600' };
+  if (row.status_label === 'Pending test') return { label: row.status_label, dot: 'bg-amber-500', text: 'text-amber-600' };
+  if (row.status_label === 'Receiving') return { label: row.status_label, dot: 'bg-blue-500', text: 'text-blue-600' };
+  if (row.status_label === 'Red label') return { label: row.status_label, dot: 'bg-red-500', text: 'text-red-600' };
+  if (row.status_label === 'Cutting store') return { label: row.status_label, dot: 'bg-green-700', text: 'text-green-700' };
+  return { label: row.status_label, dot: 'bg-slate-300', text: 'text-slate-500' };
 }
 
 function docLabel(source: string | null | undefined, no: string | null | undefined): string {
@@ -272,7 +275,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
   const [dispBusy, setDispBusy] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [processOpen, setProcessOpen] = useState(false);
-  const [testOpen, setTestOpen] = useState(false);
+  const [colourIds, setColourIds] = useState<string[] | null>(null);
   const [holdReason, setHoldReason] = useState('');
   const [holdBusy, setHoldBusy] = useState(false);
   const { showNotification } = useNotificationStore();
@@ -301,7 +304,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
-    enabled: false,
+    enabled: Boolean(openStockGroup),
   });
 
   const readinessByUnit = useMemo(() => {
@@ -313,6 +316,16 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
     }
     return map;
   }, [readinessQ.data]);
+
+  const colourRollIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const unitId of picked) {
+      const gate = readinessByUnit.get(unitId);
+      if (!gate?.roll_id || !needsColour(gate.finished)) continue;
+      ids.push(gate.roll_id);
+    }
+    return ids;
+  }, [picked, readinessByUnit]);
 
   const enrichedStockRows = useMemo(() => {
     const rows = stockQuery.data?.rows ?? [];
@@ -436,7 +449,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
       return;
     }
     if (group.inChallanId) {
-      const kind = group.docSource === 'vendor' ? 'vendor' : 'mill';
+      const kind = group.docSource === 'vendor' ? 'vendor' : 'inhouse';
       if (group.action.toLowerCase().includes('4-point') || group.action.toLowerCase().includes('test')) {
         requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id: group.inChallanId });
         return;
@@ -473,7 +486,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <SelectDropdown
+            <SelectDropdown size="compact"
               value={filterKind}
               onChange={(v) => setFilterKind(v as KindFilter)}
               options={[
@@ -555,7 +568,7 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
         <div className="p-5 flex flex-col gap-3">
           <h4 className="text-[14px] font-semibold text-slate-900">Red label disposition</h4>
           <p className="text-[11px] text-slate-500">{picked.length} rejected rolls</p>
-          <SelectDropdown
+          <SelectDropdown size="compact"
             value={dispositionAction}
             onChange={(value) => setDispositionAction(value as typeof dispositionAction)}
             options={[
@@ -614,22 +627,20 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
         onSent={(challanId) => {
           setProcessOpen(false);
           setPicked([]);
-          requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: challanId });
+          requestNavigate(RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL, { id: challanId });
         }}
       />
-      <MmQcTestModalV4
-          open={testOpen}
-          scopeKind="rolls"
-          rollIds={picked}
-          defaultSiteSide="warehouse"
-          onClose={() => setTestOpen(false)}
-          onSaved={() => {
-            setTestOpen(false);
-            setPicked([]);
-            void stockQuery.refetch();
-            void readinessQ.refetch();
-          }}
-        />
+      <MmSetRollColourModal
+        open={colourIds != null}
+        rollIds={colourIds ?? []}
+        onClose={() => setColourIds(null)}
+        onSaved={() => {
+          setColourIds(null);
+          setPicked([]);
+          void stockQuery.refetch();
+          void readinessQ.refetch();
+        }}
+      />
       <Modal
         isOpen={Boolean(openStockGroup)}
         onClose={() => {
@@ -661,9 +672,11 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                   </Button>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
-                      Test
-                    </Button>
+                    {colourRollIds.length > 0 ? (
+                      <Button type="button" size="sm" variant="secondary" onClick={() => setColourIds(colourRollIds)}>
+                        Set colour
+                      </Button>
+                    ) : null}
                     <Button type="button" size="sm" variant="secondary" disabled={holdBusy} onClick={() => void submitRelease()}>
                       Release
                     </Button>
@@ -699,6 +712,9 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                     <th className={thCenterCls} />
                     <th className={thCls}>Unit</th>
                     <th className={thCls}>Form</th>
+                    <th className={thCls}>Stage</th>
+                    <th className={thCls}>Colour</th>
+                    <th className={thCls}>Finished</th>
                     <th className={thCls}>Invoice / GRN</th>
                     <th className={thCls}>Where</th>
                     <th className={thCenterCls}>Qty</th>
@@ -732,6 +748,32 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                         </td>
                         <td className={`${tdCls} font-semibold`}>{row.unit_code || '—'}</td>
                         <td className={tdCls}>{unitFormOptionLabel(row.unit_form ?? 'roll')}</td>
+                        <td className={tdCls}>
+                          <span className="inline-flex flex-wrap items-center justify-center gap-1">
+                            <span>{rollStageLabel(gate ?? {})}</span>
+                            <MmRollProcessMark status={gate?.process_status} />
+                          </span>
+                        </td>
+                        <td className={tdCls}>{gate ? rollColour(gate) : (row.color_name || row.color_ref || '—')}</td>
+                        <td className={tdCls}>
+                          {(() => {
+                            const mark = finishedText(gate?.finished);
+                            return (
+                              <span className={mark.className}>
+                                {mark.text}
+                                {gate && needsColour(gate.finished) ? (
+                                  <button
+                                    type="button"
+                                    className="block text-[10px] font-semibold text-slate-700 hover:text-slate-900"
+                                    onClick={() => setColourIds([gate.roll_id])}
+                                  >
+                                    Add colour
+                                  </button>
+                                ) : null}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className={tdCls}>{docLabel(row.challan_source, row.challan_no)}</td>
                         <td className={tdCls}>
                           {locationDisplayLine(row.location_code, row.location_name)}
@@ -756,9 +798,8 @@ export default function MmWarehouseStockPage({ view }: { view: StockView }) {
                           )}
                         </td>
                         <td className={tdCenterCls}>
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${stockChip(row).dot}`} />
-                            {stockChip(row).label}
+                          <span className="inline-flex items-center justify-center gap-1.5">
+                            <MmStatusDot label={stockChip(row).label} dot={stockChip(row).dot} text={stockChip(row).text} />
                             {row.on_hold ? (
                               <span className="inline-flex items-center gap-0.5 text-amber-800" title={row.hold_reason || 'Held'}>
                                 <Lock size={11} />

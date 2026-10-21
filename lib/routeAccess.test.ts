@@ -47,14 +47,12 @@ describe('canAccessRoute', () => {
 
   it('allows admin Material Management', () => {
     expect(canAccessRoute('admin', RoutePath.MATERIAL_MANAGEMENT)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.WORK_CENTER_MATERIAL)).toBe(true);
   });
 
-  it('allows admin mill and warehouse when Material is on', () => {
+  it('allows admin warehouse when Material is on', () => {
     const ctx = { modulesEnabled: { material: true } };
     expect(canAccessRoute('admin', RoutePath.MATERIAL_PROCESS, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_PROCESS_DETAIL, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_STORE, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_DISPATCH, ctx)).toBe(true);
@@ -71,15 +69,10 @@ describe('canAccessRoute', () => {
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_RETURNS_DETAIL, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_END_BITS, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_MOVEMENTS, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_EXPECTED, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_UNALLOCATED, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_UNALLOCATED_ALLOCATE, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_UNALLOCATED_LINE, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_STOCK, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_STYLES, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_HISTORY, ctx)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL, { modulesEnabled: { material: false } })).toBe(false);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_RECEIVE, ctx)).toBe(true);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_RECEIPTS, ctx)).toBe(true);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRICS, ctx)).toBe(true);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE, { modulesEnabled: { material: false } })).toBe(false);
   });
 
   it('gates fabric form setup to config users', () => {
@@ -97,37 +90,38 @@ describe('canAccessRoute', () => {
     expect(canAccessRoute('viewer', RoutePath.MATERIAL_FABRICS, on)).toBe(false);
   });
 
-  it('gates mill, warehouse, and trims on material sub-switches', () => {
+  it('gates warehouse and trims on material sub-switches', () => {
     const flags = {
       fabric_warehouse: true,
-      fabric_mill: false,
       trims: false,
     };
     const ctx = { modulesEnabled: { material: true }, mmFeatures: flags };
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL, ctx)).toBe(false);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL_BATCHES, ctx)).toBe(false);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_FABRICS, ctx)).toBe(true);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_PROCESS, ctx)).toBe(true);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_PROCESS, ctx)).toBe(true);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL, ctx)).toBe(true);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_RECEIVE, ctx)).toBe(true);
 
     const warehouseOff = {
       modulesEnabled: { material: true },
-      mmFeatures: { fabric_warehouse: false, fabric_mill: false, trims: true },
+      mmFeatures: { fabric_warehouse: false, trims: true },
     };
     expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE, warehouseOff)).toBe(false);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_FABRICS, warehouseOff)).toBe(false);
     expect(canAccessRoute('admin', RoutePath.MATERIAL_PROCESS, warehouseOff)).toBe(false);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_RECEIVE, warehouseOff)).toBe(false);
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE_PROCESS, warehouseOff)).toBe(false);
     expect(canAccessRoute('admin', '#/material/trims', warehouseOff)).toBe(true);
-    expect(canAccessRoute('admin', RoutePath.MATERIAL_MILL, {
+    expect(canAccessRoute('admin', RoutePath.MATERIAL_WAREHOUSE, {
       modulesEnabled: { material: true },
-      mmFeatures: { fabric_warehouse: true, fabric_mill: true, trims: false },
+      mmFeatures: { fabric_warehouse: true, trims: false },
     })).toBe(true);
   });
 
   it('blocks viewer from Material Management', () => {
     expect(canAccessRoute('viewer', RoutePath.MATERIAL_MANAGEMENT)).toBe(false);
-    expect(canAccessRoute('viewer', RoutePath.WORK_CENTER_MATERIAL)).toBe(false);
-    expect(canAccessRoute('viewer', RoutePath.MATERIAL_MILL, { modulesEnabled: { material: true } })).toBe(false);
+    expect(canAccessRoute('viewer', RoutePath.MATERIAL_WAREHOUSE_RECEIVE, { modulesEnabled: { material: true } })).toBe(false);
     expect(canAccessRoute('viewer', RoutePath.MATERIAL_WAREHOUSE, { modulesEnabled: { material: true } })).toBe(false);
   });
 });

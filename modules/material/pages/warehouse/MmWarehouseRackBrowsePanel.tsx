@@ -10,15 +10,14 @@ import {
 } from 'lucide-react';
 import { Button, Modal } from '../../../../components/ui';
 import type { MmRackOpsBoard, MmRackOpsRoll, MmRackOpsTarget } from '../../lib/mmRpc';
-import { millDateLabel } from '../../lib/mmRollDraft';
+import { dateLabel } from '../../lib/mmRollDraft';
 import {
   challanDocLabel,
   groupRollsByStyleColor,
   matchesQuery,
   occupancyPct,
   pctText,
-  qtySum,
-  qtyText,
+  qtyPhrase,
 } from '../../lib/mmRackOps';
 
 type BoardTab = 'racks' | 'unassigned';
@@ -34,7 +33,7 @@ type StyleFabricRow = {
   colorName: string;
   fabricType: string;
   rollCount: number;
-  qty: number;
+  qty: string;
   rolls: MmRackOpsRoll[];
 };
 
@@ -48,7 +47,7 @@ function KpiCard({
 }: {
   label: string;
   rolls: number;
-  qty: number;
+  qty: string;
   pct: string;
   tone: 'blue' | 'green' | 'orange' | 'red';
   icon: LucideIcon;
@@ -94,7 +93,7 @@ function KpiCard({
           <p className={`text-[10px] font-semibold uppercase tracking-wide ${c.label}`}>{label}</p>
           <p className={`text-[22px] font-bold leading-tight tabular-nums mt-0.5 ${c.value}`}>{rolls}</p>
           <p className={`text-[11px] mt-0.5 ${c.sub}`}>
-            {qtyText(qty)} {tone === 'blue' ? '' : `(${pct})`}
+            {qty} {tone === 'blue' ? '' : `(${pct})`}
           </p>
         </div>
       </div>
@@ -138,7 +137,7 @@ function buildStyleFabricRows(
           colorName: color.colorName,
           fabricType: color.fabricType,
           rollCount: color.rolls.length,
-          qty: color.qty,
+          qty: qtyPhrase(color.rolls),
           rolls: color.rolls,
         });
       }
@@ -154,7 +153,7 @@ function buildStyleFabricRows(
         colorName: '—',
         fabricType: '—',
         rollCount: 0,
-        qty: 0,
+        qty: '0',
         rolls: [],
       });
     }
@@ -177,7 +176,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
   const allRolls = useMemo(() => [...unassigned, ...racked, ...redLabelRolls], [unassigned, racked, redLabelRolls]);
 
   const kpiTotalRolls = unassigned.length + racked.length + redLabelRolls.length;
-  const kpiTotalQty = qtySum(unassigned) + qtySum(racked) + qtySum(redLabelRolls);
+  const kpiTotalQty = qtyPhrase([...unassigned, ...racked, ...redLabelRolls]);
 
   const filteredTargets = useMemo(() => {
     const q = rackQuery.trim().toLowerCase();
@@ -227,7 +226,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
         <KpiCard
           label="Assigned to racks"
           rolls={racked.length}
-          qty={qtySum(racked)}
+          qty={qtyPhrase(racked)}
           pct={pctText(racked.length, kpiTotalRolls)}
           tone="green"
           icon={CheckCircle2}
@@ -235,7 +234,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
         <KpiCard
           label="Unassigned"
           rolls={unassigned.length}
-          qty={qtySum(unassigned)}
+          qty={qtyPhrase(unassigned)}
           pct={pctText(unassigned.length, kpiTotalRolls)}
           tone="orange"
           icon={Package}
@@ -243,7 +242,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
         <KpiCard
           label="In red label"
           rolls={redLabelRolls.length}
-          qty={qtySum(redLabelRolls)}
+          qty={qtyPhrase(redLabelRolls)}
           pct={pctText(redLabelRolls.length, kpiTotalRolls)}
           tone="red"
           icon={AlertTriangle}
@@ -377,7 +376,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
                           <td className={tdCls}>{row.colorName}</td>
                           <td className={tdCls}>{row.fabricType || '—'}</td>
                           <td className={`${tdCls} tabular-nums font-semibold`}>{row.rollCount}</td>
-                          <td className={`${tdCls} tabular-nums`}>{row.rollCount > 0 ? qtyText(row.qty) : '—'}</td>
+                          <td className={`${tdCls} tabular-nums`}>{row.rollCount > 0 ? row.qty : '—'}</td>
                           <td className={`${tdCls} tabular-nums`}>{target ? `${occupancyPct(target)}%` : '—'}</td>
                         </tr>
                       );
@@ -417,7 +416,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
                       <th className={thCls}>Fabric</th>
                       <th className={thCls}>Challan / GRN</th>
                       <th className={thCls}>Batch</th>
-                      <th className={thCls}>Qty (m)</th>
+                      <th className={thCls}>Qty</th>
                       <th className={thCls}>Received</th>
                     </tr>
                   </thead>
@@ -431,7 +430,7 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
                               <span className="ml-2 text-[10px] text-slate-400">{style.styleRef}</span>
                             ) : null}
                             <span className="ml-2 text-[10px] text-slate-500 tabular-nums">
-                              {style.rollCount} rolls · {qtyText(style.qty)}
+                              {style.rollCount} rolls · {qtyPhrase(style.colors.flatMap((color) => color.rolls))}
                             </span>
                           </td>
                         </tr>
@@ -451,11 +450,9 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
                               </td>
                               <td className={tdCls}>{batchLabelSafe(roll)}</td>
                               <td className={`${tdCls} tabular-nums`}>
-                                {roll.length_m == null
-                                  ? '—'
-                                  : Number(roll.length_m).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                {qtyPhrase([roll])}
                               </td>
-                              <td className={tdCls}>{millDateLabel(roll.received_at)}</td>
+                              <td className={tdCls}>{dateLabel(roll.received_at)}</td>
                             </tr>
                           )),
                         )}
@@ -476,16 +473,14 @@ export default function MmWarehouseRackBrowsePanel({ data }: { data: MmRackOpsBo
               {openRow.rackCode} · {openRow.styleName}
             </h4>
             <p className="text-[11px] text-slate-500 mt-1">
-              {openRow.colorName} · {openRow.fabricType || '—'} · {openRow.rollCount} rolls · {qtyText(openRow.qty)}
+              {openRow.colorName} · {openRow.fabricType || '—'} · {openRow.rollCount} rolls · {openRow.qty}
             </p>
             <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 max-h-64 overflow-y-auto space-y-1">
               {openRow.rolls.map((roll) => (
                 <p key={roll.id} className="text-[11px] text-slate-700 tabular-nums flex justify-between gap-3">
                   <span className="font-semibold">{roll.unit_code}</span>
                   <span className="text-slate-500">
-                    {roll.length_m == null
-                      ? '—'
-                      : `${Number(roll.length_m).toLocaleString(undefined, { maximumFractionDigits: 1 })} m`}
+                    {qtyPhrase([roll])}
                   </span>
                 </p>
               ))}

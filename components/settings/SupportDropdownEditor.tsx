@@ -3,6 +3,13 @@ import { X, Plus, List, Save, Loader2 } from 'lucide-react';
 import { Input } from '../ui';
 import { DesktopWriteGate } from '../DesktopWriteGate';
 import { tokens } from '../../lib/designTokens';
+import { useMmUnits, type MmUnit } from '../../modules/material/lib/units';
+
+function matchesUnit(unit: MmUnit, text: string): boolean {
+  return unit.code.toLowerCase() === text
+    || unit.label.toLowerCase() === text
+    || unit.aliases.some((alias) => alias.toLowerCase() === text);
+}
 
 interface SupportDropdownEditorProps {
   formData: any;
@@ -19,8 +26,18 @@ export const SupportDropdownEditor: React.FC<SupportDropdownEditorProps> = ({
   saving,
 }) => {
   const [newValue, setNewValue] = useState('');
+  const unitsQ = useMmUnits();
+  const category = String(formData.category ?? '');
+  const unitKind = category === 'qty_uom' ? 'qty' : category === 'width_uom' ? 'width' : null;
+  const knownUnits = (unitsQ.data?.all ?? []).filter((unit) => unit.kind === unitKind);
 
   const values: string[] = formData.values || [];
+
+  const isKnownUnit = (value: string) => {
+    const text = value.trim().toLowerCase();
+    if (!text) return true;
+    return knownUnits.some((unit) => matchesUnit(unit, text));
+  };
 
   const addValue = () => {
     const trimmed = newValue.trim();
@@ -81,10 +98,16 @@ export const SupportDropdownEditor: React.FC<SupportDropdownEditorProps> = ({
 
             {/* Existing values */}
             <div className="flex flex-wrap gap-2 mb-3">
-              {values.map((val, idx) => (
+              {values.map((val, idx) => {
+                const unknown = unitKind != null && !isKnownUnit(val);
+                return (
                 <div
                   key={idx}
-                  className="flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-lg px-2.5 py-1.5 text-xs font-medium group"
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium group border ${
+                    unknown
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-100'
+                  }`}
                 >
                   <DesktopWriteGate>
                     <>
@@ -92,22 +115,31 @@ export const SupportDropdownEditor: React.FC<SupportDropdownEditorProps> = ({
                         type="text"
                         value={val}
                         onChange={(e) => updateValue(idx, e.target.value)}
-                        className="bg-transparent border-none outline-none w-24 text-xs font-medium text-blue-700 focus:ring-0 p-0"
+                        className={`bg-transparent border-none outline-none w-24 text-xs font-medium focus:ring-0 p-0 ${
+                          unknown ? 'text-amber-800' : 'text-blue-700'
+                        }`}
                       />
+                      {unknown ? <span className="text-[10px] font-semibold whitespace-nowrap">not a known unit</span> : null}
                       <button
                         onClick={() => removeValue(idx)}
-                        className="text-blue-300 hover:text-red-500 transition-colors"
+                        className={unknown ? 'text-amber-400 hover:text-red-500 transition-colors' : 'text-blue-300 hover:text-red-500 transition-colors'}
                       >
                         <X size={12} />
                       </button>
                     </>
                   </DesktopWriteGate>
                 </div>
-              ))}
+                );
+              })}
               {values.length === 0 && (
                 <span className="text-xs text-slate-400 italic">No values added yet.</span>
               )}
             </div>
+            {unitKind ? (
+              <p className="text-[10px] text-slate-500 mb-3">
+                Known units: {knownUnits.length > 0 ? knownUnits.map((unit) => unit.label).join(', ') : '—'}
+              </p>
+            ) : null}
 
             {/* Add new value */}
             <DesktopWriteGate>

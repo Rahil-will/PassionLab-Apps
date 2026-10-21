@@ -538,10 +538,6 @@ export type Database = {
           id: string
           kind: string
           line_key: string | null
-          mill_short_closed: boolean
-          mill_short_closed_at: string | null
-          mill_short_closed_by: string | null
-          mill_short_closed_reason: string | null
           name: string
           order_id: string
           placement: string
@@ -567,10 +563,6 @@ export type Database = {
           id?: string
           kind?: string
           line_key?: string | null
-          mill_short_closed?: boolean
-          mill_short_closed_at?: string | null
-          mill_short_closed_by?: string | null
-          mill_short_closed_reason?: string | null
           name?: string
           order_id: string
           placement?: string
@@ -596,10 +588,6 @@ export type Database = {
           id?: string
           kind?: string
           line_key?: string | null
-          mill_short_closed?: boolean
-          mill_short_closed_at?: string | null
-          mill_short_closed_by?: string | null
-          mill_short_closed_reason?: string | null
           name?: string
           order_id?: string
           placement?: string
@@ -2444,38 +2432,6 @@ export type Database = {
           },
         ]
       }
-      mm_defect_types: {
-        Row: {
-          created_at: string
-          factory_id: string
-          id: string
-          is_active: boolean
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          factory_id: string
-          id?: string
-          is_active?: boolean
-          name: string
-        }
-        Update: {
-          created_at?: string
-          factory_id?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_defect_types_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       mm_doc_sequences: {
         Row: {
           doc_type: string
@@ -2509,7 +2465,7 @@ export type Database = {
           cutting_lay_id: string | null
           factory_id: string
           id: string
-          mill_shade: string | null
+          issued_shade: string | null
           qty: number
           qty_uom: string | null
           returned_at: string
@@ -2526,7 +2482,7 @@ export type Database = {
           cutting_lay_id?: string | null
           factory_id: string
           id?: string
-          mill_shade?: string | null
+          issued_shade?: string | null
           qty: number
           qty_uom?: string | null
           returned_at?: string
@@ -2543,7 +2499,7 @@ export type Database = {
           cutting_lay_id?: string | null
           factory_id?: string
           id?: string
-          mill_shade?: string | null
+          issued_shade?: string | null
           qty?: number
           qty_uom?: string | null
           returned_at?: string
@@ -2585,76 +2541,9 @@ export type Database = {
           },
         ]
       }
-      mm_fabric_constructions: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          fabric_type_id: string
-          factory_id: string
-          id: string
-          is_active: boolean
-          name: string
-          seq: number
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          fabric_type_id: string
-          factory_id: string
-          id?: string
-          is_active?: boolean
-          name: string
-          seq?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          fabric_type_id?: string
-          factory_id?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          seq?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_fabric_constructions_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_fabric_constructions_fabric_type_id_fkey"
-            columns: ["fabric_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_fabric_types"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_fabric_constructions_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_fabric_constructions_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       mm_fabric_form_fields: {
         Row: {
+          applies_to_type_ids: string[] | null
           col_span: number
           column_name: string | null
           created_at: string
@@ -2683,6 +2572,7 @@ export type Database = {
           visible_when: Json | null
         }
         Insert: {
+          applies_to_type_ids?: string[] | null
           col_span?: number
           column_name?: string | null
           created_at?: string
@@ -2711,6 +2601,7 @@ export type Database = {
           visible_when?: Json | null
         }
         Update: {
+          applies_to_type_ids?: string[] | null
           col_span?: number
           column_name?: string | null
           created_at?: string
@@ -2909,6 +2800,7 @@ export type Database = {
       }
       mm_fabric_types: {
         Row: {
+          constructions: Json
           created_at: string
           created_by: string | null
           factory_id: string
@@ -2917,6 +2809,7 @@ export type Database = {
           is_active: boolean
           name: string
           remarks: string | null
+          requirement_fields: Json
           requires_shade_band: boolean
           row_version: number
           seq: number
@@ -2924,6 +2817,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          constructions?: Json
           created_at?: string
           created_by?: string | null
           factory_id: string
@@ -2932,6 +2826,7 @@ export type Database = {
           is_active?: boolean
           name: string
           remarks?: string | null
+          requirement_fields?: Json
           requires_shade_band?: boolean
           row_version?: number
           seq?: number
@@ -2939,6 +2834,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          constructions?: Json
           created_at?: string
           created_by?: string | null
           factory_id?: string
@@ -2947,6 +2843,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           remarks?: string | null
+          requirement_fields?: Json
           requires_shade_band?: boolean
           row_version?: number
           seq?: number
@@ -2977,6 +2874,71 @@ export type Database = {
           },
         ]
       }
+      mm_fabric_vendors: {
+        Row: {
+          address: string | null
+          code: string
+          contact: string | null
+          created_at: string
+          created_by: string | null
+          fabric_type_ids: string[]
+          factory_id: string
+          id: string
+          is_active: boolean
+          name: string
+          ownership: string
+          qc_at_source: string
+          remarks: string | null
+          row_version: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          address?: string | null
+          code: string
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          fabric_type_ids?: string[]
+          factory_id: string
+          id?: string
+          is_active?: boolean
+          name: string
+          ownership?: string
+          qc_at_source?: string
+          remarks?: string | null
+          row_version?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          contact?: string | null
+          created_at?: string
+          created_by?: string | null
+          fabric_type_ids?: string[]
+          factory_id?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          ownership?: string
+          qc_at_source?: string
+          remarks?: string | null
+          row_version?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_fabric_vendors_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mm_fabrics: {
         Row: {
           code: string
@@ -2993,6 +2955,7 @@ export type Database = {
           greige_gsm: number | null
           greige_width_in: number | null
           gsm: number
+          gsm_tol_pct: number
           hsn_code: string | null
           id: string
           image_url: string | null
@@ -3008,6 +2971,7 @@ export type Database = {
           updated_by: string | null
           width_form: string
           width_in: number
+          width_tol_pct: number
         }
         Insert: {
           code: string
@@ -3024,6 +2988,7 @@ export type Database = {
           greige_gsm?: number | null
           greige_width_in?: number | null
           gsm: number
+          gsm_tol_pct?: number
           hsn_code?: string | null
           id?: string
           image_url?: string | null
@@ -3039,6 +3004,7 @@ export type Database = {
           updated_by?: string | null
           width_form: string
           width_in: number
+          width_tol_pct?: number
         }
         Update: {
           code?: string
@@ -3055,6 +3021,7 @@ export type Database = {
           greige_gsm?: number | null
           greige_width_in?: number | null
           gsm?: number
+          gsm_tol_pct?: number
           hsn_code?: string | null
           id?: string
           image_url?: string | null
@@ -3070,15 +3037,9 @@ export type Database = {
           updated_by?: string | null
           width_form?: string
           width_in?: number
+          width_tol_pct?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "mm_fabrics_construction_id_fkey"
-            columns: ["construction_id"]
-            isOneToOne: false
-            referencedRelation: "mm_fabric_constructions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "mm_fabrics_created_by_fkey"
             columns: ["created_by"]
@@ -3112,134 +3073,6 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_facilities: {
-        Row: {
-          address: string | null
-          code: string
-          contact: string | null
-          created_at: string
-          created_by: string | null
-          factory_id: string
-          id: string
-          is_active: boolean
-          kind: string
-          name: string
-          ownership: string
-          remarks: string | null
-          row_version: number
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          address?: string | null
-          code: string
-          contact?: string | null
-          created_at?: string
-          created_by?: string | null
-          factory_id: string
-          id?: string
-          is_active?: boolean
-          kind: string
-          name: string
-          ownership: string
-          remarks?: string | null
-          row_version?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          address?: string | null
-          code?: string
-          contact?: string | null
-          created_at?: string
-          created_by?: string | null
-          factory_id?: string
-          id?: string
-          is_active?: boolean
-          kind?: string
-          name?: string
-          ownership?: string
-          remarks?: string | null
-          row_version?: number
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_facilities_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_facility_process_types: {
-        Row: {
-          facility_id: string
-          factory_id: string
-          process_type_id: string
-        }
-        Insert: {
-          facility_id: string
-          factory_id: string
-          process_type_id: string
-        }
-        Update: {
-          facility_id?: string
-          factory_id?: string
-          process_type_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_facility_process_types_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "mm_facilities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_facility_process_types_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_facility_process_types_process_type_id_fkey"
-            columns: ["process_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_process_types"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_factory_features: {
-        Row: {
-          enabled: boolean
-          factory_id: string
-          feature_key: string
-        }
-        Insert: {
-          enabled?: boolean
-          factory_id: string
-          feature_key: string
-        }
-        Update: {
-          enabled?: boolean
-          factory_id?: string
-          feature_key?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_factory_features_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
             referencedColumns: ["id"]
           },
         ]
@@ -3364,12 +3197,24 @@ export type Database = {
       mm_in_challans: {
         Row: {
           challan_no: string
+          color_ref: string | null
+          container_no: string | null
           created_at: string
           created_by: string | null
+          customer_name: string | null
+          fabric_id: string | null
           factory_id: string
+          field_values: Json
+          from_facility_id: string | null
           grn_no: string | null
           id: string
           invoice_ref: string | null
+          lr_no: string | null
+          party_challan_no: string | null
+          po_no: string | null
+          po_ref: string | null
+          purpose: string | null
+          receipt_source: string | null
           received_at: string | null
           received_by: string | null
           reference_no: string | null
@@ -3378,6 +3223,7 @@ export type Database = {
           sent_at: string | null
           sent_by: string | null
           source: string
+          stage_code: string | null
           status: string
           style_material_id: string | null
           supplier_name: string | null
@@ -3387,12 +3233,24 @@ export type Database = {
         }
         Insert: {
           challan_no: string
+          color_ref?: string | null
+          container_no?: string | null
           created_at?: string
           created_by?: string | null
+          customer_name?: string | null
+          fabric_id?: string | null
           factory_id: string
+          field_values?: Json
+          from_facility_id?: string | null
           grn_no?: string | null
           id?: string
           invoice_ref?: string | null
+          lr_no?: string | null
+          party_challan_no?: string | null
+          po_no?: string | null
+          po_ref?: string | null
+          purpose?: string | null
+          receipt_source?: string | null
           received_at?: string | null
           received_by?: string | null
           reference_no?: string | null
@@ -3401,6 +3259,7 @@ export type Database = {
           sent_at?: string | null
           sent_by?: string | null
           source: string
+          stage_code?: string | null
           status: string
           style_material_id?: string | null
           supplier_name?: string | null
@@ -3410,12 +3269,24 @@ export type Database = {
         }
         Update: {
           challan_no?: string
+          color_ref?: string | null
+          container_no?: string | null
           created_at?: string
           created_by?: string | null
+          customer_name?: string | null
+          fabric_id?: string | null
           factory_id?: string
+          field_values?: Json
+          from_facility_id?: string | null
           grn_no?: string | null
           id?: string
           invoice_ref?: string | null
+          lr_no?: string | null
+          party_challan_no?: string | null
+          po_no?: string | null
+          po_ref?: string | null
+          purpose?: string | null
+          receipt_source?: string | null
           received_at?: string | null
           received_by?: string | null
           reference_no?: string | null
@@ -3424,6 +3295,7 @@ export type Database = {
           sent_at?: string | null
           sent_by?: string | null
           source?: string
+          stage_code?: string | null
           status?: string
           style_material_id?: string | null
           supplier_name?: string | null
@@ -3440,10 +3312,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "mm_in_challans_fabric_id_fkey"
+            columns: ["fabric_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabrics"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "mm_in_challans_factory_id_fkey"
             columns: ["factory_id"]
             isOneToOne: false
             referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_in_challans_from_vendor_fkey"
+            columns: ["from_facility_id"]
+            isOneToOne: false
+            referencedRelation: "mm_fabric_vendors"
             referencedColumns: ["id"]
           },
           {
@@ -3521,13 +3407,6 @@ export type Database = {
           size_band?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "mm_inspection_defects_defect_type_id_fkey"
-            columns: ["defect_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_defect_types"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "mm_inspection_defects_factory_id_fkey"
             columns: ["factory_id"]
@@ -3749,406 +3628,13 @@ export type Database = {
           },
         ]
       }
-      mm_machines: {
-        Row: {
-          code: string
-          created_at: string
-          created_by: string | null
-          facility_id: string
-          factory_id: string
-          id: string
-          is_active: boolean
-          machine_kind: string
-          name: string
-          row_version: number
-          specs: Json
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          created_by?: string | null
-          facility_id: string
-          factory_id: string
-          id?: string
-          is_active?: boolean
-          machine_kind: string
-          name: string
-          row_version?: number
-          specs?: Json
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          created_by?: string | null
-          facility_id?: string
-          factory_id?: string
-          id?: string
-          is_active?: boolean
-          machine_kind?: string
-          name?: string
-          row_version?: number
-          specs?: Json
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_machines_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "mm_facilities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_machines_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_mill_batch_style_intents: {
-        Row: {
-          batch_id: string
-          created_at: string
-          created_by: string | null
-          factory_id: string
-          style_material_id: string
-        }
-        Insert: {
-          batch_id: string
-          created_at?: string
-          created_by?: string | null
-          factory_id: string
-          style_material_id: string
-        }
-        Update: {
-          batch_id?: string
-          created_at?: string
-          created_by?: string | null
-          factory_id?: string
-          style_material_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_mill_batch_style_intents_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batch_style_intents_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batch_style_intents_style_material_id_fkey"
-            columns: ["style_material_id"]
-            isOneToOne: false
-            referencedRelation: "mm_style_materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batch_style_intents_style_material_id_fkey"
-            columns: ["style_material_id"]
-            isOneToOne: false
-            referencedRelation: "mm_v_style_fabric_reconciliation"
-            referencedColumns: ["style_material_id"]
-          },
-        ]
-      }
-      mm_mill_batches: {
-        Row: {
-          batch_kind: string | null
-          batch_no: string
-          color_ref: string | null
-          created_at: string
-          created_by: string | null
-          fabric_id: string | null
-          fabric_ref_name: string | null
-          fabric_type_id: string
-          facility_id: string | null
-          factory_id: string
-          id: string
-          initial_stage_code: string
-          mill_ref: string | null
-          production_date: string
-          remarks: string | null
-          row_version: number
-          style_material_id: string | null
-          updated_at: string
-          updated_by: string | null
-          yarn_count: string | null
-          yarn_lot: string | null
-        }
-        Insert: {
-          batch_kind?: string | null
-          batch_no: string
-          color_ref?: string | null
-          created_at?: string
-          created_by?: string | null
-          fabric_id?: string | null
-          fabric_ref_name?: string | null
-          fabric_type_id: string
-          facility_id?: string | null
-          factory_id: string
-          id?: string
-          initial_stage_code?: string
-          mill_ref?: string | null
-          production_date?: string
-          remarks?: string | null
-          row_version?: number
-          style_material_id?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          yarn_count?: string | null
-          yarn_lot?: string | null
-        }
-        Update: {
-          batch_kind?: string | null
-          batch_no?: string
-          color_ref?: string | null
-          created_at?: string
-          created_by?: string | null
-          fabric_id?: string | null
-          fabric_ref_name?: string | null
-          fabric_type_id?: string
-          facility_id?: string | null
-          factory_id?: string
-          id?: string
-          initial_stage_code?: string
-          mill_ref?: string | null
-          production_date?: string
-          remarks?: string | null
-          row_version?: number
-          style_material_id?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          yarn_count?: string | null
-          yarn_lot?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_mill_batches_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_fabric_id_fkey"
-            columns: ["fabric_id"]
-            isOneToOne: false
-            referencedRelation: "mm_fabrics"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_fabric_type_id_fkey"
-            columns: ["fabric_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_fabric_types"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "mm_facilities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_style_material_id_fkey"
-            columns: ["style_material_id"]
-            isOneToOne: false
-            referencedRelation: "mm_style_materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_style_material_id_fkey"
-            columns: ["style_material_id"]
-            isOneToOne: false
-            referencedRelation: "mm_v_style_fabric_reconciliation"
-            referencedColumns: ["style_material_id"]
-          },
-          {
-            foreignKeyName: "mm_mill_batches_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_mill_rolls: {
-        Row: {
-          attributes: Json
-          color_ref: string | null
-          created_at: string
-          created_by: string | null
-          dispatched_at: string | null
-          fabric_type_id: string
-          factory_id: string
-          id: string
-          in_challan_id: string | null
-          length_m: number | null
-          lot_no: string | null
-          mill_batch_id: string
-          parent_mill_roll_id: string | null
-          qc_result: string | null
-          roll_id: string
-          row_version: number
-          shade: string | null
-          status: string
-          style_material_id: string | null
-          unit_code: string
-          updated_at: string
-          updated_by: string | null
-          weight_kg: number | null
-        }
-        Insert: {
-          attributes?: Json
-          color_ref?: string | null
-          created_at?: string
-          created_by?: string | null
-          dispatched_at?: string | null
-          fabric_type_id: string
-          factory_id: string
-          id?: string
-          in_challan_id?: string | null
-          length_m?: number | null
-          lot_no?: string | null
-          mill_batch_id: string
-          parent_mill_roll_id?: string | null
-          qc_result?: string | null
-          roll_id: string
-          row_version?: number
-          shade?: string | null
-          status?: string
-          style_material_id?: string | null
-          unit_code: string
-          updated_at?: string
-          updated_by?: string | null
-          weight_kg?: number | null
-        }
-        Update: {
-          attributes?: Json
-          color_ref?: string | null
-          created_at?: string
-          created_by?: string | null
-          dispatched_at?: string | null
-          fabric_type_id?: string
-          factory_id?: string
-          id?: string
-          in_challan_id?: string | null
-          length_m?: number | null
-          lot_no?: string | null
-          mill_batch_id?: string
-          parent_mill_roll_id?: string | null
-          qc_result?: string | null
-          roll_id?: string
-          row_version?: number
-          shade?: string | null
-          status?: string
-          style_material_id?: string | null
-          unit_code?: string
-          updated_at?: string
-          updated_by?: string | null
-          weight_kg?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_mill_rolls_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_fabric_type_id_fkey"
-            columns: ["fabric_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_fabric_types"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_in_challan_id_fkey"
-            columns: ["in_challan_id"]
-            isOneToOne: false
-            referencedRelation: "mm_in_challans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_mill_batch_id_fkey"
-            columns: ["mill_batch_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_parent_mill_roll_id_fkey"
-            columns: ["parent_mill_roll_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_rolls"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_roll_id_fkey"
-            columns: ["roll_id"]
-            isOneToOne: false
-            referencedRelation: "mm_rolls"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_style_material_id_fkey"
-            columns: ["style_material_id"]
-            isOneToOne: false
-            referencedRelation: "mm_style_materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_style_material_id_fkey"
-            columns: ["style_material_id"]
-            isOneToOne: false
-            referencedRelation: "mm_v_style_fabric_reconciliation"
-            referencedColumns: ["style_material_id"]
-          },
-          {
-            foreignKeyName: "mm_mill_rolls_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       mm_process_challans: {
         Row: {
           challan_no: string
           created_at: string
           created_by: string | null
           factory_id: string
+          field_values: Json
           id: string
           origin: string
           parent_challan_id: string | null
@@ -4159,11 +3645,12 @@ export type Database = {
           returned_at: string | null
           sent_at: string
           status: string
+          target_color: string | null
+          target_shade: string | null
           unit_facility_id: string | null
           unit_ref_no: string | null
           updated_at: string
           updated_by: string | null
-          vendor_id: string | null
           void_reason: string | null
           voided_at: string | null
           voided_by: string | null
@@ -4173,6 +3660,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           factory_id: string
+          field_values?: Json
           id?: string
           origin: string
           parent_challan_id?: string | null
@@ -4183,11 +3671,12 @@ export type Database = {
           returned_at?: string | null
           sent_at?: string
           status?: string
+          target_color?: string | null
+          target_shade?: string | null
           unit_facility_id?: string | null
           unit_ref_no?: string | null
           updated_at?: string
           updated_by?: string | null
-          vendor_id?: string | null
           void_reason?: string | null
           voided_at?: string | null
           voided_by?: string | null
@@ -4197,6 +3686,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           factory_id?: string
+          field_values?: Json
           id?: string
           origin?: string
           parent_challan_id?: string | null
@@ -4207,11 +3697,12 @@ export type Database = {
           returned_at?: string | null
           sent_at?: string
           status?: string
+          target_color?: string | null
+          target_shade?: string | null
           unit_facility_id?: string | null
           unit_ref_no?: string | null
           updated_at?: string
           updated_by?: string | null
-          vendor_id?: string | null
           void_reason?: string | null
           voided_at?: string | null
           voided_by?: string | null
@@ -4246,10 +3737,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_process_challans_unit_facility_id_fkey"
+            foreignKeyName: "mm_process_challans_processing_vendor_fkey"
             columns: ["unit_facility_id"]
             isOneToOne: false
-            referencedRelation: "mm_facilities"
+            referencedRelation: "mm_processing_vendors"
             referencedColumns: ["id"]
           },
           {
@@ -4257,80 +3748,6 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_challans_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "mm_process_vendors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_process_lots: {
-        Row: {
-          challan_id: string
-          created_at: string
-          created_by: string | null
-          ended_at: string | null
-          factory_id: string
-          id: string
-          lot_no: string
-          machine_id: string | null
-          remarks: string | null
-          started_at: string | null
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          challan_id: string
-          created_at?: string
-          created_by?: string | null
-          ended_at?: string | null
-          factory_id: string
-          id?: string
-          lot_no: string
-          machine_id?: string | null
-          remarks?: string | null
-          started_at?: string | null
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          challan_id?: string
-          created_at?: string
-          created_by?: string | null
-          ended_at?: string | null
-          factory_id?: string
-          id?: string
-          lot_no?: string
-          machine_id?: string | null
-          remarks?: string | null
-          started_at?: string | null
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_process_lots_challan_id_fkey"
-            columns: ["challan_id"]
-            isOneToOne: false
-            referencedRelation: "mm_process_challans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_lots_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_lots_machine_id_fkey"
-            columns: ["machine_id"]
-            isOneToOne: false
-            referencedRelation: "mm_machines"
             referencedColumns: ["id"]
           },
         ]
@@ -4345,13 +3762,12 @@ export type Database = {
           line_status: string
           lot_id: string | null
           lot_no: string | null
-          mill_roll_id: string | null
           qty: number
           qty_kg: number | null
           roll_id: string | null
           shade: string | null
           stage_code: string | null
-          stock_unit_id: string | null
+          stock_unit_id: string
           unit_code: string
           uom: string
           write_off_reason: string | null
@@ -4365,13 +3781,12 @@ export type Database = {
           line_status?: string
           lot_id?: string | null
           lot_no?: string | null
-          mill_roll_id?: string | null
           qty: number
           qty_kg?: number | null
           roll_id?: string | null
           shade?: string | null
           stage_code?: string | null
-          stock_unit_id?: string | null
+          stock_unit_id: string
           unit_code: string
           uom: string
           write_off_reason?: string | null
@@ -4385,13 +3800,12 @@ export type Database = {
           line_status?: string
           lot_id?: string | null
           lot_no?: string | null
-          mill_roll_id?: string | null
           qty?: number
           qty_kg?: number | null
           roll_id?: string | null
           shade?: string | null
           stage_code?: string | null
-          stock_unit_id?: string | null
+          stock_unit_id?: string
           unit_code?: string
           uom?: string
           write_off_reason?: string | null
@@ -4412,18 +3826,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_process_out_lines_lot_id_fkey"
-            columns: ["lot_id"]
+            foreignKeyName: "mm_process_out_lines_roll_id_fkey"
+            columns: ["roll_id"]
             isOneToOne: false
-            referencedRelation: "mm_process_lots"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_out_lines_mill_roll_id_fkey"
-            columns: ["mill_roll_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_rolls"
-            referencedColumns: ["id"]
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
           },
           {
             foreignKeyName: "mm_process_out_lines_roll_id_fkey"
@@ -4443,6 +3850,8 @@ export type Database = {
       }
       mm_process_return_lines: {
         Row: {
+          actual_gsm: number | null
+          actual_width_in: number | null
           challan_id: string
           color_ref: string | null
           created_at: string
@@ -4453,7 +3862,6 @@ export type Database = {
           id: string
           lot_id: string | null
           lot_no: string | null
-          mill_roll_id: string | null
           out_line_id: string
           parent_out_line_ids: string[] | null
           qty: number
@@ -4470,6 +3878,8 @@ export type Database = {
           width_form: string | null
         }
         Insert: {
+          actual_gsm?: number | null
+          actual_width_in?: number | null
           challan_id: string
           color_ref?: string | null
           created_at?: string
@@ -4480,7 +3890,6 @@ export type Database = {
           id?: string
           lot_id?: string | null
           lot_no?: string | null
-          mill_roll_id?: string | null
           out_line_id: string
           parent_out_line_ids?: string[] | null
           qty: number
@@ -4497,6 +3906,8 @@ export type Database = {
           width_form?: string | null
         }
         Update: {
+          actual_gsm?: number | null
+          actual_width_in?: number | null
           challan_id?: string
           color_ref?: string | null
           created_at?: string
@@ -4507,7 +3918,6 @@ export type Database = {
           id?: string
           lot_id?: string | null
           lot_no?: string | null
-          mill_roll_id?: string | null
           out_line_id?: string
           parent_out_line_ids?: string[] | null
           qty?: number
@@ -4546,20 +3956,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_process_return_lines_lot_id_fkey"
-            columns: ["lot_id"]
-            isOneToOne: false
-            referencedRelation: "mm_process_lots"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_return_lines_mill_roll_id_fkey"
-            columns: ["mill_roll_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_rolls"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "mm_process_return_lines_out_line_id_fkey"
             columns: ["out_line_id"]
             isOneToOne: false
@@ -4572,6 +3968,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "mm_process_returns"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_process_return_lines_roll_id_fkey"
+            columns: ["roll_id"]
+            isOneToOne: false
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
           },
           {
             foreignKeyName: "mm_process_return_lines_roll_id_fkey"
@@ -4653,48 +4056,48 @@ export type Database = {
       mm_process_types: {
         Row: {
           active: boolean
+          challan_fields: Json
           created_at: string
           created_by: string | null
-          default_return_mode: string
+          done_external: boolean
+          done_inhouse: boolean
           factory_id: string
           id: string
-          machine_kinds: string[]
           name: string
           output_stage_code: string | null
-          resets_inspection: boolean
-          resets_testing: boolean
+          resets_qc: boolean
           sort_order: number
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           active?: boolean
+          challan_fields?: Json
           created_at?: string
           created_by?: string | null
-          default_return_mode?: string
+          done_external?: boolean
+          done_inhouse?: boolean
           factory_id: string
           id?: string
-          machine_kinds?: string[]
           name: string
           output_stage_code?: string | null
-          resets_inspection?: boolean
-          resets_testing?: boolean
+          resets_qc?: boolean
           sort_order?: number
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           active?: boolean
+          challan_fields?: Json
           created_at?: string
           created_by?: string | null
-          default_return_mode?: string
+          done_external?: boolean
+          done_inhouse?: boolean
           factory_id?: string
           id?: string
-          machine_kinds?: string[]
           name?: string
           output_stage_code?: string | null
-          resets_inspection?: boolean
-          resets_testing?: boolean
+          resets_qc?: boolean
           sort_order?: number
           updated_at?: string
           updated_by?: string | null
@@ -4723,97 +4126,64 @@ export type Database = {
           },
         ]
       }
-      mm_process_vendor_types: {
+      mm_processing_vendors: {
         Row: {
-          factory_id: string
-          process_type_id: string
-          vendor_id: string
-        }
-        Insert: {
-          factory_id: string
-          process_type_id: string
-          vendor_id: string
-        }
-        Update: {
-          factory_id?: string
-          process_type_id?: string
-          vendor_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_process_vendor_types_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_vendor_types_process_type_id_fkey"
-            columns: ["process_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_process_types"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_vendor_types_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "mm_process_vendors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mm_process_vendors: {
-        Row: {
-          active: boolean
+          address: string | null
+          code: string
+          contact: string | null
           created_at: string
           created_by: string | null
           factory_id: string
           id: string
+          is_active: boolean
           name: string
+          ownership: string
+          process_type_ids: string[]
+          remarks: string | null
+          row_version: number
           updated_at: string
           updated_by: string | null
         }
         Insert: {
-          active?: boolean
+          address?: string | null
+          code: string
+          contact?: string | null
           created_at?: string
           created_by?: string | null
           factory_id: string
           id?: string
+          is_active?: boolean
           name: string
+          ownership?: string
+          process_type_ids?: string[]
+          remarks?: string | null
+          row_version?: number
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
-          active?: boolean
+          address?: string | null
+          code?: string
+          contact?: string | null
           created_at?: string
           created_by?: string | null
           factory_id?: string
           id?: string
+          is_active?: boolean
           name?: string
+          ownership?: string
+          process_type_ids?: string[]
+          remarks?: string | null
+          row_version?: number
           updated_at?: string
           updated_by?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "mm_process_vendors_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_vendors_factory_id_fkey"
+            foreignKeyName: "mm_processing_vendors_factory_id_fkey"
             columns: ["factory_id"]
             isOneToOne: false
             referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_process_vendors_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4867,6 +4237,13 @@ export type Database = {
             foreignKeyName: "mm_qc_cut_approvals_roll_id_fkey"
             columns: ["roll_id"]
             isOneToOne: false
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
+          },
+          {
+            foreignKeyName: "mm_qc_cut_approvals_roll_id_fkey"
+            columns: ["roll_id"]
+            isOneToOne: false
             referencedRelation: "mm_rolls"
             referencedColumns: ["id"]
           },
@@ -4910,13 +4287,6 @@ export type Database = {
           size_band?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "mm_qc_inspection_defects_defect_type_id_fkey"
-            columns: ["defect_type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_defect_types"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "mm_qc_inspection_defects_factory_id_fkey"
             columns: ["factory_id"]
@@ -5057,14 +4427,14 @@ export type Database = {
             foreignKeyName: "mm_qc_inspections_roll_id_fkey"
             columns: ["roll_id"]
             isOneToOne: false
-            referencedRelation: "mm_rolls"
-            referencedColumns: ["id"]
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
           },
           {
-            foreignKeyName: "mm_qc_inspections_site_facility_id_fkey"
-            columns: ["site_facility_id"]
+            foreignKeyName: "mm_qc_inspections_roll_id_fkey"
+            columns: ["roll_id"]
             isOneToOne: false
-            referencedRelation: "mm_facilities"
+            referencedRelation: "mm_rolls"
             referencedColumns: ["id"]
           },
           {
@@ -5107,6 +4477,13 @@ export type Database = {
             foreignKeyName: "mm_qc_test_rolls_roll_id_fkey"
             columns: ["roll_id"]
             isOneToOne: false
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
+          },
+          {
+            foreignKeyName: "mm_qc_test_rolls_roll_id_fkey"
+            columns: ["roll_id"]
+            isOneToOne: false
             referencedRelation: "mm_rolls"
             referencedColumns: ["id"]
           },
@@ -5130,11 +4507,13 @@ export type Database = {
           factory_id: string
           field_values: Json
           id: string
+          legacy_inspection_id: string | null
           origin: string
           remarks: string | null
           result: string
           scope_id: string | null
           scope_kind: string
+          session_id: string | null
           site_facility_id: string | null
           site_side: string
           stage_code: string | null
@@ -5154,11 +4533,13 @@ export type Database = {
           factory_id: string
           field_values?: Json
           id?: string
+          legacy_inspection_id?: string | null
           origin?: string
           remarks?: string | null
           result: string
           scope_id?: string | null
           scope_kind: string
+          session_id?: string | null
           site_facility_id?: string | null
           site_side: string
           stage_code?: string | null
@@ -5178,11 +4559,13 @@ export type Database = {
           factory_id?: string
           field_values?: Json
           id?: string
+          legacy_inspection_id?: string | null
           origin?: string
           remarks?: string | null
           result?: string
           scope_id?: string | null
           scope_kind?: string
+          session_id?: string | null
           site_facility_id?: string | null
           site_side?: string
           stage_code?: string | null
@@ -5208,17 +4591,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_qc_tests_site_facility_id_fkey"
-            columns: ["site_facility_id"]
-            isOneToOne: false
-            referencedRelation: "mm_facilities"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "mm_qc_tests_supersedes_id_fkey"
             columns: ["supersedes_id"]
             isOneToOne: false
             referencedRelation: "mm_qc_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mm_receipt_fields: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_type: string
+          fabric_type_ids: string[]
+          factory_id: string
+          help: string | null
+          id: string
+          is_active: boolean
+          key: string
+          label: string
+          options: Json
+          required: boolean
+          row_version: number
+          section: string
+          seq: number
+          tier: string
+          updated_at: string
+          updated_by: string | null
+          visible: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_type?: string
+          fabric_type_ids?: string[]
+          factory_id: string
+          help?: string | null
+          id?: string
+          is_active?: boolean
+          key: string
+          label: string
+          options?: Json
+          required?: boolean
+          row_version?: number
+          section: string
+          seq?: number
+          tier?: string
+          updated_at?: string
+          updated_by?: string | null
+          visible?: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_type?: string
+          fabric_type_ids?: string[]
+          factory_id?: string
+          help?: string | null
+          id?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          options?: Json
+          required?: boolean
+          row_version?: number
+          section?: string
+          seq?: number
+          tier?: string
+          updated_at?: string
+          updated_by?: string | null
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_receipt_fields_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
             referencedColumns: ["id"]
           },
         ]
@@ -5231,7 +4681,6 @@ export type Database = {
           factory_id: string
           from_style_material_id: string | null
           id: string
-          mill_roll_id: string | null
           reason: string | null
           roll_id: string
           side: string
@@ -5245,7 +4694,6 @@ export type Database = {
           factory_id: string
           from_style_material_id?: string | null
           id?: string
-          mill_roll_id?: string | null
           reason?: string | null
           roll_id: string
           side: string
@@ -5259,7 +4707,6 @@ export type Database = {
           factory_id?: string
           from_style_material_id?: string | null
           id?: string
-          mill_roll_id?: string | null
           reason?: string | null
           roll_id?: string
           side?: string
@@ -5275,11 +4722,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_roll_allocations_mill_roll_id_fkey"
-            columns: ["mill_roll_id"]
+            foreignKeyName: "mm_roll_allocations_roll_id_fkey"
+            columns: ["roll_id"]
             isOneToOne: false
-            referencedRelation: "mm_mill_rolls"
-            referencedColumns: ["id"]
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
           },
           {
             foreignKeyName: "mm_roll_allocations_roll_id_fkey"
@@ -5324,6 +4771,13 @@ export type Database = {
             foreignKeyName: "mm_roll_lineage_child_roll_id_fkey"
             columns: ["child_roll_id"]
             isOneToOne: false
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
+          },
+          {
+            foreignKeyName: "mm_roll_lineage_child_roll_id_fkey"
+            columns: ["child_roll_id"]
+            isOneToOne: false
             referencedRelation: "mm_rolls"
             referencedColumns: ["id"]
           },
@@ -5338,6 +4792,13 @@ export type Database = {
             foreignKeyName: "mm_roll_lineage_parent_roll_id_fkey"
             columns: ["parent_roll_id"]
             isOneToOne: false
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
+          },
+          {
+            foreignKeyName: "mm_roll_lineage_parent_roll_id_fkey"
+            columns: ["parent_roll_id"]
+            isOneToOne: false
             referencedRelation: "mm_rolls"
             referencedColumns: ["id"]
           },
@@ -5345,6 +4806,12 @@ export type Database = {
       }
       mm_rolls: {
         Row: {
+          allocated_style_material_id: string | null
+          attributes: Json
+          booked_at: string | null
+          booked_by: string | null
+          booked_style_material_id: string | null
+          color_name: string | null
           created_at: string
           created_by: string | null
           dye_lot: string | null
@@ -5354,22 +4821,29 @@ export type Database = {
           grade: string | null
           id: string
           insp_valid_from_round: number
-          machine_id: string | null
-          mill_batch_id: string | null
+          length_m: number | null
           origin: string
           origin_facility_id: string | null
           process_round: number
           produced_at: string | null
           roll_code: string
-          shift: string | null
+          shade: string | null
           stage_code: string
           test_valid_from_round: number
           unit_form: string
           updated_at: string
           updated_by: string | null
+          weight_kg: number | null
           width_form: string | null
+          width_in: number | null
         }
         Insert: {
+          allocated_style_material_id?: string | null
+          attributes?: Json
+          booked_at?: string | null
+          booked_by?: string | null
+          booked_style_material_id?: string | null
+          color_name?: string | null
           created_at?: string
           created_by?: string | null
           dye_lot?: string | null
@@ -5379,22 +4853,29 @@ export type Database = {
           grade?: string | null
           id?: string
           insp_valid_from_round?: number
-          machine_id?: string | null
-          mill_batch_id?: string | null
+          length_m?: number | null
           origin: string
           origin_facility_id?: string | null
           process_round?: number
           produced_at?: string | null
           roll_code: string
-          shift?: string | null
+          shade?: string | null
           stage_code?: string
           test_valid_from_round?: number
           unit_form?: string
           updated_at?: string
           updated_by?: string | null
+          weight_kg?: number | null
           width_form?: string | null
+          width_in?: number | null
         }
         Update: {
+          allocated_style_material_id?: string | null
+          attributes?: Json
+          booked_at?: string | null
+          booked_by?: string | null
+          booked_style_material_id?: string | null
+          color_name?: string | null
           created_at?: string
           created_by?: string | null
           dye_lot?: string | null
@@ -5404,22 +4885,51 @@ export type Database = {
           grade?: string | null
           id?: string
           insp_valid_from_round?: number
-          machine_id?: string | null
-          mill_batch_id?: string | null
+          length_m?: number | null
           origin?: string
           origin_facility_id?: string | null
           process_round?: number
           produced_at?: string | null
           roll_code?: string
-          shift?: string | null
+          shade?: string | null
           stage_code?: string
           test_valid_from_round?: number
           unit_form?: string
           updated_at?: string
           updated_by?: string | null
+          weight_kg?: number | null
           width_form?: string | null
+          width_in?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "mm_rolls_allocated_style_material_id_fkey"
+            columns: ["allocated_style_material_id"]
+            isOneToOne: false
+            referencedRelation: "mm_style_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_rolls_allocated_style_material_id_fkey"
+            columns: ["allocated_style_material_id"]
+            isOneToOne: false
+            referencedRelation: "mm_v_style_fabric_reconciliation"
+            referencedColumns: ["style_material_id"]
+          },
+          {
+            foreignKeyName: "mm_rolls_booked_style_material_id_fkey"
+            columns: ["booked_style_material_id"]
+            isOneToOne: false
+            referencedRelation: "mm_style_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_rolls_booked_style_material_id_fkey"
+            columns: ["booked_style_material_id"]
+            isOneToOne: false
+            referencedRelation: "mm_v_style_fabric_reconciliation"
+            referencedColumns: ["style_material_id"]
+          },
           {
             foreignKeyName: "mm_rolls_fabric_id_fkey"
             columns: ["fabric_id"]
@@ -5442,24 +4952,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_rolls_machine_id_fkey"
-            columns: ["machine_id"]
-            isOneToOne: false
-            referencedRelation: "mm_machines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_rolls_mill_batch_id_fkey"
-            columns: ["mill_batch_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_rolls_origin_facility_id_fkey"
+            foreignKeyName: "mm_rolls_origin_vendor_fkey"
             columns: ["origin_facility_id"]
             isOneToOne: false
-            referencedRelation: "mm_facilities"
+            referencedRelation: "mm_fabric_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mm_shade_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          factory_id: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          shade_field: string
+          side: string
+          stock_unit_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          factory_id: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          shade_field: string
+          side: string
+          stock_unit_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          factory_id?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          shade_field?: string
+          side?: string
+          stock_unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mm_shade_history_stock_unit_id_fkey"
+            columns: ["stock_unit_id"]
+            isOneToOne: false
+            referencedRelation: "mm_stock_units"
             referencedColumns: ["id"]
           },
         ]
@@ -5594,9 +5134,6 @@ export type Database = {
           is_remnant: boolean
           length_m: number | null
           lot_no: string | null
-          mill_batch_id: string | null
-          mill_roll_id: string | null
-          mill_snapshot: Json | null
           on_hold: boolean
           parent_stock_unit_id: string | null
           qc_result: string | null
@@ -5641,9 +5178,6 @@ export type Database = {
           is_remnant?: boolean
           length_m?: number | null
           lot_no?: string | null
-          mill_batch_id?: string | null
-          mill_roll_id?: string | null
-          mill_snapshot?: Json | null
           on_hold?: boolean
           parent_stock_unit_id?: string | null
           qc_result?: string | null
@@ -5688,9 +5222,6 @@ export type Database = {
           is_remnant?: boolean
           length_m?: number | null
           lot_no?: string | null
-          mill_batch_id?: string | null
-          mill_roll_id?: string | null
-          mill_snapshot?: Json | null
           on_hold?: boolean
           parent_stock_unit_id?: string | null
           qc_result?: string | null
@@ -5755,25 +5286,18 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "mm_stock_units_mill_batch_fk"
-            columns: ["mill_batch_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_stock_units_mill_roll_fk"
-            columns: ["mill_roll_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_rolls"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "mm_stock_units_parent_stock_unit_id_fkey"
             columns: ["parent_stock_unit_id"]
             isOneToOne: false
             referencedRelation: "mm_stock_units"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_stock_units_roll_id_fkey"
+            columns: ["roll_id"]
+            isOneToOne: false
+            referencedRelation: "mm_roll_drift"
+            referencedColumns: ["roll_id"]
           },
           {
             foreignKeyName: "mm_stock_units_roll_id_fkey"
@@ -6271,86 +5795,8 @@ export type Database = {
           },
         ]
       }
-      mm_type_requirement_fields: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          factory_id: string
-          id: string
-          is_active: boolean
-          key: string
-          label: string
-          remarks: string | null
-          row_version: number
-          seq: number
-          type_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          factory_id: string
-          id?: string
-          is_active?: boolean
-          key: string
-          label: string
-          remarks?: string | null
-          row_version?: number
-          seq?: number
-          type_id: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          factory_id?: string
-          id?: string
-          is_active?: boolean
-          key?: string
-          label?: string
-          remarks?: string | null
-          row_version?: number
-          seq?: number
-          type_id?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mm_type_requirement_fields_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_type_requirement_fields_factory_id_fkey"
-            columns: ["factory_id"]
-            isOneToOne: false
-            referencedRelation: "factories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_type_requirement_fields_type_id_fkey"
-            columns: ["type_id"]
-            isOneToOne: false
-            referencedRelation: "mm_fabric_types"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_type_requirement_fields_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       mm_type_test_fields: {
         Row: {
-          capture_site: string
           created_at: string
           created_by: string | null
           data_type: string
@@ -6364,12 +5810,18 @@ export type Database = {
           row_version: number
           seq: number
           test_level: string
+          tolerance: number | null
+          tolerance_max: number | null
+          tolerance_min: number | null
+          tolerance_mode: string
+          tolerance_on: boolean
+          tolerance_target: number | null
+          tolerance_unit: string
           type_id: string
           updated_at: string
           updated_by: string | null
         }
         Insert: {
-          capture_site?: string
           created_at?: string
           created_by?: string | null
           data_type?: string
@@ -6383,12 +5835,18 @@ export type Database = {
           row_version?: number
           seq?: number
           test_level?: string
+          tolerance?: number | null
+          tolerance_max?: number | null
+          tolerance_min?: number | null
+          tolerance_mode?: string
+          tolerance_on?: boolean
+          tolerance_target?: number | null
+          tolerance_unit?: string
           type_id: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
-          capture_site?: string
           created_at?: string
           created_by?: string | null
           data_type?: string
@@ -6402,6 +5860,13 @@ export type Database = {
           row_version?: number
           seq?: number
           test_level?: string
+          tolerance?: number | null
+          tolerance_max?: number | null
+          tolerance_min?: number | null
+          tolerance_mode?: string
+          tolerance_on?: boolean
+          tolerance_target?: number | null
+          tolerance_unit?: string
           type_id?: string
           updated_at?: string
           updated_by?: string | null
@@ -6454,8 +5919,6 @@ export type Database = {
           inspected_at: string
           inspected_by: string | null
           inspected_length: number | null
-          mill_batch_id: string | null
-          mill_roll_id: string | null
           occasion: string
           override_at: string | null
           override_by: string | null
@@ -6498,8 +5961,6 @@ export type Database = {
           inspected_at?: string
           inspected_by?: string | null
           inspected_length?: number | null
-          mill_batch_id?: string | null
-          mill_roll_id?: string | null
           occasion: string
           override_at?: string | null
           override_by?: string | null
@@ -6542,8 +6003,6 @@ export type Database = {
           inspected_at?: string
           inspected_by?: string | null
           inspected_length?: number | null
-          mill_batch_id?: string | null
-          mill_roll_id?: string | null
           occasion?: string
           override_at?: string | null
           override_by?: string | null
@@ -6604,20 +6063,6 @@ export type Database = {
             columns: ["inspected_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_warehouse_inspections_mill_batch_id_fkey"
-            columns: ["mill_batch_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mm_warehouse_inspections_mill_roll_id_fkey"
-            columns: ["mill_roll_id"]
-            isOneToOne: false
-            referencedRelation: "mm_mill_rolls"
             referencedColumns: ["id"]
           },
           {
@@ -7840,35 +7285,58 @@ export type Database = {
       }
     }
     Views: {
-      mm_v_mill_accuracy_summary: {
+      mm_roll_drift: {
         Row: {
-          avg_abs_delta_pct: number | null
+          custody: string | null
+          custody_colour: string | null
+          custody_length: number | null
+          custody_shade: string | null
+          custody_style: string | null
           factory_id: string | null
-          key: string | null
-          max_abs_delta_pct: number | null
-          max_declared: number | null
-          max_measured: number | null
-          mill_batch_id: string | null
-          min_declared: number | null
-          min_measured: number | null
-          sample_count: number | null
+          roll_code: string | null
+          roll_colour: string | null
+          roll_id: string | null
+          roll_length: number | null
+          roll_shade: string | null
+          roll_style: string | null
         }
-        Relationships: []
-      }
-      mm_v_mill_field_accuracy: {
-        Row: {
-          declared: number | null
-          delta: number | null
-          delta_pct: number | null
-          factory_id: string | null
-          inspected_at: string | null
-          key: string | null
-          measured: number | null
-          mill_batch_id: string | null
-          stock_unit_id: string | null
-          unit_code: string | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mm_rolls_allocated_style_material_id_fkey"
+            columns: ["roll_style"]
+            isOneToOne: false
+            referencedRelation: "mm_style_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_rolls_allocated_style_material_id_fkey"
+            columns: ["roll_style"]
+            isOneToOne: false
+            referencedRelation: "mm_v_style_fabric_reconciliation"
+            referencedColumns: ["style_material_id"]
+          },
+          {
+            foreignKeyName: "mm_rolls_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_stock_units_style_material_id_fkey"
+            columns: ["custody_style"]
+            isOneToOne: false
+            referencedRelation: "mm_style_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mm_stock_units_style_material_id_fkey"
+            columns: ["custody_style"]
+            isOneToOne: false
+            referencedRelation: "mm_v_style_fabric_reconciliation"
+            referencedColumns: ["style_material_id"]
+          },
+        ]
       }
       mm_v_style_fabric_reconciliation: {
         Row: {
@@ -8402,29 +7870,48 @@ export type Database = {
       }
       _mm_actor_factory_id: { Args: never; Returns: string }
       _mm_actor_id: { Args: never; Returns: string }
+      _mm_alloc_check_roll: {
+        Args: { p_factory: string; p_roll_id: string; p_t: Json }
+        Returns: Json
+      }
+      _mm_alloc_roll_ids: { Args: { p_payload: Json }; Returns: string[] }
+      _mm_alloc_target: { Args: { p_payload: Json }; Returns: Json }
       _mm_apply_clearance: {
         Args: { p_unit_ids: string[] }
-        Returns: undefined
-      }
-      _mm_apply_roll_tags_from_payload: {
-        Args: { p_batch: string; p_factory: string; p_rolls: Json }
         Returns: undefined
       }
       _mm_challan_header: {
         Args: { p_ch: Database["public"]["Tables"]["mm_in_challans"]["Row"] }
         Returns: Json
       }
+      _mm_clean_challan_fields: { Args: { p: Json }; Returns: Json }
+      _mm_construction_name: {
+        Args: { p_id: string; p_type: string }
+        Returns: string
+      }
       _mm_counts_as_received: { Args: { p_status: string }; Returns: boolean }
+      _mm_cut_usable: {
+        Args: {
+          p_cut: string
+          p_unit: Database["public"]["Tables"]["mm_stock_units"]["Row"]
+        }
+        Returns: boolean
+      }
       _mm_cutting_param_block: {
         Args: { p_unit: Database["public"]["Tables"]["mm_stock_units"]["Row"] }
         Returns: string
       }
       _mm_err: { Args: { p_code: string; p_message: string }; Returns: Json }
+      _mm_fabric_applies: {
+        Args: { p_ids: string[]; p_type: string }
+        Returns: boolean
+      }
       _mm_fabric_check_spec: {
         Args: { p_factory: string; p_spec: Json; p_type: string }
         Returns: Json
       }
       _mm_fabric_code: { Args: { p_id: string }; Returns: string }
+      _mm_fabric_core_keys: { Args: never; Returns: string[] }
       _mm_fabric_custom_fields: {
         Args: { p_factory: string; p_type: string }
         Returns: {
@@ -8437,8 +7924,19 @@ export type Database = {
           visible: boolean
         }[]
       }
+      _mm_fabric_demand: {
+        Args: { p_factory: string }
+        Returns: {
+          demand: number
+          fabric_id: string
+        }[]
+      }
       _mm_fabric_duplicate_of: {
         Args: { p_dedupe: string; p_except: string; p_factory: string }
+        Returns: string
+      }
+      _mm_fabric_field_tier: {
+        Args: { p_is_system: boolean; p_key: string }
         Returns: string
       }
       _mm_fabric_form_bump: { Args: { p_factory: string }; Returns: number }
@@ -8467,6 +7965,10 @@ export type Database = {
         Args: { p_factory: string; p_key: string; p_type: string }
         Returns: boolean
       }
+      _mm_feature: {
+        Args: { p_factory: string; p_key: string }
+        Returns: boolean
+      }
       _mm_fpt_score: {
         Args: {
           p_length: number
@@ -8478,29 +7980,18 @@ export type Database = {
         Returns: number
       }
       _mm_fpt_threshold: { Args: { p_unit_id: string }; Returns: number }
-      _mm_get_mill_line_base: {
-        Args: {
-          p_colorway_id: string
-          p_colorway_material_id: string
-          p_order_id: string
-        }
-        Returns: Json
-      }
-      _mm_get_unallocated_mill_base: { Args: never; Returns: Json }
       _mm_get_warehouse_board_base: {
         Args: { p_order_ids: string[] }
         Returns: Json
       }
       _mm_guard_err: { Args: { p_sqlerrm: string }; Returns: Json }
-      _mm_insert_mill_batch_rolls: {
-        Args: {
-          p_batch: string
-          p_factory: string
-          p_loc: string
-          p_rolls: Json
-          p_sm: string
-        }
-        Returns: number
+      _mm_inhouse_fabric_vendor: {
+        Args: { p_factory: string }
+        Returns: string
+      }
+      _mm_inhouse_process_vendor: {
+        Args: { p_factory: string }
+        Returns: string
       }
       _mm_insert_rolls: {
         Args: {
@@ -8564,27 +8055,6 @@ export type Database = {
         }
         Returns: string
       }
-      _mm_mill_at_process: { Args: { p_roll: string }; Returns: boolean }
-      _mm_mill_cell_status: {
-        Args: { p_at_mill: number; p_dispatched: number }
-        Returns: string
-      }
-      _mm_mill_inspect_stale: {
-        Args: { p_inspected_at: string; p_mill_roll_id: string }
-        Returns: boolean
-      }
-      _mm_mill_length: {
-        Args: { p_unit: Database["public"]["Tables"]["mm_stock_units"]["Row"] }
-        Returns: number
-      }
-      _mm_mill_list_batches_v4_base: {
-        Args: { p_filter?: Json }
-        Returns: Json
-      }
-      _mm_mill_short_closed: {
-        Args: { p_style_material_id: string }
-        Returns: boolean
-      }
       _mm_next_doc: {
         Args: { p_factory: string; p_on?: string; p_prefix: string }
         Returns: string
@@ -8594,14 +8064,41 @@ export type Database = {
         Args: { p_factory: string; p_on: string }
         Returns: string
       }
+      _mm_norm_colour: { Args: { p: string }; Returns: string }
       _mm_num: { Args: { p_text: string }; Returns: number }
       _mm_ok: { Args: { p_data?: Json }; Returns: Json }
       _mm_param_text: { Args: { p_bag: Json; p_key: string }; Returns: string }
+      _mm_partner_kind: { Args: { p_kind: string }; Returns: string }
+      _mm_partner_next_code: {
+        Args: { p_factory: string; p_fkind: string }
+        Returns: string
+      }
       _mm_payload_line_fabric: {
         Args: { p_factory: string; p_payload: Json }
         Returns: string
       }
       _mm_process_refresh: { Args: { p_id: string }; Returns: undefined }
+      _mm_qc_field_limit: {
+        Args: { p_fabric_id: string; p_field_id: string; p_stage: string }
+        Returns: Json
+      }
+      _mm_qc_mirror_legacy_inspection_body: {
+        Args: {
+          new: Database["public"]["Tables"]["mm_warehouse_inspections"]["Row"]
+          old: Database["public"]["Tables"]["mm_warehouse_inspections"]["Row"]
+          tg_op: string
+        }
+        Returns: undefined
+      }
+      _mm_qc_out_of_limits: {
+        Args: {
+          p_fabric_id: string
+          p_stage: string
+          p_type_id: string
+          p_values: Json
+        }
+        Returns: string[]
+      }
       _mm_qc_passport: { Args: { p_roll_id: string }; Returns: Json }
       _mm_qc_scope_rolls: {
         Args: { p_factory: string; p_id: string; p_kind: string }
@@ -8626,6 +8123,7 @@ export type Database = {
           greige_gsm: number | null
           greige_width_in: number | null
           gsm: number
+          gsm_tol_pct: number
           hsn_code: string | null
           id: string
           image_url: string | null
@@ -8641,6 +8139,7 @@ export type Database = {
           updated_by: string | null
           width_form: string
           width_in: number
+          width_tol_pct: number
         }
         SetofOptions: {
           from: "*"
@@ -8650,6 +8149,25 @@ export type Database = {
         }
       }
       _mm_receipt_fabric_guc: { Args: never; Returns: string }
+      _mm_receipt_field_json: {
+        Args: { f: Database["public"]["Tables"]["mm_receipt_fields"]["Row"] }
+        Returns: Json
+      }
+      _mm_receipt_form_check: {
+        Args: {
+          p_fabric_type_id: string
+          p_factory: string
+          p_roll: string
+          p_section: string
+          p_values: Json
+        }
+        Returns: string
+      }
+      _mm_receipt_form_json: {
+        Args: { p_fabric_type_id: string; p_factory: string }
+        Returns: Json
+      }
+      _mm_receipt_roll_flat: { Args: { p_roll: Json }; Returns: Json }
       _mm_recv_loc: { Args: { p_factory: string }; Returns: string }
       _mm_refresh_in_challan_status: { Args: { p_id: string }; Returns: string }
       _mm_require_config: { Args: never; Returns: string }
@@ -8663,11 +8181,14 @@ export type Database = {
         Returns: Json
       }
       _mm_roll_alive: { Args: { p_roll_id: string }; Returns: boolean }
+      _mm_roll_can_cut: { Args: { p_roll_id: string }; Returns: boolean }
       _mm_roll_custody: { Args: { p_roll_id: string }; Returns: Json }
+      _mm_roll_finished: { Args: { p_roll_id: string }; Returns: Json }
       _mm_roll_row: {
         Args: { p_roll_id: string; p_with_passport?: boolean }
         Returns: Json
       }
+      _mm_roll_spec: { Args: { p_roll_id: string }; Returns: Json }
       _mm_roll_stock: {
         Args: { p_factory: string }
         Returns: {
@@ -8675,7 +8196,6 @@ export type Database = {
           colour: string
           fabric_id: string
           fabric_type_id: string
-          mill_roll_id: string
           out_line_id: string
           qty: number
           qty_kg: number
@@ -8702,6 +8222,7 @@ export type Database = {
         Args: { p_actor: string; p_factory: string }
         Returns: undefined
       }
+      _mm_seed_receipt_form: { Args: { p_factory: string }; Returns: undefined }
       _mm_set_on_hand: {
         Args: { p_qty: number; p_received?: boolean; p_unit_id: string }
         Returns: undefined
@@ -8729,6 +8250,15 @@ export type Database = {
           p_status_after: string
         }
         Returns: string
+      }
+      _mm_stock_row_extra: {
+        Args: {
+          p_factory: string
+          p_roll_id: string
+          p_side: string
+          p_stock_unit_id: string
+        }
+        Returns: Json
       }
       _mm_stock_totals: { Args: { p_rows: Json }; Returns: Json }
       _mm_store_line_missing: { Args: { p_unit_id: string }; Returns: boolean }
@@ -8759,8 +8289,14 @@ export type Database = {
       }
       _mm_v4_on: { Args: { p_factory: string }; Returns: boolean }
       _mm_v4_seed_masters: { Args: { p_factory: string }; Returns: undefined }
-      _mm_v4_selftest: { Args: { p_admin: string }; Returns: undefined }
-      _mm_v4_selftest_wh: { Args: { p_admin: string }; Returns: undefined }
+      _mm_vendor_next_code: {
+        Args: { p_factory: string; p_prefix: string; p_table: string }
+        Returns: string
+      }
+      _mm_wh_receipt_qc_from_attrs: {
+        Args: { p_challan: string }
+        Returns: number
+      }
       _upsert_colorway_material: {
         Args: {
           p_colorway_id: string
@@ -9906,15 +9442,8 @@ export type Database = {
         Args: { p_factory_id: string; p_order_id: string }
         Returns: undefined
       }
-      mm_allocate_mill_rolls_to_style: {
-        Args: {
-          p_colorway_id: string
-          p_colorway_material_id: string
-          p_order_id: string
-          p_unit_ids: string[]
-        }
-        Returns: Json
-      }
+      mm_allocate_auto_pick: { Args: { p_payload: Json }; Returns: Json }
+      mm_allocate_check: { Args: { p_payload: Json }; Returns: Json }
       mm_allocate_rolls_to_style: {
         Args: {
           p_colorway_id: string
@@ -9924,6 +9453,8 @@ export type Database = {
         }
         Returns: Json
       }
+      mm_allocate_rolls_v4: { Args: { p_payload: Json }; Returns: Json }
+      mm_book_rolls: { Args: { p_payload: Json }; Returns: Json }
       mm_check_fabric_duplicate: { Args: { p_row: Json }; Returns: Json }
       mm_confirm_received_lengths: {
         Args: { p_challan_id: string; p_lengths: Json }
@@ -9941,20 +9472,10 @@ export type Database = {
         Returns: Json
       }
       mm_deactivate_rack_location: { Args: { p_id: string }; Returns: Json }
+      mm_default_warehouse: { Args: never; Returns: Json }
       mm_delete_fabric_type: { Args: { p_id: string }; Returns: Json }
       mm_delete_trim_requirement_param: {
         Args: { p_id: string }
-        Returns: Json
-      }
-      mm_dispatch_mill_rolls: {
-        Args: {
-          p_challan_no: string
-          p_reference_no?: string
-          p_remarks?: string
-          p_sent_at?: string
-          p_to_location?: string
-          p_unit_ids: string[]
-        }
         Returns: Json
       }
       mm_disposition_rejected: {
@@ -9968,6 +9489,16 @@ export type Database = {
       }
       mm_enable_module: { Args: { p_config: Json }; Returns: Json }
       mm_exclude_roll: { Args: { p_unit_id: string }; Returns: Json }
+      mm_fabric_opening_stock: {
+        Args: {
+          p_count: number
+          p_fabric_id: string
+          p_lot_no?: string
+          p_qty: number
+          p_unit_form?: string
+        }
+        Returns: Json
+      }
       mm_fabric_stock_rolls: { Args: { p_filter?: Json }; Returns: Json }
       mm_fabric_stock_summary: { Args: { p_filter?: Json }; Returns: Json }
       mm_floor_call: {
@@ -10001,23 +9532,14 @@ export type Database = {
       }
       mm_get_in_challan_rolls: { Args: { p_id: string }; Returns: Json }
       mm_get_lay_report: { Args: { p_lay_id: string }; Returns: Json }
-      mm_get_mill_accuracy: {
-        Args: { p_mill_batch_id?: string }
-        Returns: Json
-      }
-      mm_get_mill_board: { Args: { p_order_ids: string[] }; Returns: Json }
-      mm_get_mill_line: {
-        Args: {
-          p_colorway_id: string
-          p_colorway_material_id: string
-          p_order_id: string
-        }
-        Returns: Json
-      }
+      mm_get_material_features: { Args: never; Returns: Json }
       mm_get_ops_context: { Args: never; Returns: Json }
       mm_get_order_fabric_lines: { Args: { p_order_id: string }; Returns: Json }
-      mm_get_process_challan: { Args: { p_id: string }; Returns: Json }
       mm_get_rack_ops_board: { Args: never; Returns: Json }
+      mm_get_receipt_form: {
+        Args: { p_fabric_type_id?: string }
+        Returns: Json
+      }
       mm_get_store_challan: { Args: { p_id: string }; Returns: Json }
       mm_get_style_reconciliation: {
         Args: { p_order_id?: string; p_style_material_id?: string }
@@ -10025,7 +9547,6 @@ export type Database = {
       }
       mm_get_style_warehouse: { Args: { p_order_id: string }; Returns: Json }
       mm_get_supplier_return: { Args: { p_id: string }; Returns: Json }
-      mm_get_unallocated_mill: { Args: never; Returns: Json }
       mm_get_v4_config: { Args: never; Returns: Json }
       mm_get_warehouse_board: { Args: { p_order_ids: string[] }; Returns: Json }
       mm_get_warehouse_dashboard: { Args: never; Returns: Json }
@@ -10058,19 +9579,12 @@ export type Database = {
         Returns: Json
       }
       mm_list_inspection_queue: { Args: never; Returns: Json }
-      mm_list_mill_stock: {
-        Args: {
-          p_alloc?: string
-          p_page?: number
-          p_page_size?: number
-          p_place?: string
-          p_search?: string
-        }
+      mm_list_partners: {
+        Args: { p_include_inactive?: boolean; p_kind: string }
         Returns: Json
       }
-      mm_list_process_challans: { Args: never; Returns: Json }
       mm_list_process_types: { Args: never; Returns: Json }
-      mm_list_process_vendors: { Args: never; Returns: Json }
+      mm_list_processes: { Args: never; Returns: Json }
       mm_list_rack_master: { Args: never; Returns: Json }
       mm_list_receive_catalog: { Args: never; Returns: Json }
       mm_list_rolls_v4: { Args: { p_filter?: Json }; Returns: Json }
@@ -10105,21 +9619,9 @@ export type Database = {
         Args: { p_from_id: string; p_into_id: string; p_reason: string }
         Returns: Json
       }
-      mm_mill_add_rolls_v4: {
-        Args: { p_batch_id: string; p_rolls: Json }
-        Returns: Json
-      }
-      mm_mill_get_batch_v4: { Args: { p_batch_id: string }; Returns: Json }
-      mm_mill_list_batches_v4: { Args: { p_filter?: Json }; Returns: Json }
-      mm_mill_save_batch_v4: { Args: { p_payload: Json }; Returns: Json }
-      mm_mill_save_batch_v5: { Args: { p_payload: Json }; Returns: Json }
       mm_proc_get_challan: { Args: { p_id: string }; Returns: Json }
       mm_proc_list_challans: { Args: { p_filter?: Json }; Returns: Json }
       mm_proc_return: { Args: { p_payload: Json }; Returns: Json }
-      mm_proc_save_lots: {
-        Args: { p_challan_id: string; p_lots: Json }
-        Returns: Json
-      }
       mm_proc_send: { Args: { p_payload: Json }; Returns: Json }
       mm_proc_void_challan: {
         Args: { p_challan_id: string; p_reason: string }
@@ -10158,50 +9660,22 @@ export type Database = {
       }
       mm_qc_save_inspections: { Args: { p_payload: Json }; Returns: Json }
       mm_qc_save_test: { Args: { p_payload: Json }; Returns: Json }
+      mm_qc_save_test_grid: { Args: { p_payload: Json }; Returns: Json }
       mm_qc_void: {
         Args: { p_id: string; p_kind: string; p_reason: string }
         Returns: Json
       }
       mm_quick_create_fabric: { Args: { p_row: Json }; Returns: Json }
-      mm_receive_in_challan_lines: {
-        Args: { p_challan_id: string; p_unit_ids: string[] }
-        Returns: Json
-      }
-      mm_receive_mill_bundle: { Args: { p_payload: Json }; Returns: Json }
-      mm_receive_mill_floor: {
-        Args: {
-          p_id: string
-          p_missing_unit_ids?: string[]
-          p_roll_edits: Json
-          p_row_version: number
-        }
-        Returns: Json
-      }
-      mm_receive_mill_in_challan:
-        | {
-            Args: { p_id: string; p_roll_edits: Json; p_row_version: number }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_id: string
-              p_missing_unit_ids: string[]
-              p_roll_edits: Json
-              p_row_version: number
-            }
-            Returns: Json
-          }
-      mm_receive_process_return: {
-        Args: { p_id: string; p_rolls: Json }
-        Returns: Json
-      }
       mm_receive_store_challan:
         | { Args: { p_id: string }; Returns: Json }
         | {
             Args: { p_id: string; p_missing_unit_ids: string[] }
             Returns: Json
           }
+      mm_recv_get_process_challan: { Args: { p_id: string }; Returns: Json }
+      mm_recv_process_challans: { Args: { p_filter?: Json }; Returns: Json }
       mm_release_rolls: { Args: { p_unit_ids: string[] }; Returns: Json }
+      mm_report_damage: { Args: { p_payload: Json }; Returns: Json }
       mm_rpt_process_loss: {
         Args: { p_from?: string; p_group_by?: string; p_to?: string }
         Returns: Json
@@ -10212,13 +9686,11 @@ export type Database = {
       }
       mm_save_fabric: { Args: { p_row: Json }; Returns: Json }
       mm_save_fabric_construction: { Args: { p_row: Json }; Returns: Json }
-      mm_save_fabric_form_schema: {
-        Args: { p_fabric_type_id: string; p_groups: Json }
-        Returns: Json
-      }
+      mm_save_fabric_form_schema:
+        | { Args: { p_fabric_type_id: string; p_groups: Json }; Returns: Json }
+        | { Args: { p_groups: Json }; Returns: Json }
       mm_save_fabric_stage: { Args: { p_row: Json }; Returns: Json }
       mm_save_fabric_type: { Args: { p_row: Json }; Returns: Json }
-      mm_save_facility: { Args: { p_row: Json }; Returns: Json }
       mm_save_inspections: {
         Args: { p_rolls: Json; p_scope_id: string; p_scope_kind: string }
         Returns: Json
@@ -10227,27 +9699,14 @@ export type Database = {
         Args: { p_lay_id: string; p_rows: Json; p_style_material_id?: string }
         Returns: Json
       }
-      mm_save_machine: { Args: { p_row: Json }; Returns: Json }
-      mm_save_mill_batch: {
-        Args: {
-          p_batch_no: string
-          p_colorway_id: string
-          p_colorway_material_id: string
-          p_mill_ref: string
-          p_order_id: string
-          p_production_date: string
-          p_remarks: string
-          p_rolls: Json
-        }
-        Returns: Json
-      }
-      mm_save_process_catalog: { Args: { p_payload: Json }; Returns: Json }
+      mm_save_partner: { Args: { p_row: Json }; Returns: Json }
+      mm_save_process: { Args: { p_row: Json }; Returns: Json }
       mm_save_process_type_rules: { Args: { p_row: Json }; Returns: Json }
       mm_save_rack_location: {
         Args: { p_row: Json; p_row_version?: number }
         Returns: Json
       }
-      mm_save_test_field_rules: { Args: { p_rules: Json }; Returns: Json }
+      mm_save_receipt_form: { Args: { p_fields: Json }; Returns: Json }
       mm_save_trim_requirement_param: { Args: { p_row: Json }; Returns: Json }
       mm_save_type_requirement_fields: {
         Args: { p_fields: Json; p_type_id: string }
@@ -10255,33 +9714,6 @@ export type Database = {
       }
       mm_save_type_test_fields: {
         Args: { p_fields: Json; p_type_id: string }
-        Returns: Json
-      }
-      mm_save_unallocated_mill_batch: {
-        Args: {
-          p_batch_no: string
-          p_color_ref: string
-          p_fabric_ref_name?: string
-          p_fabric_type_id: string
-          p_lot_no: string
-          p_mill_ref: string
-          p_production_date: string
-          p_remarks: string
-          p_rolls: Json
-        }
-        Returns: Json
-      }
-      mm_save_unallocated_mill_batch_v2: {
-        Args: {
-          p_batch_no: string
-          p_color_ref: string
-          p_fabric_id: string
-          p_lot_no: string
-          p_mill_ref: string
-          p_production_date: string
-          p_remarks: string
-          p_rolls: Json
-        }
         Returns: Json
       }
       mm_save_unallocated_vendor_grn: {
@@ -10329,44 +9761,20 @@ export type Database = {
         Args: { p_id: string; p_rolls: Json }
         Returns: Json
       }
-      mm_send_to_process: {
-        Args: {
-          p_challan_no: string
-          p_ids: string[]
-          p_origin: string
-          p_remarks?: string
-          p_type_id: string
-          p_vendor_id: string
-        }
-        Returns: Json
-      }
-      mm_set_batch_fabric: {
-        Args: { p_batch_id: string; p_fabric_id: string }
-        Returns: Json
-      }
-      mm_set_batch_style_intents: {
-        Args: { p_batch_id: string; p_style_material_ids: string[] }
-        Returns: Json
-      }
       mm_set_fabric_status: {
         Args: { p_id: string; p_status: string }
         Returns: Json
       }
+      mm_set_fabric_tolerance: {
+        Args: { p_gsm_tol_pct: number; p_id: string; p_width_tol_pct: number }
+        Returns: Json
+      }
       mm_set_fabric_v4: { Args: { p_enabled: boolean }; Returns: Json }
-      mm_set_factory_feature: {
+      mm_set_material_feature: {
         Args: { p_enabled: boolean; p_key: string }
         Returns: Json
       }
-      mm_set_mill_short_close: {
-        Args: {
-          p_closed: boolean
-          p_colorway_id: string
-          p_colorway_material_id: string
-          p_order_id: string
-          p_reason?: string
-        }
-        Returns: Json
-      }
+      mm_set_roll_colour: { Args: { p_payload: Json }; Returns: Json }
       mm_set_roll_tags: {
         Args: { p_roll_ids: string[]; p_tags: Json }
         Returns: Json
@@ -10380,29 +9788,18 @@ export type Database = {
         Args: { p_challan_id: string; p_reason: string }
         Returns: Json
       }
+      mm_style_fabric_position: { Args: { p_filter?: Json }; Returns: Json }
       mm_unallocate_rolls: { Args: { p_unit_ids: string[] }; Returns: Json }
-      mm_update_mill_batch: {
-        Args: {
-          p_batch_id: string
-          p_batch_no: string
-          p_color_ref?: string
-          p_fabric_ref_name?: string
-          p_mill_ref: string
-          p_production_date: string
-          p_remarks: string
-          p_rolls: Json
-          p_row_version?: number
-          p_test_only?: boolean
-        }
-        Returns: Json
-      }
+      mm_unallocate_rolls_v4: { Args: { p_payload: Json }; Returns: Json }
+      mm_unbook_rolls: { Args: { p_payload: Json }; Returns: Json }
       mm_update_roll: {
         Args: { p_patch: Json; p_row_version?: number; p_unit_id: string }
         Returns: Json
       }
+      mm_wh_get_receipt: { Args: { p_id: string }; Returns: Json }
       mm_wh_list_readiness: { Args: { p_filter?: Json }; Returns: Json }
-      mm_wh_save_vendor_grn_v4: { Args: { p_payload: Json }; Returns: Json }
-      mm_wh_save_vendor_grn_v5: { Args: { p_payload: Json }; Returns: Json }
+      mm_wh_list_receipts: { Args: { p_filter?: Json }; Returns: Json }
+      mm_wh_receive: { Args: { p_payload: Json }; Returns: Json }
       module_config: {
         Args: { p_factory: string; p_key: string }
         Returns: Json

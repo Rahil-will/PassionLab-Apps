@@ -13,8 +13,17 @@ import {
   type MmV4ProcSide,
   type MmV4RollRow,
 } from '../lib/mmV4Rpc';
-import { useMmPartners, useMmProcesses } from '../lib/useMmV4Config';
+import { useMmProcesses } from '../lib/useMmV4Config';
+import { MmChallanFieldInputs } from './MmChallanFieldInputs';
+import {
+  challanFieldError,
+  fieldValuesPayload,
+  sendableProcesses,
+  whereChoices,
+  whereSendPayload,
+} from '../lib/processChallan';
 import { unitFormOptionLabel } from '../lib/mmUnitForm';
+import { formatQtyM, declaredQty } from '../lib/mmRollDraft';
 import { useMmChallanPrint } from '../lib/useMmChallanPrint';
 import type { MmChallanPrintDoc } from '../lib/mmChallanPrint';
 
@@ -46,11 +55,11 @@ export function MmProcSendModalV4({
   const { showNotification } = useNotificationStore();
 
   const [processTypeId, setProcessTypeId] = useState('');
-  const [unitFacilityId, setUnitFacilityId] = useState('');
+  const [whereId, setWhereId] = useState('');
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [unitRefNo, setUnitRefNo] = useState('');
   const [sentAt, setSentAt] = useState(todayIso());
   const [remarks, setRemarks] = useState('');
-  const [targetColor, setTargetColor] = useState('');
   const [reprocess, setReprocess] = useState(Boolean(parentChallanId) || purposeProp === 'reprocess');
   const [reprocessReason, setReprocessReason] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
@@ -63,11 +72,11 @@ export function MmProcSendModalV4({
   useEffect(() => {
     if (!open) return;
     setProcessTypeId('');
-    setUnitFacilityId('');
+    setWhereId('');
+    setFieldValues({});
     setUnitRefNo('');
     setSentAt(todayIso());
     setRemarks('');
-    setTargetColor('');
     setReprocess(Boolean(parentChallanId) || purposeProp === 'reprocess');
     setReprocessReason('');
     setPicked(preselectedRollIds ?? []);
@@ -78,15 +87,19 @@ export function MmProcSendModalV4({
   }, [open, preselectedRollIds, parentChallanId, purposeProp]);
 
   const processesQ = useMmProcesses(open);
-  const partnersQ = useMmPartners('process_vendor', false, open);
   const processTypes = useMemo(
-    () => (processesQ.data ?? []).filter((row) => row.active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+    () => sendableProcesses(processesQ.data ?? []),
     [processesQ.data],
   );
-  const units = useMemo(() => {
-    if (!processTypeId) return [];
-    return (partnersQ.data ?? []).filter((row) => (row.process_type_ids ?? []).includes(processTypeId));
-  }, [partnersQ.data, processTypeId]);
+  const process = processTypes.find((row) => row.id === processTypeId);
+  const choices = useMemo(() => whereChoices(process), [process]);
+  const choiceKey = choices.map((choice) => choice.id).join('|');
+
+  useEffect(() => {
+    if (!open) return;
+    const ids = choiceKey.split('|').filter(Boolean);
+    if (ids.length === 1) setWhereId(ids[0]);
+  }, [open, choiceKey]);
 
   const rollsQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'rollsV4Process', side, search] as const,
@@ -111,16 +124,28 @@ export function MmProcSendModalV4({
     if (!open) return;
     const chosen = rollRows.filter((roll) => activeIds.includes(roll.roll_id));
     const colours = [...new Set(chosen.map((roll) => String(roll.style?.colorway_name || '').trim()).filter(Boolean))];
-    if (colours.length === 1) setTargetColor(colours[0]);
-  }, [open, rollRows, activeIds]);
+    if (colours.length === 1) {
+      const hasColour = (process?.challan_fields ?? []).some((field) => field.key === 'target_color');
+      if (hasColour) {
+        setFieldValues((current) => (
+          current.target_color ? current : { ...current, target_color: colours[0] }
+        ));
+      }
+    }
+  }, [open, rollRows, activeIds, process]);
 
   const submit = async () => {
-    if (!unitFacilityId) {
-      showNotification('Select a process vendor', 'error');
-      return;
-    }
     if (!processTypeId) {
       showNotification('Select a process', 'error');
+      return;
+    }
+    if (!whereId) {
+      showNotification('Select where this process is done', 'error');
+      return;
+    }
+    const fieldError = challanFieldError(process?.challan_fields ?? [], fieldValues);
+    if (fieldError) {
+      showNotification(fieldError, 'error');
       return;
     }
     if (activeIds.length === 0) {
@@ -138,34 +163,34 @@ export function MmProcSendModalV4({
     setBusy(true);
     try {
       const res = await mmProcSend({
-        side,
-        unit_facility_id: unitFacilityId,
+        side: 'warehouse',
         process_type_id: processTypeId,
         roll_ids: activeIds,
+        ...whereSendPayload(whereId),
+        field_values: fieldValuesPayload(process?.challan_fields ?? [], fieldValues),
         unit_ref_no: unitRefNo.trim() || null,
         sent_at: sentAt || null,
         purpose: reprocess ? 'reprocess' : 'fresh',
         parent_challan_id: reprocess ? parentChallanId ?? null : null,
         reprocess_reason: reprocess ? reprocessReason.trim() : null,
         remarks: remarks.trim() || null,
-        target_color: targetColor.trim() || null,
       });
       if (res.ok === false) throw new Error(res.message);
       showNotification(`Challan ${res.data.challan_no} sent`, 'success');
-      const unit = units.find((row) => row.id === unitFacilityId);
-      if (unit && unit.name.trim().toLowerCase() !== 'in-house') {
+      const vendor = choices.find((choice) => choice.id === whereId);
+      if (vendor && !vendor.inhouse) {
         const sentRolls = rollRows.filter((roll) => activeIds.includes(roll.roll_id));
         setPrintDoc({
-          kind: 'mill',
+          kind: 'inhouse',
           title: 'Process challan',
-          movement: 'Mill to processing',
+          movement: 'Warehouse to processing',
           factoryName: '',
           factoryCode: '',
           challanNo: res.data.challan_no,
           referenceNo: unitRefNo.trim(),
           sentAt: sentAt || null,
-          fromLocation: side === 'mill' ? 'Mill' : 'Warehouse',
-          toLocation: unit.name,
+          fromLocation: 'Warehouse',
+          toLocation: vendor.label,
           styleName: '',
           styleRef: '',
           buyerName: '',
@@ -185,7 +210,6 @@ export function MmProcSendModalV4({
             lot_no: roll.lot_no ?? null,
             batch_no: roll.batch_no ?? null,
             attributes: roll.attributes ?? null,
-            mill_snapshot: null,
           })),
         });
         setPendingSent({ id: res.data.id, challanNo: res.data.challan_no });
@@ -204,30 +228,35 @@ export function MmProcSendModalV4({
       <div className="p-5 flex flex-col gap-3 max-h-[90vh] overflow-y-auto">
         <h4 className="text-[14px] font-semibold text-slate-900">Send to processing</h4>
         <p className="text-[11px] text-slate-500">
-          From {side === 'mill' ? 'mill' : 'warehouse'} · {activeIds.length} rolls
+          From warehouse · {activeIds.length} rolls
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SelectDropdown
+          <SelectDropdown size="compact"
             label="Process"
             value={processTypeId}
             onChange={(v) => {
               setProcessTypeId(v);
-              setUnitFacilityId('');
+              setWhereId('');
+              setFieldValues({});
             }}
             options={processTypes.map((t) => ({ value: t.id, label: t.name }))}
           />
-          <SelectDropdown
-            label="Process vendor"
-            value={unitFacilityId}
-            onChange={setUnitFacilityId}
+          <SelectDropdown size="compact"
+            label="Where"
+            value={whereId}
+            onChange={setWhereId}
             options={[
-              { value: '', label: processTypeId ? 'Select a process vendor' : 'Pick a process first' },
-              ...units.map((u) => ({ value: u.id, label: u.name })),
+              { value: '', label: processTypeId ? 'Select where' : 'Pick a process first' },
+              ...choices.map((choice) => ({ value: choice.id, label: choice.label })),
             ]}
           />
+          <MmChallanFieldInputs
+            fields={process?.challan_fields ?? []}
+            values={fieldValues}
+            onChange={(key, value) => setFieldValues((current) => ({ ...current, [key]: value }))}
+          />
           <Input label="Unit ref no" value={unitRefNo} onChange={(e) => setUnitRefNo(e.target.value)} />
-          <Input label="Target colour" value={targetColor} onChange={(e) => setTargetColor(e.target.value)} />
           <LabeledDatePicker label="Sent date" value={sentAt} onChange={setSentAt} />
         </div>
 
@@ -274,7 +303,7 @@ export function MmProcSendModalV4({
                       <th className="px-2 py-1.5">Roll</th>
                       <th className="px-2 py-1.5">Form</th>
                       <th className="px-2 py-1.5">Fabric</th>
-                      <th className="px-2 py-1.5 text-right">Length m</th>
+                      <th className="px-2 py-1.5 text-right">Qty</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -297,7 +326,7 @@ export function MmProcSendModalV4({
                           <td className="px-2 py-1.5">{unitFormOptionLabel(roll.unit_form || 'roll')}</td>
                           <td className="px-2 py-1.5 text-slate-500">{roll.fabric_type_name || '—'}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums">
-                            {roll.length_m != null ? Number(roll.length_m).toFixed(1) : '—'}
+                            {formatQtyM(declaredQty(roll, roll.uom), roll.uom)}
                           </td>
                         </tr>
                       );

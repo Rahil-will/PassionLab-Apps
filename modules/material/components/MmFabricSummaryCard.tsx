@@ -7,6 +7,7 @@ export interface MmFabricSummary {
   style_ref?: string | null;
   color_name?: string | null;
   color_ref?: string | null;
+  fabric_color?: string | null;
   buyer_name?: string | null;
   po_number?: string | null;
   image_url?: string | null;
@@ -15,7 +16,6 @@ export interface MmFabricSummary {
   fabric_type?: string | null;
   fabric_category?: string | null;
   fabric_ref_name?: string | null;
-  mill_ref?: string | null;
   batch_no?: string | null;
   lot_no?: string | null;
 }
@@ -95,12 +95,19 @@ export function MmFabricSummaryCard({
   onStyleClick,
   imageSize = 'default',
   hideImage = false,
+  splitColours = false,
+  title = 'Fabric details',
+  showFabric = true,
 }: {
   data?: MmFabricSummary | null;
   extraMetrics?: React.ReactNode;
   onStyleClick?: () => void;
   imageSize?: 'default' | 'large';
   hideImage?: boolean;
+  /** Style colour sits with the style ref. Fabric colour sits after the fabric name. */
+  splitColours?: boolean;
+  title?: string;
+  showFabric?: boolean;
 }) {
   const [imageError, setImageError] = useState(false);
   useEffect(() => {
@@ -113,13 +120,19 @@ export function MmFabricSummaryCard({
   const colorLine = hideImage
     ? (data?.color_ref || data?.color_name || '—')
     : (data?.color_name || data?.color_ref || '—');
+  const styleMeta = [data?.style_ref, data?.color_name].map((part) => (part ?? '').trim()).filter(Boolean).join(' · ');
+  const fabricColor = (data?.fabric_color || data?.color_ref || '').trim();
+  const fabricSecondary = [
+    splitColours && fabricColor ? `Fabric color ${fabricColor}` : null,
+    typeCategoryLine(data) === '—' ? null : typeCategoryLine(data),
+  ].filter(Boolean).join(' · ');
 
   return (
     <Card className="shadow-sm border-slate-200 h-full" noPadding>
       <div className="px-5 py-4 h-full flex flex-col">
         <h4 className="text-[13px] font-semibold text-slate-900 flex items-center gap-2 mb-3">
           <Layers size={16} className="text-primary-600" />
-          Fabric details
+          {title}
         </h4>
         <div className="flex items-stretch gap-4 flex-1 min-h-0">
           {hideImage ? null : (
@@ -155,7 +168,9 @@ export function MmFabricSummaryCard({
                 {heading}
               </p>
             )}
-            <p className="text-[12px] text-slate-500 mt-0.5 truncate">{colorLine}</p>
+            <p className="text-[12px] text-slate-500 mt-0.5 truncate">
+              {splitColours && !hideImage ? (styleMeta || '—') : colorLine}
+            </p>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {hideImage ? (
                 <>
@@ -164,31 +179,34 @@ export function MmFabricSummaryCard({
                   {data?.color_ref ? <Chip>Color {data.color_ref}</Chip> : null}
                   {data?.lot_no ? <Chip>Lot {data.lot_no}</Chip> : null}
                   {data?.batch_no ? <Chip>Batch {data.batch_no}</Chip> : null}
-                  {data?.mill_ref ? <Chip>{data.mill_ref}</Chip> : null}
                 </>
               ) : (
                 <>
                   {data?.buyer_name ? <Chip>{data.buyer_name}</Chip> : null}
-                  {data?.style_ref ? <Chip>{data.style_ref}</Chip> : null}
+                  {splitColours ? null : (data?.style_ref ? <Chip>{data.style_ref}</Chip> : null)}
                   {data?.po_number ? <Chip>PO {data.po_number}</Chip> : null}
                   {data?.fabric_ref_name ? <Chip>Ref {data.fabric_ref_name}</Chip> : null}
-                  {data?.color_ref ? <Chip>Color {data.color_ref}</Chip> : null}
+                  {splitColours ? null : (data?.color_ref ? <Chip>Color {data.color_ref}</Chip> : null)}
                 </>
               )}
             </div>
-            <div className="mt-auto pt-3 flex flex-col gap-2.5">
-              <MmSummaryMetric
-                icon={Layers}
-                label="Fabric"
-                primary={
-                  data?.fabric_code
-                    ? `${data.fabric_code}${data.fabric_name ? ` · ${data.fabric_name}` : ''}`
-                    : (data?.fabric_name || data?.fabric_ref_name || '—')
-                }
-                secondary={typeCategoryLine(data)}
-              />
-              {extraMetrics}
-            </div>
+            {showFabric || extraMetrics ? (
+              <div className="mt-auto pt-3 flex flex-col gap-2.5">
+                {showFabric ? (
+                  <MmSummaryMetric
+                    icon={Layers}
+                    label="Fabric"
+                    primary={
+                      data?.fabric_code
+                        ? `${data.fabric_code}${data.fabric_name ? ` · ${data.fabric_name}` : ''}`
+                        : (data?.fabric_name || data?.fabric_ref_name || '—')
+                    }
+                    secondary={splitColours ? (fabricSecondary || undefined) : typeCategoryLine(data)}
+                  />
+                ) : null}
+                {extraMetrics}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { GripVertical, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { Button, Input, SelectDropdown } from '../../../components/ui';
+import { ArrowDown, ArrowUp, GripVertical, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Button, Input } from '../../../components/ui';
 import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
 import { EditorSplitLayout } from '../../../components/settings/EditorSplitLayout';
 import {
@@ -11,6 +11,7 @@ import {
   catalogSerialCellClass,
 } from '../../../components/settings/CatalogTablePanel';
 import { useNotificationStore } from '../../../stores';
+import { EditorToggle } from '../components/EditorToggle';
 import { MmTableSaveButton } from '../components/MmTableSaveButton';
 import { mmSaveFabricStage } from '../lib/mmV4Rpc';
 import { useMmV4Config, useRefreshMmV4Config } from '../lib/useMmV4Config';
@@ -26,35 +27,33 @@ type StageDraft = {
   label: string;
   seq: number;
   can_cut: boolean;
-  is_initial: boolean;
   is_active: boolean;
   dirty: boolean;
   isNew: boolean;
 };
 
+function stageSeq(index: number): number {
+  return (index + 1) * 10;
+}
+
 function renumber(rows: StageDraft[]): StageDraft[] {
   return rows.map((row, index) => ({
     ...row,
-    seq: index + 1,
-    dirty: row.dirty || row.seq !== index + 1,
+    seq: stageSeq(index),
+    dirty: row.dirty || row.seq !== stageSeq(index),
   }));
 }
 
-function insertAfter(
-  rows: StageDraft[],
-  row: StageDraft,
-  afterLocalId: string | '',
-): StageDraft[] {
-  const inactive = rows.filter((r) => !r.is_active && r.localId !== row.localId);
-  const active = rows.filter((r) => r.is_active && r.localId !== row.localId);
-  const placed = { ...row, is_active: true };
-  if (!afterLocalId) {
-    return [...renumber([placed, ...active]), ...inactive];
-  }
-  const idx = active.findIndex((r) => r.localId === afterLocalId);
-  if (idx < 0) return [...renumber([...active, placed]), ...inactive];
+function placeStage(rows: StageDraft[], row: StageDraft, creating: boolean): StageDraft[] {
+  const without = rows.filter((item) => item.localId !== row.localId);
+  const inactive = without.filter((item) => !item.is_active);
+  const active = without.filter((item) => item.is_active).sort((a, b) => a.seq - b.seq);
+  if (!row.is_active) return [...renumber(active), ...inactive, row];
+  if (creating) return [...renumber([...active, row]), ...inactive];
+  const index = rows.filter((item) => item.is_active).sort((a, b) => a.seq - b.seq)
+    .findIndex((item) => item.localId === row.localId);
   const next = [...active];
-  next.splice(idx + 1, 0, placed);
+  next.splice(index < 0 ? next.length : index, 0, row);
   return [...renumber(next), ...inactive];
 }
 
@@ -74,9 +73,7 @@ const MmFabricStagesPage = forwardRef<
   const [editingLocalId, setEditingLocalId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
-  const [placeAfter, setPlaceAfter] = useState('');
   const [canCut, setCanCut] = useState(false);
-  const [isInitial, setIsInitial] = useState(false);
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -90,7 +87,6 @@ const MmFabricStagesPage = forwardRef<
         label: s.label ?? s.code,
         seq: Number(s.seq ?? i + 1),
         can_cut: s.can_cut === true,
-        is_initial: s.is_initial === true,
         is_active: s.is_active !== false,
         dirty: false,
         isNew: false,
@@ -123,41 +119,20 @@ const MmFabricStagesPage = forwardRef<
     [rows],
   );
 
-  const placeAfterOptions = useMemo(() => {
-    const others = ordered.filter((r) => r.localId !== editingLocalId);
-    return [
-      { value: '', label: 'At start' },
-      ...others.map((r) => ({
-        value: r.localId,
-        label: `After ${r.label || r.code || 'stage'}`,
-      })),
-    ];
-  }, [ordered, editingLocalId]);
-
   const resetForm = () => {
     setEditingLocalId(null);
     setCode('');
     setLabel('');
-    setPlaceAfter(ordered.length ? ordered[ordered.length - 1]!.localId : '');
     setCanCut(false);
-    setIsInitial(false);
     setIsActive(true);
   };
-
-  useEffect(() => {
-    if (editingLocalId) return;
-    setPlaceAfter(ordered.length ? ordered[ordered.length - 1]!.localId : '');
-  }, [ordered, editingLocalId]);
 
   const loadRow = (row: StageDraft) => {
     setEditingLocalId(row.localId);
     setCode(row.code);
     setLabel(row.label);
     setCanCut(row.can_cut);
-    setIsInitial(row.is_initial);
     setIsActive(row.is_active);
-    const idx = ordered.findIndex((r) => r.localId === row.localId);
-    setPlaceAfter(idx > 0 ? ordered[idx - 1]!.localId : '');
   };
 
   const submitForm = () => {
@@ -180,11 +155,10 @@ const MmFabricStagesPage = forwardRef<
         code: current.isNew ? trimmedCode : current.code,
         label: trimmedLabel,
         can_cut: canCut,
-        is_initial: isInitial,
         is_active: isActive,
         dirty: true,
       };
-      setRows(insertAfter(rows, updated, placeAfter));
+      setRows(placeStage(rows, updated, false));
     } else {
       const created: StageDraft = {
         localId: `tmp_${crypto.randomUUID()}`,
@@ -192,12 +166,11 @@ const MmFabricStagesPage = forwardRef<
         label: trimmedLabel,
         seq: rows.length + 1,
         can_cut: canCut,
-        is_initial: isInitial,
         is_active: isActive,
         dirty: true,
         isNew: true,
       };
-      setRows(insertAfter(rows, created, placeAfter));
+      setRows(placeStage(rows, created, true));
     }
     resetForm();
   };
@@ -259,11 +232,10 @@ const MmFabricStagesPage = forwardRef<
               code: current.isNew ? trimmedCode : current.code,
               label: trimmedLabel,
               can_cut: canCut,
-              is_initial: isInitial,
               is_active: isActive,
               dirty: true,
             };
-            pending = insertAfter(pending, updated, placeAfter);
+            pending = placeStage(pending, updated, false);
           }
         } else {
           const created: StageDraft = {
@@ -272,28 +244,28 @@ const MmFabricStagesPage = forwardRef<
             label: trimmedLabel,
             seq: pending.length + 1,
             can_cut: canCut,
-            is_initial: isInitial,
             is_active: isActive,
             dirty: true,
             isNew: true,
           };
-          pending = insertAfter(pending, created, placeAfter);
+          pending = placeStage(pending, created, true);
         }
         setRows(pending);
         resetForm();
       }
 
+      const activeOrder = pending.filter((row) => row.is_active).sort((a, b) => a.seq - b.seq);
       for (const row of pending.filter((r) => r.dirty)) {
         if (!row.code.trim() || !row.label.trim()) {
           showNotification('Stage code and label are required', 'error');
           return false;
         }
+        const index = activeOrder.findIndex((item) => item.localId === row.localId);
         const res = await mmSaveFabricStage({
           code: row.code.trim().toUpperCase(),
           label: row.label.trim(),
-          seq: row.seq,
+          seq: index >= 0 ? stageSeq(index) : row.seq,
           can_cut: row.can_cut,
-          is_initial: row.is_initial,
           is_active: row.is_active,
         });
         if (res.ok === false) {
@@ -311,9 +283,7 @@ const MmFabricStagesPage = forwardRef<
     code,
     label,
     canCut,
-    isInitial,
     isActive,
-    placeAfter,
     editingLocalId,
     refresh,
     showNotification,
@@ -362,36 +332,13 @@ const MmFabricStagesPage = forwardRef<
               onChange={(e) => setLabel(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submitForm()}
             />
-            <SelectDropdown
-              label="Place in sequence"
-              value={placeAfter}
-              onChange={setPlaceAfter}
-              options={placeAfterOptions}
+            <EditorToggle
+              label="Finished (ready to cut)"
+              hint="Rolls at this stage can be allocated to a style and checked against the fabric spec. Earlier stages can only be booked."
+              on={canCut}
+              onChange={setCanCut}
             />
-            <label className="flex items-center gap-2 text-[11px] text-slate-700">
-              <input
-                type="checkbox"
-                checked={canCut}
-                onChange={(e) => setCanCut(e.target.checked)}
-              />
-              Can be cut
-            </label>
-            <label className="flex items-center gap-2 text-[11px] text-slate-700">
-              <input
-                type="checkbox"
-                checked={isInitial}
-                onChange={(e) => setIsInitial(e.target.checked)}
-              />
-              Initial
-            </label>
-            <label className="flex items-center gap-2 text-[11px] text-slate-700">
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              Active
-            </label>
+            <EditorToggle label="Active" on={isActive} onChange={setIsActive} />
             <div className="flex flex-col gap-2 pt-1">
               <Button
                 variant="primary"
@@ -430,12 +377,12 @@ const MmFabricStagesPage = forwardRef<
         <div className="h-full flex flex-col min-h-0">
           <CatalogTablePanel
             title="Fabric stages"
-            subtitle="Drag rows to reorder, or set place-in-sequence on the left"
+            subtitle="Drag a row, or use the arrows, to change the order."
             isEmpty={ordered.length === 0}
             emptyMessage="No stages yet."
             headerAction={<MmTableSaveButton />}
           >
-            <CatalogTable headers={['', 'S.No', 'Code', 'Label', 'Cut', 'Initial', 'Active', '']}>
+            <CatalogTable headers={['', 'S.No', 'Code', 'Label', 'Finished (ready to cut)', 'Active', '']}>
               {ordered.map((row, idx) => (
                 <CatalogTableRow
                   key={row.localId}
@@ -491,21 +438,48 @@ const MmFabricStagesPage = forwardRef<
                   </CatalogTableCell>
                   <CatalogTableCell className="text-slate-800 truncate">{row.label || '—'}</CatalogTableCell>
                   <CatalogTableCell className="text-slate-600">{row.can_cut ? 'Yes' : '—'}</CatalogTableCell>
-                  <CatalogTableCell className="text-slate-600">{row.is_initial ? 'Yes' : '—'}</CatalogTableCell>
                   <CatalogTableCell className="text-slate-600">{row.is_active ? 'Yes' : 'No'}</CatalogTableCell>
                   <CatalogTableCell>
                     <DesktopWriteGate>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeRow(row);
-                        }}
-                        className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50"
-                        aria-label={`Remove ${row.label || row.code}`}
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const target = ordered[idx - 1];
+                            if (target) moveRow(row.localId, target.localId);
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                          aria-label={`Move ${row.label || row.code} up`}
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === ordered.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const target = ordered[idx + 1];
+                            if (target) moveRow(row.localId, target.localId);
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                          aria-label={`Move ${row.label || row.code} down`}
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeRow(row);
+                          }}
+                          className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50"
+                          aria-label={`Remove ${row.label || row.code}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </DesktopWriteGate>
                   </CatalogTableCell>
                 </CatalogTableRow>

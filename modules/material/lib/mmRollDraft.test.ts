@@ -4,15 +4,19 @@ import {
   measureOutOfSpec,
   withLengthField,
   fieldRole,
-  millRollFieldText,
-  millFieldSeedText,
+  rollFieldText,
+  fieldSeedText,
   seedWarehouseFieldValues,
   warehouseMeasuredFieldValues,
   warehouseTestFields,
-  millRollWorkStatus,
-  millRollWorkStatusLabel,
-  growMillBatchRolls,
-  sortMillAssignDrafts,
+  rollWorkStatus,
+  rollWorkStatusLabel,
+  growReceiptRolls,
+  sortAssignDrafts,
+  autoFillDraftRolls,
+  ROLL_MEASURES,
+  LOT_TYPE_OPTIONS,
+  rollOutOfSpec,
   type MmDraftRoll,
 } from './mmRollDraft';
 
@@ -61,6 +65,15 @@ describe('fieldsForType', () => {
 });
 
 describe('fieldRole', () => {
+  it('keeps a Length data point separate from Qty', () => {
+    const length = { id: 'l', key: 'length', label: 'Length', data_type: 'decimal', options: null };
+    const qty = { id: 'q', key: 'length_m', label: 'Qty', data_type: 'decimal', options: null };
+    expect(fieldRole(length)).toBe('attr');
+    expect(fieldRole(qty)).toBe('length');
+    const cols = withLengthField([length]);
+    expect(cols.map((field) => field.key)).toEqual(['length_m', 'shade', 'length']);
+  });
+
   it('does not throw when key or label is null', () => {
     expect(
       fieldRole({
@@ -74,30 +87,14 @@ describe('fieldRole', () => {
   });
 });
 
-describe('millRollFieldText', () => {
+describe('rollFieldText', () => {
   const qtyField = { id: 'q', key: 'length_m', label: 'Qty', data_type: 'decimal', options: null };
 
-  it('prefers mill_snapshot over live warehouse columns', () => {
+  it('reads live quantity', () => {
     expect(
-      millRollFieldText(
+      rollFieldText(
         {
           length_m: 12,
-          mill_snapshot: { length_m: 10, shade: 'A1' },
-          shade: 'WH',
-          lot_no: null,
-          attributes: null,
-        },
-        qtyField,
-      ),
-    ).toBe('10');
-  });
-
-  it('falls back to live columns when mill_snapshot is null', () => {
-    expect(
-      millRollFieldText(
-        {
-          length_m: 12,
-          mill_snapshot: null,
           shade: null,
           lot_no: null,
           attributes: null,
@@ -107,19 +104,18 @@ describe('millRollFieldText', () => {
     ).toBe('12');
   });
 
-  it('reads mill identity shade from mill_snapshot.shade before catalog attributes', () => {
+  it('reads shade from the roll before catalog attributes', () => {
     const shadeField = { id: 's', key: 'shade', label: 'Shade', data_type: 'select', options: null };
     expect(
-      millRollFieldText(
+      rollFieldText(
         {
           length_m: 12,
           shade: 'COLUMN',
-          mill_snapshot: { shade: 'SNAP', attributes: { shade: 'JSON' } },
           attributes: { shade: 'LIVE' },
         },
         shadeField,
       ),
-    ).toBe('SNAP');
+    ).toBe('COLUMN');
   });
 });
 
@@ -159,7 +155,7 @@ describe('seedWarehouseFieldValues', () => {
   it('fills catalog cells from mill declared attributes', () => {
     expect(
       seedWarehouseFieldValues(
-        { length_m: 42, mill_snapshot: { attributes: { gsm: '160', shade: 'A' } } },
+        { length_m: 42, attributes: { gsm: '160', shade: 'A' } },
         {},
         [gsm, shade, width],
       ),
@@ -169,7 +165,7 @@ describe('seedWarehouseFieldValues', () => {
   it('keeps a warehouse value that was already recorded', () => {
     expect(
       seedWarehouseFieldValues(
-        { length_m: 42, mill_snapshot: { attributes: { gsm: '160' } } },
+        { length_m: 42, attributes: { gsm: '160' } },
         { gsm: '158' },
         [gsm, width],
       ),
@@ -179,7 +175,7 @@ describe('seedWarehouseFieldValues', () => {
   it('shows a catalog column as blank when mill missed that attribute', () => {
     expect(
       seedWarehouseFieldValues(
-        { length_m: 42, mill_snapshot: { attributes: { gsm: '160' } } },
+        { length_m: 42, attributes: { gsm: '160' } },
         {},
         [gsm, shade, width],
       ),
@@ -187,7 +183,7 @@ describe('seedWarehouseFieldValues', () => {
   });
 
   it('does not seed an em dash into the warehouse cell', () => {
-    expect(millFieldSeedText({ length_m: 1, attributes: {} }, gsm)).toBe('');
+    expect(fieldSeedText({ length_m: 1, attributes: {} }, gsm)).toBe('');
   });
 });
 
@@ -207,28 +203,26 @@ describe('warehouseMeasuredFieldValues', () => {
   });
 });
 
-describe('millRollWorkStatus', () => {
-  it('marks unsaved extra rolls as new / not yet sent', () => {
-    expect(millRollWorkStatus({})).toBe('new');
-    expect(millRollWorkStatusLabel('new')).toBe('New');
+describe('rollWorkStatus', () => {
+  it('marks unsaved extra rolls as new', () => {
+    expect(rollWorkStatus({})).toBe('new');
+    expect(rollWorkStatusLabel('new')).toBe('New');
   });
 
-  it('marks mill drafts as not sent', () => {
-    expect(millRollWorkStatus({ id: 'r1', at_mill: true })).toBe('not_sent');
-    expect(millRollWorkStatusLabel('not_sent')).toBe('Not sent');
+  it('marks a draft without a challan as not sent', () => {
+    expect(rollWorkStatus({ id: 'r1', status: 'draft' })).toBe('not_sent');
+    expect(rollWorkStatusLabel('not_sent')).toBe('Not sent');
   });
 
   it('marks dispatched rolls as sent until the warehouse receives them', () => {
-    expect(millRollWorkStatus({
+    expect(rollWorkStatus({
       id: 'r1',
-      at_mill: false,
       in_challan_id: 'c1',
       challan_status: 'pending',
       status: 'in_transit',
     })).toBe('sent');
-    expect(millRollWorkStatus({
+    expect(rollWorkStatus({
       id: 'r1',
-      at_mill: false,
       in_challan_id: 'c1',
       challan_status: 'received',
       status: 'pending_qc',
@@ -236,7 +230,7 @@ describe('millRollWorkStatus', () => {
   });
 });
 
-describe('growMillBatchRolls', () => {
+describe('growReceiptRolls', () => {
   const fields = [{ id: 'q', key: 'length_m', label: 'Qty', data_type: 'decimal', options: null }];
 
   function row(partial: Partial<MmDraftRoll>): MmDraftRoll {
@@ -253,32 +247,100 @@ describe('growMillBatchRolls', () => {
   }
 
   it('numbers a new batch ROL-001 onward', () => {
-    const next = growMillBatchRolls([], 3, fields);
+    const next = growReceiptRolls([], 3, fields);
     expect(next.map((item) => item.roll_no)).toEqual(['ROL-001', 'ROL-002', 'ROL-003']);
   });
 
   it('keeps sent rolls at the bottom and inserts extra rolls as new', () => {
     const rows = [
-      row({ localId: 'sent', id: 'sent', locked: true, millWorkStatus: 'sent', roll_no: '1' }),
-      row({ localId: 'open', id: 'open', locked: false, millWorkStatus: 'not_sent', roll_no: '2' }),
+      row({ localId: 'sent', id: 'sent', locked: true, rollWorkStatus: 'sent', roll_no: '1' }),
+      row({ localId: 'open', id: 'open', locked: false, rollWorkStatus: 'not_sent', roll_no: '2' }),
     ];
-    const next = growMillBatchRolls(rows, 3, fields);
-    expect(next.map((item) => item.millWorkStatus)).toEqual(['not_sent', 'new', 'sent']);
+    const next = growReceiptRolls(rows, 3, fields);
+    expect(next.map((item) => item.rollWorkStatus)).toEqual(['not_sent', 'new', 'sent']);
     expect(next.at(-1)?.locked).toBe(true);
   });
 
   it('does not drop locked sent rolls when shrinking', () => {
     const rows = [
-      row({ localId: 'open', id: 'open', locked: false, millWorkStatus: 'not_sent', roll_no: '2' }),
-      row({ localId: 'sent', id: 'sent', locked: true, millWorkStatus: 'sent', roll_no: '1' }),
+      row({ localId: 'open', id: 'open', locked: false, rollWorkStatus: 'not_sent', roll_no: '2' }),
+      row({ localId: 'sent', id: 'sent', locked: true, rollWorkStatus: 'sent', roll_no: '1' }),
     ];
-    const next = growMillBatchRolls(rows, 1, fields);
+    const next = growReceiptRolls(rows, 1, fields);
     expect(next).toHaveLength(1);
     expect(next[0].id).toBe('sent');
   });
+});
+
+describe('autoFillDraftRolls', () => {
+  const fields = [
+    { id: 'q', key: 'length_m', label: 'Qty', data_type: 'decimal' as const, options: null },
+    { id: 'sl', key: 'shrinkage-l', label: 'Shrinkage L%', data_type: 'decimal' as const, options: null },
+    { id: 'sw', key: 'shrinkage-w', label: 'Shrinkage W%', data_type: 'decimal' as const, options: null },
+  ];
+
+  function blank(): MmDraftRoll {
+    return {
+      localId: 'r1',
+      roll_no: 'ROL-001',
+      length_m: '',
+      weight_kg: '',
+      shade: '',
+      lot_no: '',
+      attributes: {
+        target_width_in: '54',
+        width_tol_pct: '2.5',
+        target_gsm: '210',
+        gsm_tol_pct: '2.5',
+      },
+    };
+  }
+
+  it('fills empty cells inside the width and GSM tolerance and leaves targets alone', () => {
+    const next = autoFillDraftRolls([blank()], fields, { measures: ROLL_MEASURES, fillLotType: true })[0];
+    expect(next.attributes.target_width_in).toBe('54');
+    expect(next.attributes.width_tol_pct).toBe('2.5');
+    expect(next.attributes.target_gsm).toBe('210');
+    expect(next.attributes.gsm_tol_pct).toBe('2.5');
+    expect(next.length_m.trim()).not.toBe('');
+    expect(LOT_TYPE_OPTIONS).toContain(next.lot_no);
+    expect(Number(next.attributes['shrinkage-l'])).toBeGreaterThan(0);
+    expect(rollOutOfSpec(next)).toBe(false);
+    expect(next.attributes.qc_status).toBe('pass');
+  });
+
+  it('does not replace a value already entered or a locked roll', () => {
+    const kept = blank();
+    kept.length_m = '18.5';
+    kept.attributes.length_m = '18.5';
+    kept.attributes.actual_width_in = '54';
+    const locked = blank();
+    locked.localId = 'locked';
+    locked.locked = true;
+    const [open, sent] = autoFillDraftRolls([kept, locked], fields, { measures: ROLL_MEASURES, fillLotType: true });
+    expect(open.length_m).toBe('18.5');
+    expect(open.attributes.actual_width_in).toBe('54');
+    expect(sent.attributes.actual_width_in ?? '').toBe('');
+    expect(sent.lot_no).toBe('');
+  });
+});
+
+describe('growReceiptRolls sort', () => {
+  function row(partial: Partial<MmDraftRoll>): MmDraftRoll {
+    return {
+      localId: partial.localId ?? 'x',
+      roll_no: partial.roll_no ?? '1',
+      length_m: partial.length_m ?? '10',
+      weight_kg: '',
+      shade: '',
+      lot_no: '',
+      attributes: {},
+      ...partial,
+    };
+  }
 
   it('sorts assign drafts with not-sent first', () => {
-    const sorted = sortMillAssignDrafts([
+    const sorted = sortAssignDrafts([
       row({ localId: 'sent', locked: true }),
       row({ localId: 'open', locked: false }),
     ]);

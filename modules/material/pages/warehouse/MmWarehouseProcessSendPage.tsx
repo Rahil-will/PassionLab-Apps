@@ -11,19 +11,25 @@ import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import {
   mmListRollsV4,
-  mmMillListBatchesV4,
   mmProcSend,
-  type MmV4MillBatchListRow,
   type MmV4RollRow,
 } from '../../lib/mmV4Rpc';
-import { useMmPartners, useMmProcesses, useMmV4Config } from '../../lib/useMmV4Config';
+import { useMmProcesses, useMmV4Config } from '../../lib/useMmV4Config';
+import { MmChallanFieldInputs } from '../../components/MmChallanFieldInputs';
+import {
+  challanFieldError,
+  fieldValuesPayload,
+  sendableProcesses,
+  whereChoices,
+  whereSendPayload,
+} from '../../lib/processChallan';
 import { useInvalidateMmOps } from '../../lib/useMmOps';
-import { fieldRole, formatQtyM, millDateLabel } from '../../lib/mmRollDraft';
+import { fieldRole, formatQtyM } from '../../lib/mmRollDraft';
 import { listFabrics } from '../../lib/mmFabricRpc';
 import type { MmTestField } from '../../lib/mmRpc';
 import { useMmConfigBundle } from '../../lib/useMmConfigBundle';
-import { millTestCaptureFields } from '../mill/millUnallocated';
 import { unitFormOptionLabel } from '../../lib/mmUnitForm';
+import { formatStoredQty, formatStoredWidth, isStoredWidthKey, useFabricUnits, widthLabel, type WidthUnit } from '../../lib/units';
 
 function todayIso(): string {
   const now = new Date();
@@ -66,10 +72,10 @@ function isToleranceKey(key: string): boolean {
   return name.includes('tol') || name.includes('tolerance');
 }
 
-function paramLabel(key: string): string {
+function paramLabel(key: string, unit: WidthUnit = 'in'): string {
   const known = BASE_TEST_COLUMNS.find((column) => column.key === key);
-  if (known) return known.label;
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  const base = known ? known.label : key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  return isStoredWidthKey(key) ? `${base} (${widthLabel(unit)})` : base;
 }
 
 function fieldsForType(rows: Record<string, unknown>[] | undefined, typeId: string): MmTestField[] {
@@ -87,15 +93,22 @@ function fieldsForType(rows: Record<string, unknown>[] | undefined, typeId: stri
       capture_site: row.capture_site != null ? String(row.capture_site) : 'either',
     }];
   });
-  return millTestCaptureFields(mapped).filter((field) => {
+  return mapped.filter((field) => {
+    const site = (field.capture_site ?? 'either').toLowerCase();
+    return site === 'warehouse' || site === 'both' || site === 'either' || site === '';
+  }).filter((field) => {
     const role = fieldRole(field);
     return role !== 'length' && role !== 'weight' && role !== 'shade' && role !== 'lot';
   });
 }
 
-function attrText(roll: MmV4RollRow, key: string): string {
+function attrText(roll: MmV4RollRow, key: string, unit: WidthUnit): string {
   const value = roll.attributes?.[key];
   if (value == null || String(value).trim() === '') return '—';
+  if (isStoredWidthKey(key)) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return formatStoredWidth(n, unit);
+  }
   return String(value);
 }
 
@@ -120,6 +133,8 @@ type FabricCard = {
   rolls: MmV4RollRow[];
   qty: number;
   uom: string;
+  qtyUnit?: string | null;
+  widthUnit?: string | null;
 };
 
 type LotCard = {
@@ -147,60 +162,34 @@ function sumMeasures(rolls: MmV4RollRow[], fabricUom?: string | null): { qty: nu
 
 function fabricOf(
   roll: MmV4RollRow,
-  batch: MmV4MillBatchListRow | undefined,
-  catalog: Map<string, { code: string; name: string; uom: string }>,
-): { key: string; code: string; name: string; uom: string } {
-  const id = String(roll.fabric_id || batch?.fabric_id || '');
+  catalog: Map<string, { code: string; name: string; uom: string; qty_unit?: string | null; width_unit?: string | null }>,
+): { key: string; code: string; name: string; uom: string; qty_unit?: string | null; width_unit?: string | null } {
+  const id = String(roll.fabric_id || '');
   const known = id ? catalog.get(id) : undefined;
-  const name = String(known?.name || batch?.fabric_name || '').trim();
-  const code = String(known?.code || roll.fabric_code || batch?.fabric_code || '').trim();
-  const fallback = String(roll.style?.fabric_line || roll.fabric_type_name || batch?.fabric_type_name || '').trim();
+  const name = String(known?.name || '').trim();
+  const code = String(known?.code || roll.fabric_code || '').trim();
+  const fallback = String(roll.style?.fabric_line || roll.fabric_type_name || '').trim();
   const display = name || fallback;
-  const key = id || String(roll.fabric_type_id || batch?.fabric_type_id || `name:${code}:${display || 'fabric'}`);
+  const key = id || String(roll.fabric_type_id || `name:${code}:${display || 'fabric'}`);
   return {
     key,
     code,
     name: display || 'Unnamed fabric',
-    uom: String(known?.uom || batch?.fabric_uom || ''),
+    uom: String(known?.uom || ''),
+    qty_unit: known?.qty_unit ?? null,
+    width_unit: known?.width_unit ?? null,
   };
 }
 
-function lotOf(roll: MmV4RollRow, batch: MmV4MillBatchListRow | undefined): Omit<LotCard, 'rolls' | 'qty' | 'uom'> {
-  const origin = String(roll.origin || '');
-  const purpose = String(batch?.purpose || (roll.style?.style_name ? 'style' : 'stock'));
-  if (origin === 'vendor' || (!roll.mill_batch_id && origin !== 'process')) {
-    const receipt = String(roll.batch_no || roll.lot_no || '').trim();
-    const detail = [roll.lot_no && roll.batch_no ? `Lot ${roll.lot_no}` : '', roll.color_ref, roll.style?.style_name]
-      .filter(Boolean)
-      .join(' · ');
-    return {
-      key: `received:${roll.mill_batch_id || receipt || 'open'}`,
-      title: receipt || batch?.batch_no || 'Received',
-      kind: 'received',
-      purpose,
-      detail: detail || 'Supplier receipt',
-    };
-  }
-  if (origin === 'process') {
-    return {
-      key: `returned:${roll.mill_batch_id || roll.dye_lot || roll.batch_no || 'open'}`,
-      title: String(roll.batch_no || batch?.batch_no || roll.dye_lot || 'Returned'),
-      kind: 'returned',
-      purpose,
-      detail: [roll.dye_lot ? `Dye lot ${roll.dye_lot}` : 'Came back from processing', roll.style?.style_name].filter(Boolean).join(' · '),
-    };
-  }
-  const detail = purpose === 'style'
-    ? [roll.style?.style_name, roll.style?.colorway_name || roll.color_ref].filter(Boolean).join(' · ')
-    : purpose === 'open_po'
-      ? [batch?.customer_name, batch?.po_ref].filter(Boolean).join(' · ')
-      : [batch?.mill_ref ? `Mill ref ${batch.mill_ref}` : 'Mill batch', millDateLabel(batch?.production_date)].filter((part) => part && part !== '—').join(' · ');
+function lotOf(roll: MmV4RollRow): Omit<LotCard, 'rolls' | 'qty' | 'uom'> {
+  const receiptNo = String(roll.receipt_no || '').trim();
+  const purpose = roll.style?.style_name ? 'style' : 'stock';
   return {
-    key: String(roll.mill_batch_id || batch?.id || roll.batch_no || 'made'),
-    title: String(roll.batch_no || batch?.batch_no || 'Mill batch'),
-    kind: 'made',
+    key: `receipt:${receiptNo || 'none'}`,
+    title: receiptNo || 'No receipt',
+    kind: 'received',
     purpose,
-    detail: detail || 'Made at the mill',
+    detail: [roll.color || roll.color_ref, roll.style?.style_name].filter(Boolean).join(' · ') || 'Warehouse receipt',
   };
 }
 
@@ -211,7 +200,7 @@ const thFirstCls =
 const tdCls = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 overflow-hidden';
 const tdFirstCls = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 overflow-hidden';
 
-export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { side?: 'warehouse' | 'mill' }) {
+export default function MmWarehouseProcessSendPage() {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const { showNotification } = useNotificationStore();
@@ -225,39 +214,36 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
   const [batchOn, setBatchOn] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [processTypeId, setProcessTypeId] = useState('');
-  const [unitFacilityId, setUnitFacilityId] = useState('');
+  const [whereId, setWhereId] = useState('');
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [challanNo, setChallanNo] = useState('');
   const [unitRefNo, setUnitRefNo] = useState('');
   const [sentAt, setSentAt] = useState(todayIso);
   const [remarks, setRemarks] = useState('');
-  const [targetColor, setTargetColor] = useState('');
   const [busy, setBusy] = useState(false);
 
   usePageHeader({
-    subtitle: 'Pick a fabric, tick the batches it was made in or received as, then the rolls or laps. One challan can cover several batches of that fabric.',
+    subtitle: 'Pick a fabric, tick the receipts, then the rolls. One challan can cover several receipts of that fabric.',
   });
 
   const processesQ = useMmProcesses();
-  const partnersQ = useMmPartners('process_vendor', false);
   const processTypes = useMemo(
-    () => (processesQ.data ?? []).filter((row) => row.active !== false).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+    () => sendableProcesses(processesQ.data ?? []),
     [processesQ.data],
   );
+  const process = processTypes.find((row) => row.id === processTypeId);
+  const choices = useMemo(() => whereChoices(process), [process]);
+  const choiceKey = choices.map((choice) => choice.id).join('|');
   const stageLabel = (code: string | null | undefined) => {
     if (!code) return '';
     return v4?.stages?.find((stage) => stage.code === code)?.label || code;
   };
 
-  const units = useMemo(() => {
-    if (!processTypeId) return [];
-    return (partnersQ.data ?? []).filter((row) => (row.process_type_ids ?? []).includes(processTypeId));
-  }, [partnersQ.data, processTypeId]);
-
   const rollsQ = useQuery({
-    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'rollsV4Process', side, 'sendPage'] as const,
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'rollsV4Process', 'warehouse', 'sendPage'] as const,
     queryFn: async (): Promise<MmV4RollRow[]> => {
       const res = await mmListRollsV4({
-        side,
+        side: 'warehouse',
         available_for: 'process',
         search: null,
         limit: 500,
@@ -270,17 +256,6 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
 
   const allRolls = rollsQ.data ?? [];
 
-  const batchesQ = useQuery({
-    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'millBatchesV4', 'processSend'] as const,
-    queryFn: async (): Promise<MmV4MillBatchListRow[]> => {
-      const res = await mmMillListBatchesV4({});
-      if (res.ok === false) throw new Error(res.message);
-      return res.data.rows ?? [];
-    },
-    enabled: Boolean(factoryId),
-  });
-  const batchRows = batchesQ.data ?? [];
-  const batchById = useMemo(() => new Map(batchRows.map((row) => [row.id, row])), [batchRows]);
   const catalogQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'fabricCatalog', 'processSend'] as const,
     queryFn: async () => {
@@ -291,56 +266,44 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
     enabled: Boolean(factoryId),
   });
   const fabricCatalog = useMemo(() => {
-    const map = new Map<string, { code: string; name: string; uom: string }>();
+    const map = new Map<string, { code: string; name: string; uom: string; qty_unit?: string | null; width_unit?: string | null }>();
     for (const row of catalogQ.data ?? []) {
-      map.set(row.id, { code: row.code, name: row.name, uom: row.uom });
-    }
-    for (const batch of batchRows) {
-      if (!batch.fabric_id || map.has(batch.fabric_id)) continue;
-      if (!batch.fabric_name && !batch.fabric_code) continue;
-      map.set(batch.fabric_id, {
-        code: batch.fabric_code || '',
-        name: batch.fabric_name || batch.fabric_code || '',
-        uom: batch.fabric_uom || '',
-      });
+      map.set(row.id, { code: row.code, name: row.name, uom: row.uom, qty_unit: row.qty_unit, width_unit: row.width_unit });
     }
     return map;
-  }, [catalogQ.data, batchRows]);
-
-  const batchFor = (roll: MmV4RollRow) => (roll.mill_batch_id ? batchById.get(roll.mill_batch_id) : undefined);
+  }, [catalogQ.data]);
 
   const fabrics = useMemo(() => {
     const map = new Map<string, FabricCard>();
     for (const roll of allRolls) {
-      const identity = fabricOf(roll, batchFor(roll), fabricCatalog);
+      const identity = fabricOf(roll, fabricCatalog);
       const existing = map.get(identity.key);
       if (existing) existing.rolls.push(roll);
-      else map.set(identity.key, { key: identity.key, code: identity.code, name: identity.name, rolls: [roll], qty: 0, uom: identity.uom || 'm' });
+      else map.set(identity.key, { key: identity.key, code: identity.code, name: identity.name, rolls: [roll], qty: 0, uom: identity.uom || 'm', qtyUnit: identity.qty_unit, widthUnit: identity.width_unit });
     }
     const q = groupQuery.trim().toLowerCase();
     return [...map.values()]
       .map((row) => {
-        const total = sumMeasures(row.rolls, row.uom || batchFor(row.rolls[0])?.fabric_uom);
+        const total = sumMeasures(row.rolls, row.uom);
         return { ...row, qty: total.qty, uom: total.uom || row.uom };
       })
       .filter((row) => !q || `${row.code} ${row.name}`.toLowerCase().includes(q))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [allRolls, batchById, fabricCatalog, groupQuery]);
+  }, [allRolls, fabricCatalog, groupQuery]);
 
   const fabric = fabrics.find((row) => row.key === fabricKey) ?? null;
   const lots = useMemo(() => {
     if (!fabric) return [];
     const map = new Map<string, LotCard>();
     for (const roll of fabric.rolls) {
-      const batch = batchFor(roll);
-      const identity = lotOf(roll, batch);
+      const identity = lotOf(roll);
       const existing = map.get(identity.key);
       if (existing) existing.rolls.push(roll);
       else map.set(identity.key, { ...identity, rolls: [roll], qty: 0, uom: 'm' });
     }
     return [...map.values()]
       .map((row) => {
-        const total = sumMeasures(row.rolls, batchFor(row.rolls[0])?.fabric_uom);
+        const total = sumMeasures(row.rolls, fabric?.uom);
         return { ...row, qty: total.qty, uom: total.uom };
       })
       .sort((a, b) => {
@@ -348,7 +311,7 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
         if (a.kind !== b.kind) return rank(a.kind) - rank(b.kind);
         return a.title.localeCompare(b.title);
       });
-  }, [fabric, batchById]);
+  }, [fabric]);
   const pickedLots = lots.filter((row) => batchOn[row.key]);
   const lotByRoll = useMemo(() => {
     const map = new Map<string, LotCard>();
@@ -369,16 +332,20 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
 
   const fabricTypeId = String(
     fabric?.rolls[0]?.fabric_type_id
-    || (fabric?.rolls[0] ? batchFor(fabric.rolls[0])?.fabric_type_id : '')
+    || ''
     || '',
   );
+  const units = useFabricUnits(fabric ? { qty_unit: fabric.qtyUnit, width_unit: fabric.widthUnit, uom: fabric.uom } : null);
   const testColumns = useMemo(() => {
-    const columns: { key: string; label: string }[] = BASE_TEST_COLUMNS.map((column) => ({ key: column.key, label: column.label }));
+    const columns: { key: string; label: string }[] = BASE_TEST_COLUMNS.map((column) => ({
+      key: column.key,
+      label: paramLabel(column.key, units.widthUnit),
+    }));
     const seen = new Set(columns.map((column) => column.key));
     const add = (key: string, label: string) => {
       if (!key || seen.has(key) || isToleranceKey(key) || isToleranceKey(label) || HIDDEN_ATTR.has(key)) return;
       seen.add(key);
-      columns.push({ key, label: label || paramLabel(key) });
+      columns.push({ key, label: label || paramLabel(key, units.widthUnit) });
     };
     for (const field of fieldsForType(config.data?.test_fields, fabricTypeId)) {
       const token = `${field.key} ${field.label}`.toLowerCase();
@@ -386,10 +353,10 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
       add(field.key, field.label);
     }
     for (const roll of centreRolls) {
-      for (const key of Object.keys(roll.attributes ?? {})) add(key, paramLabel(key));
+      for (const key of Object.keys(roll.attributes ?? {})) add(key, paramLabel(key, units.widthUnit));
     }
     return columns;
-  }, [centreRolls, config.data?.test_fields, fabricTypeId]);
+  }, [centreRolls, config.data?.test_fields, fabricTypeId, units.widthUnit]);
 
   const selectedRolls = useMemo(
     () => centreRolls.filter((roll) => selected[roll.roll_id]),
@@ -407,8 +374,16 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
   }, [selectedRolls]);
 
   useEffect(() => {
-    setTargetColor(sharedColour);
-  }, [sharedColour]);
+    const ids = choiceKey.split('|').filter(Boolean);
+    if (ids.length === 1) setWhereId(ids[0]);
+  }, [choiceKey]);
+
+  useEffect(() => {
+    if (!sharedColour) return;
+    const hasColour = (process?.challan_fields ?? []).some((field) => field.key === 'target_color');
+    if (!hasColour) return;
+    setFieldValues((current) => (current.target_color ? current : { ...current, target_color: sharedColour }));
+  }, [sharedColour, process]);
 
   const selectFabric = (key: string) => {
     setFabricKey(key);
@@ -424,12 +399,17 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
   };
 
   const submit = async () => {
-    if (!unitFacilityId) {
-      showNotification('Select a process vendor', 'error');
-      return;
-    }
     if (!processTypeId) {
       showNotification('Select a process', 'error');
+      return;
+    }
+    if (!whereId) {
+      showNotification('Select where this process is done', 'error');
+      return;
+    }
+    const fieldError = challanFieldError(process?.challan_fields ?? [], fieldValues);
+    if (fieldError) {
+      showNotification(fieldError, 'error');
       return;
     }
     if (selectedIds.length === 0) {
@@ -439,10 +419,11 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
     setBusy(true);
     try {
       const res = await mmProcSend({
-        side,
-        unit_facility_id: unitFacilityId,
+        side: 'warehouse',
         process_type_id: processTypeId,
         roll_ids: selectedIds,
+        ...whereSendPayload(whereId),
+        field_values: fieldValuesPayload(process?.challan_fields ?? [], fieldValues),
         challan_no: challanNo.trim() || null,
         unit_ref_no: unitRefNo.trim() || null,
         sent_at: sentAt || null,
@@ -450,12 +431,11 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
         parent_challan_id: null,
         reprocess_reason: null,
         remarks: remarks.trim() || null,
-        target_color: targetColor.trim() || null,
       });
       if (res.ok === false) throw new Error(res.message);
       showNotification(`Challan ${res.data.challan_no} sent`, 'success');
       await invalidate();
-      requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: res.data.id });
+      requestNavigate(RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL, { id: res.data.id });
     } catch (e) {
       showNotification(e instanceof Error ? e.message : 'Send failed', 'error');
     } finally {
@@ -467,10 +447,10 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
   const headingDetail = pickedLots.length === 1
     ? `${pickedLots[0].kind === 'made' ? 'Made' : pickedLots[0].kind === 'received' ? 'Received' : 'Returned'} · ${pickedLots[0].title}${pickedLots[0].detail ? ` · ${pickedLots[0].detail}` : ''}`
     : pickedLots.length > 1
-      ? `${pickedLots.length} batches · ${pickedLots.map((lot) => lot.title).join(', ')}`
+      ? `${pickedLots.length} receipts · ${pickedLots.map((lot) => lot.title).join(', ')}`
       : fabric
-        ? 'Tick one or more batches'
-        : (side === 'mill' ? 'Mill to processing' : 'Warehouse to processing');
+        ? 'Tick one or more receipts'
+        : 'Warehouse to processing';
 
   return (
     <PageShell
@@ -480,13 +460,13 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
       skeleton="card"
       className="flex flex-col h-[calc(100dvh-8.5rem)] overflow-hidden"
     >
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[16.5rem_minmax(0,1fr)_19rem] gap-3">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[16.5rem_minmax(0,1fr)] gap-3">
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 shrink-0">
             <h3 className="text-[13px] font-semibold text-slate-900">{fabric ? 'Batches' : 'Fabrics'}</h3>
             <p className="text-[10px] text-slate-400 mt-0.5">
               {fabric
-                ? 'Tick the batches for this challan. Made, received, and returned can go together.'
+                ? 'Tick the receipts for this challan. Received and returned can go together.'
                 : 'Pick the fabric first. Code sits under the name.'}
             </p>
             {fabric ? (
@@ -524,12 +504,12 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
                   <p className="text-[12px] font-semibold text-slate-800 truncate">{row.name}</p>
                   <p className="text-[10px] text-slate-400 mt-0.5 truncate">{row.code || 'No code'}</p>
                   <p className="text-[10px] mt-1 font-semibold tabular-nums text-slate-600">
-                    {formatQtyM(row.qty, row.uom)} · {row.rolls.length} {row.rolls.length === 1 ? 'roll' : 'rolls'}
+                    {formatStoredQty(row.qty, row.qtyUnit ?? row.uom)} · {row.rolls.length} {row.rolls.length === 1 ? 'roll' : 'rolls'}
                   </p>
                 </button>
               ))
             ) : lots.length === 0 ? (
-              <p className="text-[11px] text-slate-400 italic text-center py-10">No batches for this fabric.</p>
+              <p className="text-[11px] text-slate-400 italic text-center py-10">No receipts for this fabric.</p>
             ) : lots.map((row) => {
               const on = Boolean(batchOn[row.key]);
               return (
@@ -558,7 +538,7 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
                     {row.kind === 'made' ? 'Made' : row.kind === 'received' ? 'Received' : 'Returned'} · {row.detail}
                   </p>
                   <p className="text-[10px] mt-1 font-semibold tabular-nums text-slate-600">
-                    {formatQtyM(row.qty, row.uom)} · {row.rolls.length} {row.rolls.length === 1 ? 'roll' : 'rolls'}
+                    {formatStoredQty(row.qty, fabric?.qtyUnit ?? row.uom)} · {row.rolls.length} {row.rolls.length === 1 ? 'roll' : 'rolls'}
                   </p>
                 </button>
               );
@@ -566,7 +546,118 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden">
+        <div className="flex flex-col min-h-0 gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm shrink-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-[13px] font-semibold text-slate-900">Process challan</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {fabric && pickedLots.length > 0
+                  ? `${fabric.name}${fabric.code ? ` · ${fabric.code}` : ''} · ${pickedLots.map((lot) => lot.title).join(', ')}`
+                  : 'Write the challan, then tick the rolls below. Roll number, quantity, and the fabric columns stay locked to each roll.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-right">
+                <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Rolls</p>
+                <p className="text-[13px] font-bold text-slate-800 tabular-nums">{selectedIds.length}</p>
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-right">
+                <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Qty</p>
+                <p className="text-[13px] font-bold text-slate-800 tabular-nums">{formatStoredQty(selectedMeasure.qty, fabric?.qtyUnit ?? selectedMeasure.uom)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="px-4 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+              <Input
+                label="Fabric"
+                value={fabric?.name ?? ''}
+                readOnly
+                placeholder="Select a fabric on the left"
+              />
+              <SelectDropdown size="compact"
+                label="Process"
+                value={processTypeId}
+                onChange={(v) => {
+                  setProcessTypeId(v);
+                  setWhereId('');
+                  setFieldValues({});
+                }}
+                options={processTypes.map((t) => ({ value: t.id, label: t.name }))}
+              />
+              <SelectDropdown size="compact"
+                label="Where"
+                value={whereId}
+                onChange={setWhereId}
+                options={[
+                  { value: '', label: processTypeId ? 'Select where' : 'Pick a process first' },
+                  ...choices.map((choice) => ({ value: choice.id, label: choice.label })),
+                ]}
+              />
+              <MmChallanFieldInputs
+                fields={process?.challan_fields ?? []}
+                values={fieldValues}
+                onChange={(key, value) => setFieldValues((current) => ({ ...current, [key]: value }))}
+              />
+              <Input
+                label="Challan no"
+                value={challanNo}
+                onChange={(e) => setChallanNo(e.target.value)}
+                placeholder="Auto if blank"
+              />
+              <Input
+                label="Unit ref no"
+                value={unitRefNo}
+                onChange={(e) => setUnitRefNo(e.target.value)}
+                placeholder="Processor's reference"
+              />
+            </div>
+            <div className="flex flex-col gap-3 min-w-0">
+              <LabeledDatePicker
+                label="Sent date"
+                value={sentAt}
+                onChange={setSentAt}
+                variant="pill"
+                labelClassName="block text-[10px] font-semibold text-slate-600 mb-1"
+              />
+              <div className="flex-1 flex flex-col">
+                <label className="block text-[10px] font-semibold text-slate-600 mb-1">Remarks</label>
+                <textarea
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value.slice(0, 400))}
+                  rows={5}
+                  maxLength={400}
+                  placeholder="Add any remarks…"
+                  className="w-full flex-1 min-h-[7.5rem] rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-blue-300 resize-y"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="px-4 py-3 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE)}
+            >
+              Cancel
+            </Button>
+            <DesktopWriteGate>
+              <Button
+                type="button"
+                size="sm"
+                icon={Package}
+                disabled={busy || selectedIds.length === 0 || !processTypeId || !whereId}
+                onClick={() => void submit()}
+              >
+                {busy ? 'Sending…' : 'Create challan'}
+              </Button>
+            </DesktopWriteGate>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden flex-1">
           <div className="px-4 py-3 border-b border-slate-100 shrink-0">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -599,7 +690,7 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
           <div className="flex-1 min-h-0 overflow-auto">
             {pickedLots.length === 0 ? (
               <p className="px-4 py-10 text-center text-[11px] text-slate-400">
-                {fabric ? 'Select one or more batches.' : 'Select a fabric.'}
+                {fabric ? 'Select one or more receipts.' : 'Select a fabric.'}
               </p>
             ) : centreRolls.length === 0 ? (
               <p className="px-4 py-10 text-center text-[11px] text-slate-400">No rolls in this batch.</p>
@@ -664,11 +755,11 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
                         <td className={`${tdCls} whitespace-nowrap`}>{roll.lot_no || '—'}</td>
                         <td className={`${tdCls} whitespace-nowrap`}>{roll.shade || roll.color_ref || '—'}</td>
                         <td className={`${tdCls} whitespace-nowrap tabular-nums font-semibold text-indigo-700`}>
-                          {formatQtyM(rowQty.qty, rowQty.uom)}
+                          {formatStoredQty(rowQty.qty, fabric?.qtyUnit ?? rowQty.uom)}
                         </td>
                         {testColumns.map((column) => (
                           <td key={column.key} className={`${tdCls} whitespace-nowrap tabular-nums`}>
-                            {attrText(roll, column.key)}
+                            {attrText(roll, column.key, units.widthUnit)}
                           </td>
                         ))}
                       </tr>
@@ -679,113 +770,9 @@ export default function MmWarehouseProcessSendPage({ side = 'warehouse' }: { sid
             )}
           </div>
           <div className="px-4 py-2 border-t border-slate-100 text-[10px] text-slate-400 shrink-0">
-            Showing {centreRolls.length} rolls
+            Showing {centreRolls.length} rolls. Quantity and fabric columns are locked from the roll.
           </div>
         </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 shrink-0">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[13px] font-semibold text-slate-900">Process challan</h3>
-              <p className="text-[11px] font-semibold text-blue-700 tabular-nums">{selectedIds.length} selected</p>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              {fabric && pickedLots.length > 0
-                ? `${fabric.name}${fabric.code ? ` · ${fabric.code}` : ''} · ${pickedLots.map((lot) => lot.title).join(', ')}`
-                : 'Select rolls, then write the challan.'}
-            </p>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-            <SelectDropdown
-              label="Process"
-              value={processTypeId}
-              onChange={(v) => {
-                setProcessTypeId(v);
-                setUnitFacilityId('');
-              }}
-              options={processTypes.map((t) => ({ value: t.id, label: t.name }))}
-              className="mb-3"
-            />
-            <SelectDropdown
-              label="Process vendor"
-              value={unitFacilityId}
-              onChange={setUnitFacilityId}
-              options={[
-                { value: '', label: processTypeId ? 'Select a process vendor' : 'Pick a process first' },
-                ...units.map((u) => ({ value: u.id, label: u.name })),
-              ]}
-              className="mb-3"
-            />
-            <LabeledDatePicker
-              label="Sent date"
-              value={sentAt}
-              onChange={setSentAt}
-              variant="pill"
-              labelClassName="block text-[10px] font-semibold text-slate-600 mb-1"
-              className="mb-3"
-            />
-            <Input
-              label="Challan no"
-              value={challanNo}
-              onChange={(e) => setChallanNo(e.target.value)}
-              placeholder="Auto if blank"
-              className="mb-3"
-            />
-            <Input
-              label="Unit ref no"
-              value={unitRefNo}
-              onChange={(e) => setUnitRefNo(e.target.value)}
-              placeholder="Processor's reference"
-              className="mb-3"
-            />
-            <Input label="Target colour" value={targetColor} onChange={(e) => setTargetColor(e.target.value)} className="mb-3" />
-            <label className="block text-[10px] font-semibold text-slate-600 mb-1">Remarks</label>
-            <textarea
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value.slice(0, 400))}
-              rows={3}
-              maxLength={400}
-              placeholder="Add any remarks…"
-              className="w-full min-h-[4.5rem] max-h-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-blue-300 resize-y mb-1"
-            />
-            <p className="text-[9px] text-slate-400 tabular-nums mb-3 text-right">{remarks.length}/400</p>
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2">
-                <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Total rolls</p>
-                <p className="text-[13px] font-bold text-slate-800 tabular-nums mt-0.5">{selectedIds.length}</p>
-              </div>
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2">
-                <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Total qty</p>
-                <p className="text-[13px] font-bold text-slate-800 tabular-nums mt-0.5">
-                  {formatQtyM(selectedMeasure.qty, selectedMeasure.uom)}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <DesktopWriteGate>
-                <Button
-                  type="button"
-                  size="sm"
-                  icon={Package}
-                  disabled={busy || selectedIds.length === 0 || !processTypeId || !unitFacilityId}
-                  onClick={() => void submit()}
-                  className="w-full"
-                >
-                  {busy ? 'Sending…' : 'Create challan'}
-                </Button>
-              </DesktopWriteGate>
-              <Button
-                type="button"
-                size="sm"
-                variant="danger-light"
-                disabled={busy}
-                onClick={() => requestNavigate(side === 'mill' ? RoutePath.MATERIAL_MILL : RoutePath.MATERIAL_WAREHOUSE)}
-                className="w-full"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
     </PageShell>

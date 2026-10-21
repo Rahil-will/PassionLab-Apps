@@ -17,9 +17,10 @@ import { usePageHeader } from '../../../../components/Breadcrumb';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
 import { useNotificationStore } from '../../../../stores';
 import { mmPutawayRolls, type MmWarehouseStockRow } from '../../lib/mmRpc';
+import { mmListRollsV4 } from '../../lib/mmV4Rpc';
 import { useInvalidateMmOps, useMmRackOpsBoard, useMmWarehouseStock } from '../../lib/useMmOps';
-import { formatQtyM, millDateLabel } from '../../lib/mmRollDraft';
-import { MmAllocateRollsModal } from '../../components/MmAllocateRollsModal';
+import { formatQtyM, dateLabel } from '../../lib/mmRollDraft';
+import { MmAllocateV4Modal } from '../../components/MmAllocateV4Modal';
 import {
   batchKey,
   batchLabel,
@@ -76,6 +77,7 @@ export default function MmWarehouseRackMovePage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [allocOpen, setAllocOpen] = useState(false);
+  const [allocRollIds, setAllocRollIds] = useState<string[]>([]);
   const [allocSearch, setAllocSearch] = useState('');
   const [allocPage, setAllocPage] = useState(1);
 
@@ -177,6 +179,35 @@ export default function MmWarehouseRackMovePage() {
     }
     return null;
   }, [action, target, tableRolls, selected, selectedIds.length]);
+
+  const openAllocate = async () => {
+    if (!canAllocate) {
+      showNotification('Select unallocated rolls of the same fabric type', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await mmListRollsV4({ side: 'warehouse', unallocated: true, limit: 500 });
+      if (res.ok === false) throw new Error(res.message);
+      const byUnit = new Map<string, string>();
+      const byCode = new Map<string, string>();
+      for (const roll of res.data.rows ?? []) {
+        if (roll.stock_unit_id) byUnit.set(roll.stock_unit_id, roll.roll_id);
+        if (roll.roll_code) byCode.set(roll.roll_code, roll.roll_id);
+      }
+      const ids = selectedAlloc.map((row) => byUnit.get(row.id) ?? byCode.get(row.unit_code) ?? '');
+      if (ids.some((id) => !id)) {
+        showNotification('Could not match every selected roll', 'error');
+        return;
+      }
+      setAllocRollIds(ids);
+      setAllocOpen(true);
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : 'Allocate failed', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const switchAction = (next: OpsAction) => {
     setAction(next);
@@ -398,13 +429,7 @@ export default function MmWarehouseRackMovePage() {
                 size="sm"
                 className="w-full mt-2"
                 disabled={busy || !canAllocate}
-                onClick={() => {
-                  if (!canAllocate) {
-                    showNotification('Select unallocated rolls of the same fabric type', 'error');
-                    return;
-                  }
-                  setAllocOpen(true);
-                }}
+                onClick={() => { void openAllocate(); }}
               >
                 Allocate {selectedAlloc.length} roll{selectedAlloc.length === 1 ? '' : 's'}
               </Button>
@@ -605,19 +630,19 @@ export default function MmWarehouseRackMovePage() {
                               }`}
                             />
                             <span
-                              className={
+                              className={`text-[10px] font-bold ${
                                 status.tone === 'rose'
                                   ? 'text-rose-600'
                                   : status.tone === 'blue'
                                     ? 'text-blue-600'
                                     : 'text-emerald-700'
-                              }
+                              }`}
                             >
                               {status.label}
                             </span>
                           </span>
                         </td>
-                        <td className={tdCls}>{millDateLabel(roll.received_at)}</td>
+                        <td className={tdCls}>{dateLabel(roll.received_at)}</td>
                       </tr>
                     );
                   })}
@@ -628,20 +653,14 @@ export default function MmWarehouseRackMovePage() {
         </section>
       </div>
       )}
-      <MmAllocateRollsModal
+      <MmAllocateV4Modal
         open={allocOpen}
-        rolls={selectedAlloc}
+        rollIds={allocRollIds}
         onClose={() => setAllocOpen(false)}
-        onDone={(overAllocated) => {
-          const count = selectedAlloc.length;
+        onDone={() => {
           setAllocOpen(false);
           setSelected({});
-          showNotification(
-            overAllocated
-              ? `Allocated ${count} rolls. This style fabric is now over required qty.`
-              : `Allocated ${count} rolls`,
-            'success',
-          );
+          setAllocRollIds([]);
           void invalidate();
         }}
       />

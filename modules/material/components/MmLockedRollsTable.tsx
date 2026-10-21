@@ -1,7 +1,11 @@
 import React from 'react';
 import type { MmTestField } from '../lib/mmRpc';
 import { lockedRollFieldText, withLengthField } from '../lib/mmRollDraft';
+import { MmRollProcessMark } from './MmProcessStatus';
+import { finishedText, rollColour, rollStageLabel } from '../lib/rollColour';
+import type { MmRollProcessStatus } from '../lib/mmV4Rpc';
 import { rollQcClass, rollQcLabel } from '../lib/mmStyleRollGroups';
+import { MmStatusDot } from './MmStatusDot';
 
 const thCls =
   'px-4 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 whitespace-nowrap text-center';
@@ -20,7 +24,6 @@ export type MmLockedRollRow = {
   is_remnant?: boolean;
   lot_no?: string | null;
   attributes?: Record<string, unknown> | null;
-  mill_snapshot?: Record<string, unknown> | null;
   source?: string | null;
   location_code?: string | null;
   location_name?: string | null;
@@ -28,6 +31,12 @@ export type MmLockedRollRow = {
   qc_result?: string | null;
   points_per_100_sqyd?: number | null;
   selectable?: boolean;
+  stage_label?: string | null;
+  stage_code?: string | null;
+  color?: string | null;
+  color_ref?: string | null;
+  finished?: import('../lib/mmV4Rpc').MmRollFinished | null;
+  process_status?: MmRollProcessStatus | null;
 };
 
 function rollStatusLabel(status: string | null | undefined): string {
@@ -58,6 +67,7 @@ interface MmLockedRollsTableProps {
   showQc?: boolean;
   showStatus?: boolean;
   showScore?: boolean;
+  showRollState?: boolean;
 }
 
 export function MmLockedRollsTable({
@@ -72,11 +82,12 @@ export function MmLockedRollsTable({
   showQc = false,
   showStatus = false,
   showScore = false,
+  showRollState = false,
 }: MmLockedRollsTableProps) {
   const cols = withLengthField(fields, uom);
   const selectableRolls = selectable ? rolls.filter((row) => row.selectable !== false) : [];
   const allOn = selectableRolls.length > 0 && selectableRolls.every((row) => selected[row.id]);
-  const colCount = (selectable ? 1 : 0) + 1 + cols.length + 2 + (showStatus ? 1 : 0) + (showScore ? 1 : 0) + (showQc ? 1 : 0);
+  const colCount = (selectable ? 1 : 0) + 1 + cols.length + 2 + (showStatus ? 1 : 0) + (showScore ? 1 : 0) + (showQc ? 1 : 0) + (showRollState ? 3 : 0);
 
   return (
     <div className="overflow-auto min-h-0 print:overflow-visible">
@@ -95,6 +106,9 @@ export function MmLockedRollsTable({
               </th>
             ) : null}
             <th className={thFirstCls}>Roll</th>
+            {showRollState ? <th className={thCls}>Stage</th> : null}
+            {showRollState ? <th className={thCls}>Colour</th> : null}
+            {showRollState ? <th className={thCls}>Finished</th> : null}
             {cols.map((field) => (
               <th key={field.id} className={thCls}>{field.label}</th>
             ))}
@@ -136,19 +150,40 @@ export function MmLockedRollsTable({
                       </span>
                     ) : null}
                   </td>
+                  {showRollState ? (
+                    <td className={tdCls}>
+                      <span className="inline-flex flex-wrap items-center justify-center gap-1">
+                        <span>{rollStageLabel(roll)}</span>
+                        <MmRollProcessMark status={roll.process_status} />
+                      </span>
+                    </td>
+                  ) : null}
+                  {showRollState ? <td className={tdCls}>{rollColour(roll)}</td> : null}
+                  {showRollState ? (
+                    <td className={tdCls}>
+                      {(() => {
+                        const mark = finishedText(roll.finished);
+                        return <span className={mark.className}>{mark.text}</span>;
+                      })()}
+                    </td>
+                  ) : null}
                   {cols.map((field) => (
                     <td key={field.id} className={`${tdCls} tabular-nums`}>
-                      {lockedRollFieldText(roll, field)}
+                      {lockedRollFieldText(roll, field, uom)}
                     </td>
                   ))}
                   <td className={tdCls}>{roll.location_code || roll.location_name || '—'}</td>
-                  {showStatus ? <td className={tdCls}>{rollStatusLabel(roll.status)}</td> : null}
+                  {showStatus ? (
+                    <td className={tdCls}>
+                      <MmStatusDot label={rollStatusLabel(roll.status)} />
+                    </td>
+                  ) : null}
                   {showScore ? (
                     <td className={`${tdCls} tabular-nums`}>
                       {roll.points_per_100_sqyd == null ? '—' : Number(roll.points_per_100_sqyd).toFixed(2)}
                     </td>
                   ) : null}
-                  <td className={tdCls}>{roll.source === 'vendor' ? 'Vendor' : roll.source === 'mill' ? 'Mill' : roll.source || '—'}</td>
+                  <td className={tdCls}>{roll.source === 'vendor' ? 'Vendor' : roll.source ? 'In-house' : '—'}</td>
                   {showQc ? (
                     <td className={tdCls}>
                       <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${rollQcClass(roll.qc_result)}`}>

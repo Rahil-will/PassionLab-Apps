@@ -28,13 +28,26 @@ import {
   getFabric,
   quickCreateFabric,
   saveFabric,
+  setFabricTolerance,
   saveFabricConstruction,
   saveFabricOpeningStock,
   type MmFabric,
-  type MmFabricUom,
   type MmFabricWithUsage,
 } from '../lib/mmFabricRpc';
 import { suggestFabricName } from '../lib/fabricLabels';
+import {
+  displayNumberToInches,
+  formatStoredWidth,
+  parseQtyUnit,
+  parseWidthUnit,
+  unitBase,
+  useMmUnits,
+  qtyToStored,
+  toDisplayWidth,
+  widthLabel,
+  type QtyUnit,
+  type WidthUnit,
+} from '../lib/units';
 import { RoutePath } from '../../../types';
 import { FabricSchemaForm } from './fabric-form/FabricSchemaForm';
 import {
@@ -64,13 +77,6 @@ type DupState =
   | { kind: 'near'; fabrics: MmFabric[] };
 
 const DESIGN_REF_METHODS = ['yarn_dyed', 'melange', 'print'];
-
-function defaultUomForType(typeName: string | undefined): MmFabricUom {
-  if (!typeName) return 'kg';
-  const lower = typeName.toLowerCase();
-  if (lower.includes('woven') || lower.includes('denim')) return 'm';
-  return 'kg';
-}
 
 function compositionText(values: FabricFormValues): string {
   const raw = (values.composition ?? '').trim();
@@ -104,6 +110,11 @@ export function FabricFormDrawer({
   const [stockDraft, setStockDraft] = useState<OpeningStockDraft>(emptyOpeningStockDraft);
   const hydrated = useRef<string | null>(null);
   const dirty = useRef(false);
+  useMmUnits();
+  const [qtyUnit, setQtyUnit] = useState<QtyUnit>('kg');
+  const [widthUnit, setWidthUnit] = useState<WidthUnit>('in');
+  const widthUnitRef = useRef<WidthUnit>('in');
+  widthUnitRef.current = widthUnit;
 
   const typeId = values.fabric_type?.trim() ? values.fabric_type : null;
   const { schema, loading: schemaLoading } = useFabricFormSchema(open);
@@ -113,15 +124,19 @@ export function FabricFormDrawer({
   const lockedMsg = locked
     ? `Used on ${loaded?.used_on_orders ?? 0} order(s) — spec cannot change`
     : '';
-  const selectedType = catalog.data?.fabricTypes.find((t) => t.id === typeId);
   const formFabricTypes = useMemo(() => {
     const types = catalog.data?.fabricTypes ?? [];
     const saved = loaded?.fabric_type;
     if (saved && !types.some((type) => type.id === saved.id)) {
-      return [...types, { id: saved.id, name: saved.name }];
+      return [...types, {
+        id: saved.id,
+        name: saved.name,
+        qty_units: [parseQtyUnit(loaded?.qty_unit ?? loaded?.uom)],
+        width_units: [parseWidthUnit(loaded?.width_unit)],
+      }];
     }
     return types;
-  }, [catalog.data?.fabricTypes, loaded?.fabric_type]);
+  }, [catalog.data?.fabricTypes, loaded?.fabric_type, loaded?.qty_unit, loaded?.uom, loaded?.width_unit]);
   const formConstructions = useMemo(() => {
     const rows = constructions.map((row) => ({ id: row.id, name: row.name }));
     const saved = loaded?.construction;
@@ -130,6 +145,22 @@ export function FabricFormDrawer({
     }
     return rows;
   }, [constructions, loaded?.construction]);
+
+  const pickedType = formFabricTypes.find((type) => type.id === typeId) ?? null;
+  const qtyOptions = pickedType?.qty_units?.length ? pickedType.qty_units : [];
+  const widthOptions = pickedType?.width_units?.length ? pickedType.width_units : [];
+
+  const applyWidthUnit = useCallback((nextUnit: WidthUnit) => {
+    setWidthUnit((prevUnit) => {
+      if (prevUnit === nextUnit) return prevUnit;
+      setValues((current) => {
+        const inches = displayNumberToInches(current.width_in, prevUnit);
+        const shown = toDisplayWidth(inches, nextUnit);
+        return { ...current, width_in: shown == null ? current.width_in : String(shown) };
+      });
+      return nextUnit;
+    });
+  }, []);
 
   const setField = useCallback((key: string, value: string) => {
     dirty.current = true;
@@ -145,6 +176,17 @@ export function FabricFormDrawer({
             if (!fieldAppliesToType(field, value || null)) delete next[field.key];
           }
         }
+        const nextType = (catalog.data?.fabricTypes ?? []).find((type) => type.id === value);
+        const nextQty = nextType?.qty_units[0] ?? 'kg';
+        const nextWidth = nextType?.width_units[0] ?? 'in';
+        setQtyUnit(nextQty);
+        const prevUnit = widthUnitRef.current;
+        if (prevUnit !== nextWidth) {
+          const inches = displayNumberToInches(next.width_in, prevUnit);
+          const shown = toDisplayWidth(inches, nextWidth);
+          next.width_in = shown == null ? (next.width_in ?? '') : String(shown);
+        }
+        setWidthUnit(nextWidth);
         return next;
       }
       return { ...prev, [key]: value };
@@ -155,7 +197,7 @@ export function FabricFormDrawer({
       delete next[key];
       return next;
     });
-  }, [mode, schema]);
+  }, [mode, schema, catalog.data?.fabricTypes]);
 
   useEffect(() => {
     if (!open) {
@@ -189,23 +231,27 @@ export function FabricFormDrawer({
     setDupState({ kind: 'none' });
     setNearConfirmed(false);
     setStockDraft(emptyOpeningStockDraft());
+    setQtyUnit('kg');
+    setWidthUnit('in');
     dirty.current = false;
     hydrated.current = 'new';
   }, [open, fabricId, mode, initialName, showNotification]);
 
   useEffect(() => {
     if (!open || !schema || mode !== 'edit' || !loaded || dirty.current) return;
-    const key = `${loaded.id}:${schema.schema_version}`;
+    const fabricWidth = parseWidthUnit(loaded.width_unit);
+    const fabricQty = parseQtyUnit(loaded.qty_unit ?? loaded.uom);
+    const key = `${loaded.id}:${schema.schema_version}:${fabricQty}:${fabricWidth}`;
     if (hydrated.current === key) return;
-    setValues(formValuesFromFabric(loaded, schema));
+    const next = formValuesFromFabric(loaded, schema);
+    const shown = toDisplayWidth(loaded.width_in, fabricWidth);
+    next.width_in = shown == null ? '' : String(shown);
+    delete next.uom;
+    setQtyUnit(fabricQty);
+    setWidthUnit(fabricWidth);
+    setValues(next);
     hydrated.current = key;
   }, [open, schema, mode, loaded]);
-
-  useEffect(() => {
-    if (!open || mode === 'edit' || !selectedType?.id) return;
-    const name = selectedType.name;
-    setValues((prev) => ({ ...prev, uom: defaultUomForType(name) }));
-  }, [open, mode, selectedType?.id, selectedType?.name]);
 
   const lookupDuplicate = useCallback(async (): Promise<DupState> => {
     const fabricTypeId = values.fabric_type;
@@ -219,9 +265,10 @@ export function FabricFormDrawer({
       construction_id: constructionId,
       composition: compo,
       gsm: values.gsm ? Number(values.gsm) : undefined,
-      width_in: values.width_in ? Number(values.width_in) : undefined,
+      width_in: displayNumberToInches(values.width_in, widthUnit) ?? undefined,
       width_form: values.width_form,
-      uom: values.uom,
+      qty_unit: qtyUnit,
+      width_unit: widthUnit,
       color_method: colorMethod as MmFabric['color_method'],
       design_ref: DESIGN_REF_METHODS.includes(colorMethod) ? values.design_ref || null : null,
     });
@@ -229,7 +276,7 @@ export function FabricFormDrawer({
     if (res.data.exact) return { kind: 'exact', fabric: res.data.exact };
     if (res.data.near.length > 0) return { kind: 'near', fabrics: res.data.near };
     return { kind: 'none' };
-  }, [values, loaded?.id]);
+  }, [values, loaded?.id, widthUnit, qtyUnit]);
 
   useEffect(() => {
     if (!open) return;
@@ -261,9 +308,10 @@ export function FabricFormDrawer({
       gsm: values.gsm ? Number(values.gsm) : undefined,
       widthIn: values.width_in ? Number(values.width_in) : undefined,
       widthForm: values.width_form,
+      widthUnit,
     });
     setValues((prev) => (prev.name === autoName ? prev : { ...prev, name: autoName }));
-  }, [open, values.construction, values.composition, values.gsm, values.width_in, values.width_form, constructions]);
+  }, [open, values.construction, values.composition, values.gsm, values.width_in, values.width_form, widthUnit, constructions]);
 
   function handleSuggestName() {
     const constr = constructions.find((c) => c.id === values.construction);
@@ -273,6 +321,7 @@ export function FabricFormDrawer({
       gsm: values.gsm ? Number(values.gsm) : undefined,
       widthIn: values.width_in ? Number(values.width_in) : undefined,
       widthForm: values.width_form,
+      widthUnit,
     });
     if (suggested) setField('name', suggested);
   }
@@ -280,7 +329,7 @@ export function FabricFormDrawer({
   async function handleSave() {
     if (readOnly || !schema) return;
     const constr = constructions.find((c) => c.id === values.construction);
-    const named = {
+    const named: FabricFormValues = {
       ...values,
       name: suggestFabricName({
         constructionName: constr?.name,
@@ -288,6 +337,7 @@ export function FabricFormDrawer({
         gsm: values.gsm ? Number(values.gsm) : undefined,
         widthIn: values.width_in ? Number(values.width_in) : undefined,
         widthForm: values.width_form,
+        widthUnit,
       }) || values.name,
     };
     const nextErrors = clientValidate(named, schema);
@@ -314,11 +364,18 @@ export function FabricFormDrawer({
       return;
     }
     setDupState(checked.kind === 'near' ? checked : { kind: 'none' });
-    const row = fabricPayloadFromValues(named, schema, {
+    const inches = displayNumberToInches(named.width_in, widthUnit);
+    const row = fabricPayloadFromValues({
+      ...named,
+      width_in: inches == null ? '' : String(inches),
+    }, schema, {
       id: mode === 'edit' ? loaded?.id : undefined,
       row_version: mode === 'edit' ? loaded?.row_version : undefined,
       legacySpec,
     });
+    delete row.uom;
+    row.qty_unit = qtyUnit;
+    row.width_unit = widthUnit;
     const res = mode === 'quick' ? await quickCreateFabric(row) : await saveFabric(row);
     if (res.ok === false) {
       setSaving(false);
@@ -348,7 +405,7 @@ export function FabricFormDrawer({
     if (mode !== 'edit' && stock.empty === false) {
       const stockRes = await saveFabricOpeningStock(
         res.data.id,
-        stock.qty,
+        qtyToStored(stock.qty, qtyUnit) ?? stock.qty,
         stock.count,
         stock.unitForm,
       );
@@ -420,7 +477,7 @@ export function FabricFormDrawer({
                     Exact duplicate found: {dupState.fabric.code} — {dupState.fabric.name}
                   </p>
                   <p className="text-[10px] text-red-600 mt-0.5">
-                    {dupState.fabric.composition_text} · {dupState.fabric.gsm} GSM · {dupState.fabric.width_in}"
+                    {dupState.fabric.composition_text} · {dupState.fabric.gsm} GSM · {formatStoredWidth(dupState.fabric.width_in, parseWidthUnit(dupState.fabric.width_unit ?? widthUnit))}
                   </p>
                   <button
                     type="button"
@@ -436,7 +493,7 @@ export function FabricFormDrawer({
                   <p className="text-xs font-semibold text-amber-700">Similar fabrics exist — confirm this is a new quality:</p>
                   {dupState.fabrics.map((f) => (
                     <p key={f.id} className="text-[10px] text-amber-700 pl-2">
-                      {f.code} · {f.name} · {f.composition_text} · {f.gsm} GSM · {f.width_in}"
+                      {f.code} · {f.name} · {f.composition_text} · {f.gsm} GSM · {formatStoredWidth(f.width_in, parseWidthUnit(f.width_unit ?? widthUnit))}
                     </p>
                   ))}
                   {!nearConfirmed ? (
@@ -470,13 +527,23 @@ export function FabricFormDrawer({
                 onAddConstruction={mode === 'edit' ? handleAddConstruction : undefined}
                 pairCodeAndName={mode !== 'edit'}
                 allowAddConstruction={mode === 'edit'}
+                widthUnitText={typeId ? widthLabel(widthUnit) : undefined}
+                unitPick={typeId ? {
+                  qtyOptions: qtyOptions.length > 0 ? qtyOptions : [qtyUnit],
+                  widthOptions: widthOptions.length > 0 ? widthOptions : [widthUnit],
+                  qtyUnit,
+                  widthUnit,
+                  onQty: setQtyUnit,
+                  onWidth: applyWidthUnit,
+                } : null}
                 afterReference={(
                   <>
                     {mode === 'edit' && loaded ? <FabricWarehouseStockCard fabric={loaded} /> : null}
                     {mode !== 'edit' && !isReadOnly && canOpenStock ? (
                       <FabricOpeningStockPanel
                         draft={stockDraft}
-                        uom={values.uom === 'm' ? 'm' : 'kg'}
+                        uom={unitBase(qtyUnit) === 'kg' ? 'kg' : 'm'}
+                        qtyUnit={qtyUnit}
                         onDraftChange={setStockDraft}
                       />
                     ) : null}
@@ -486,6 +553,10 @@ export function FabricFormDrawer({
                   </>
                 )}
               />
+
+              {mode === 'edit' && loaded ? (
+                <FabricToleranceFields fabricId={loaded.id} gsmTol={loaded.gsm_tol_pct} widthTol={loaded.width_tol_pct} />
+              ) : null}
 
               {mode === 'edit' && loaded && loaded.usage && loaded.usage.length > 0 && (
                 <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
@@ -541,5 +612,65 @@ export function FabricFormDrawer({
         )}
       </div>
     </>
+  );
+}
+
+function FabricToleranceFields({
+  fabricId,
+  gsmTol,
+  widthTol,
+}: {
+  fabricId: string;
+  gsmTol?: number | null;
+  widthTol?: number | null;
+}) {
+  const { showNotification } = useNotificationStore();
+  const [gsm, setGsm] = useState(gsmTol == null ? '2.5' : String(gsmTol));
+  const [width, setWidth] = useState(widthTol == null ? '2.5' : String(widthTol));
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setGsm(gsmTol == null ? '2.5' : String(gsmTol));
+    setWidth(widthTol == null ? '2.5' : String(widthTol));
+  }, [fabricId, gsmTol, widthTol]);
+
+  const save = async () => {
+    const gsmPct = Number(gsm);
+    const widthPct = Number(width);
+    if (!Number.isFinite(gsmPct) || !Number.isFinite(widthPct) || gsmPct < 0 || gsmPct > 50 || widthPct < 0 || widthPct > 50) {
+      showNotification('Tolerance is 0 to 50%', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await setFabricTolerance(fabricId, gsmPct, widthPct);
+      if (res.ok === false) throw new Error(res.message);
+      showNotification('Tolerance saved', 'success');
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : 'Tolerance save failed', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col gap-3">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tolerance</p>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-600 mb-1">GSM tolerance %</span>
+          <input value={gsm} onChange={(event) => setGsm(event.target.value)} className="w-full h-8 rounded-lg border border-slate-200 px-2 text-[12px]" />
+        </label>
+        <label className="block">
+          <span className="block text-[10px] font-semibold text-slate-600 mb-1">Width tolerance %</span>
+          <input value={width} onChange={(event) => setWidth(event.target.value)} className="w-full h-8 rounded-lg border border-slate-200 px-2 text-[12px]" />
+        </label>
+      </div>
+      <div>
+        <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void save()}>
+          {busy ? 'Saving…' : 'Save tolerance'}
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSchemaPatch,
   clientValidate,
+  compositionFromInput,
   fabricPayloadFromValues,
   fieldAppliesToType,
   fieldKeyForServerMessage,
@@ -20,8 +21,6 @@ function field(partial: Partial<MmFabricFormField> & Pick<MmFabricFormField, 'ke
     placeholder: null,
     options: [],
     required: false,
-    required_when: null,
-    visible_when: null,
     col_span: 1,
     seq: 1,
     storage: 'column',
@@ -68,16 +67,13 @@ const designRef = field({
   label: 'Design / colour ref',
   input_type: 'text',
   column_name: 'design_ref',
-  visible_when: { color_method: ['yarn_dyed', 'melange', 'print'] },
-  required_when: { color_method: ['yarn_dyed', 'melange', 'print'] },
 });
 
 describe('fabric form schema helpers', () => {
-  it('hides design ref until colour method needs it, then requires it', () => {
-    expect(isFieldVisible(designRef, { color_method: 'solid_dyed' })).toBe(false);
+  it('shows a visible field, and requires it only when required is set', () => {
+    expect(isFieldVisible(designRef, { color_method: 'solid_dyed' })).toBe(true);
     expect(isFieldRequired(designRef, { color_method: 'solid_dyed' })).toBe(false);
-    expect(isFieldVisible(designRef, { color_method: 'yarn_dyed' })).toBe(true);
-    expect(isFieldRequired(designRef, { color_method: 'yarn_dyed' })).toBe(true);
+    expect(isFieldRequired(field({ ...designRef, required: true }), { color_method: 'yarn_dyed' })).toBe(true);
     expect(isFieldVisible(field({ ...designRef, visible: false }), { color_method: 'yarn_dyed' })).toBe(false);
   });
 
@@ -150,6 +146,14 @@ describe('fabric form schema helpers', () => {
     expect(errors.finish).toBe('Finish is not a valid option');
     expect(fieldKeyForServerMessage('Finish is required', s)).toBe('finish');
     expect(fieldKeyForServerMessage('Row version mismatch', s)).toBeNull();
+  });
+
+  it('reads each percent in a composition, including a dash between fibres', () => {
+    expect(compositionFromInput('80% Cotton - 20% Polyester')).toEqual([
+      { fiber: 'Cotton', pct: 80 },
+      { fiber: 'Polyester', pct: 20 },
+    ]);
+    expect(compositionFromInput('80% Cotton')).toEqual([{ fiber: 'Cotton', pct: 80 }]);
   });
 
   it('renames a core field and ignores required and input type', () => {

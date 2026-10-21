@@ -10,7 +10,6 @@ import {
   mmQcSaveTest,
   type MmV4QcResult,
   type MmV4QcScopeKind,
-  type MmV4QcSiteSide,
 } from '../lib/mmV4Rpc';
 import { useMmV4Config } from '../lib/useMmV4Config';
 
@@ -26,7 +25,6 @@ export function MmQcTestModalV4({
   scopeKind,
   scopeId,
   rollIds,
-  defaultSiteSide,
   onClose,
   onSaved,
 }: {
@@ -34,7 +32,6 @@ export function MmQcTestModalV4({
   scopeKind: MmV4QcScopeKind;
   scopeId?: string | null;
   rollIds?: string[];
-  defaultSiteSide: MmV4QcSiteSide;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -42,7 +39,6 @@ export function MmQcTestModalV4({
   const { showNotification } = useNotificationStore();
   const { data: v4 } = useMmV4Config(open);
 
-  const [siteSide, setSiteSide] = useState<MmV4QcSiteSide>(defaultSiteSide);
   const [siteFacilityId, setSiteFacilityId] = useState('');
   const [testedAt, setTestedAt] = useState(todayIso());
   const [result, setResult] = useState<MmV4QcResult>('pass');
@@ -68,29 +64,21 @@ export function MmQcTestModalV4({
 
   useEffect(() => {
     if (!open) return;
-    setSiteSide(defaultSiteSide);
     setSiteFacilityId('');
     setTestedAt(todayIso());
     setResult('pass');
     setRemarks('');
     setValues({});
     setBusy(false);
-  }, [open, defaultSiteSide]);
+  }, [open]);
 
   const fields = scopeQ.data?.fields ?? [];
-  const lotFields = fields.filter((f) => String(f.test_level) === 'lot');
-  const rollFields = fields.filter((f) => String(f.test_level) !== 'lot');
-  const ordered = [...lotFields, ...rollFields];
 
-  const facilities = (v4?.facilities ?? []).filter((f) => {
-    if (siteSide === 'mill') return f.kind === 'mill';
-    if (siteSide === 'processing') return f.kind === 'process_unit';
-    return f.kind === 'warehouse';
-  });
+  const facilities = (v4?.facilities ?? []).filter((f) => f.kind === 'warehouse');
 
   const save = async () => {
     const fieldValues: Record<string, unknown> = {};
-    for (const field of ordered) {
+    for (const field of fields) {
       const raw = values[field.key] ?? '';
       if (raw.trim() === '') continue;
       if (field.data_type === 'number') {
@@ -104,19 +92,13 @@ export function MmQcTestModalV4({
         fieldValues[field.key] = raw;
       }
     }
-    for (const field of ordered) {
-      if (field.required && (fieldValues[field.key] === undefined || fieldValues[field.key] === '')) {
-        showNotification(`${field.label} is required`, 'error');
-        return;
-      }
-    }
     setBusy(true);
     try {
       const res = await mmQcSaveTest({
         scope_kind: scopeKind,
         scope_id: scopeId ?? null,
         roll_ids: rollIds,
-        site_side: siteSide,
+        site_side: 'warehouse',
         site_facility_id: siteFacilityId || null,
         tested_at: testedAt || null,
         field_values: fieldValues,
@@ -157,17 +139,7 @@ export function MmQcTestModalV4({
             </p>
           ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <SelectDropdown
-              label="Tested at"
-              value={siteSide}
-              onChange={(v) => setSiteSide(v as MmV4QcSiteSide)}
-              options={[
-                { value: 'mill', label: 'Mill' },
-                { value: 'processing', label: 'Processing' },
-                { value: 'warehouse', label: 'Warehouse' },
-              ]}
-            />
-            <SelectDropdown
+            <SelectDropdown size="compact"
               label="Site"
               value={siteFacilityId}
               onChange={setSiteFacilityId}
@@ -177,7 +149,7 @@ export function MmQcTestModalV4({
               ]}
             />
             <LabeledDatePicker label="Test date" value={testedAt} onChange={setTestedAt} />
-            <SelectDropdown
+            <SelectDropdown size="compact"
               label="Result"
               value={result}
               onChange={(v) => setResult(v as MmV4QcResult)}
@@ -188,10 +160,10 @@ export function MmQcTestModalV4({
               ]}
             />
           </div>
-          {ordered.map((field) => (
+          {fields.map((field) => (
             <Input
               key={field.id}
-              label={`${field.label}${field.required ? ' *' : ''}${String(field.test_level) === 'lot' ? ' (lot)' : ''}`}
+              label={field.label}
               value={values[field.key] ?? ''}
               onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
             />

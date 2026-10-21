@@ -8,13 +8,17 @@ import {
   serializeTsv,
   type SheetRange,
 } from '../lib/mmSheetGrid';
+import { parseCheckboxPaste } from '../lib/qcTolerance';
+import { MmStatusDot } from './MmStatusDot';
 
 export type SheetColumn = {
   key: string;
   label: string;
   editable?: boolean;
-  kind?: 'text' | 'select';
+  kind?: 'text' | 'select' | 'check' | 'date' | 'number' | 'status';
   options?: { value: string; label: string }[];
+  /** Muted line under the header, such as a resolved tolerance. */
+  hint?: string;
   headerClassName?: string;
   cellClassName?: string;
   width?: string;
@@ -31,6 +35,8 @@ type Props = {
   /** Stretch columns to the parent. Default keeps a minimum width so dense grids can scroll. */
   fit?: boolean;
   rowClassName?: (row: number) => string | undefined;
+  /** Per-cell fill, used when a test value is past its tolerance. */
+  cellTone?: (row: number, key: string) => string | undefined;
 };
 
 const thBase =
@@ -58,6 +64,7 @@ export function MmSheetGrid({
   rowAction,
   fit = false,
   rowClassName,
+  cellTone,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState({ row: 0, col: 0 });
@@ -92,8 +99,8 @@ export function MmSheetGrid({
     if (!column?.editable || isRowLocked?.(row)) return;
     setAnchor({ row, col });
     setFocus({ row, col });
-    if (column.kind === 'select') {
-      if (seed != null) onChange(row, column.key, seed);
+    if (column.kind === 'select' || column.kind === 'check' || column.kind === 'date') {
+      if (seed != null && column.kind === 'select') onChange(row, column.key, seed);
       return;
     }
     setEditBuf(seed ?? getValue(row, column.key));
@@ -143,7 +150,14 @@ export function MmSheetGrid({
     try {
       const text = await navigator.clipboard.readText();
       const values = parseTsv(text);
-      writeBlock(applyPaste(values, focus, rowCount, columns.length));
+      const writes = applyPaste(values, focus, rowCount, columns.length).flatMap((item) => {
+        const column = columns[item.col];
+        if (column?.kind !== 'check') return [item];
+        const parsed = parseCheckboxPaste(item.value);
+        if (parsed == null) return [];
+        return [{ ...item, value: parsed ? 'true' : 'false' }];
+      });
+      writeBlock(writes);
     } catch {
       /* ignore */
     }
@@ -190,6 +204,14 @@ export function MmSheetGrid({
         e.preventDefault();
         void pasteAtFocus();
       }
+      return;
+    }
+    if (e.key === ' ' && columns[focus.col]?.kind === 'check') {
+      e.preventDefault();
+      const column = columns[focus.col];
+      if (!column?.editable || isRowLocked?.(focus.row)) return;
+      const current = getValue(focus.row, column.key);
+      onChange(focus.row, column.key, current === 'true' ? 'false' : 'true');
       return;
     }
     if (e.key === 'F2' || e.key === 'Enter') {
@@ -242,7 +264,10 @@ export function MmSheetGrid({
           <tr>
             {columns.map((column) => (
               <th key={column.key} className={`${thBase} ${column.headerClassName ?? ''}`} style={{ width: column.width }}>
-                {column.label}
+                <span className="block">{column.label}</span>
+                {column.hint ? (
+                  <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">{column.hint}</span>
+                ) : null}
               </th>
             ))}
             {rowAction ? <th className={`${thBase} w-10`} /> : null}
@@ -264,14 +289,18 @@ export function MmSheetGrid({
                     const selected = inRange(shownRange, row, col);
                     const locked = Boolean(isRowLocked?.(row));
                     const value = getValue(row, column.key);
+                    const isStatus = column.kind === 'status';
                     const isSelect = column.kind === 'select';
-                    const isEdit = editing && active && column.editable && !locked && !isSelect;
+                    const isCheck = column.kind === 'check';
+                    const isDate = column.kind === 'date';
+                    const isEdit = editing && active && column.editable && !locked && !isSelect && !isCheck && !isDate;
                     const tone = rowClassName?.(row);
+                    const alert = cellTone?.(row, column.key);
                     return (
                       <td
                         key={column.key}
-                        className={`${tdBase} ${tone ? '' : (column.cellClassName ?? '')} ${
-                          selected ? 'bg-blue-50' : tone || 'bg-white'
+                        className={`${tdBase} ${alert ? '' : tone ? '' : (column.cellClassName ?? '')} ${
+                          alert ? 'bg-tolerance-out' : selected ? 'bg-blue-50' : tone || 'bg-white'
                         } ${active ? 'ring-2 ring-inset ring-blue-500 z-[1]' : ''}`}
                         onMouseDown={(e) => {
                           if (e.button !== 0) return;
@@ -296,10 +325,33 @@ export function MmSheetGrid({
                           if (dragging.current === 'fill') setFillTo({ row, col });
                         }}
                         onDoubleClick={() => {
-                          if (!isSelect) startEdit(row, col);
+                          if (!isSelect && !isCheck && !isDate) startEdit(row, col);
                         }}
                       >
-                        {isSelect ? (
+                        {isDate ? (
+                          <input
+                            type="date"
+                            className="w-full h-8 px-1 text-[11px] text-center bg-transparent outline-none"
+                            value={value}
+                            disabled={locked || !column.editable}
+                            aria-label={column.label}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onChange={(e) => onChange(row, column.key, e.target.value)}
+                          />
+                        ) : isCheck ? (
+                          <label
+                            className="flex h-8 items-center justify-center"
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={value === 'true'}
+                              disabled={locked || !column.editable}
+                              aria-label={column.label}
+                              onChange={(e) => onChange(row, column.key, e.target.checked ? 'true' : 'false')}
+                            />
+                          </label>
+                        ) : isSelect ? (
                           <div
                             className="h-8"
                             onMouseDown={(e) => {
@@ -322,9 +374,15 @@ export function MmSheetGrid({
                               className="w-full h-8"
                             />
                           </div>
+                        ) : isStatus ? (
+                          <span className="flex h-8 items-center justify-center px-1">
+                            <MmStatusDot label={value || '—'} />
+                          </span>
                         ) : isEdit ? (
                           <input
                             autoFocus
+                            type={column.kind === 'number' ? 'number' : 'text'}
+                            step={column.kind === 'number' ? '0.01' : undefined}
                             className="w-full h-8 px-1.5 text-[11px] text-center bg-white outline-none"
                             value={editBuf}
                             onChange={(e) => setEditBuf(e.target.value)}

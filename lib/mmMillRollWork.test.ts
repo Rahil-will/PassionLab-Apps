@@ -1,36 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
-  millRollWorkStatus,
-  millRollWorkStatusLabel,
-  millFieldSeedText,
+  rollWorkStatus,
+  rollWorkStatusLabel,
+  fieldSeedText,
   seedWarehouseFieldValues,
-  growMillBatchRolls,
-  sortMillAssignDrafts,
+  growReceiptRolls,
+  sortAssignDrafts,
   type MmDraftRoll,
 } from '../modules/material/lib/mmRollDraft';
 
-describe('millRollWorkStatus', () => {
-  it('marks unsaved extra rolls as new / not yet sent', () => {
-    expect(millRollWorkStatus({})).toBe('new');
-    expect(millRollWorkStatusLabel('new')).toBe('New');
+describe('rollWorkStatus', () => {
+  it('marks unsaved extra rolls as new', () => {
+    expect(rollWorkStatus({})).toBe('new');
+    expect(rollWorkStatusLabel('new')).toBe('New');
   });
 
-  it('marks mill drafts as not sent', () => {
-    expect(millRollWorkStatus({ id: 'r1', at_mill: true })).toBe('not_sent');
-    expect(millRollWorkStatusLabel('not_sent')).toBe('Not sent');
+  it('marks a draft without a challan as not sent', () => {
+    expect(rollWorkStatus({ id: 'r1', status: 'draft' })).toBe('not_sent');
+    expect(rollWorkStatusLabel('not_sent')).toBe('Not sent');
   });
 
   it('marks dispatched rolls as sent until the warehouse receives them', () => {
-    expect(millRollWorkStatus({
+    expect(rollWorkStatus({
       id: 'r1',
-      at_mill: false,
       in_challan_id: 'c1',
       challan_status: 'pending',
       status: 'in_transit',
     })).toBe('sent');
-    expect(millRollWorkStatus({
+    expect(rollWorkStatus({
       id: 'r1',
-      at_mill: false,
       in_challan_id: 'c1',
       challan_status: 'received',
       status: 'pending_qc',
@@ -38,7 +36,7 @@ describe('millRollWorkStatus', () => {
   });
 });
 
-describe('growMillBatchRolls', () => {
+describe('growReceiptRolls', () => {
   const fields = [{ id: 'q', key: 'length_m', label: 'Qty', data_type: 'decimal', options: null }];
 
   function row(partial: Partial<MmDraftRoll>): MmDraftRoll {
@@ -56,26 +54,26 @@ describe('growMillBatchRolls', () => {
 
   it('keeps sent rolls at the bottom and inserts extra rolls as new', () => {
     const rows = [
-      row({ localId: 'sent', id: 'sent', locked: true, millWorkStatus: 'sent', roll_no: '1' }),
-      row({ localId: 'open', id: 'open', locked: false, millWorkStatus: 'not_sent', roll_no: '2' }),
+      row({ localId: 'sent', id: 'sent', locked: true, rollWorkStatus: 'sent', roll_no: '1' }),
+      row({ localId: 'open', id: 'open', locked: false, rollWorkStatus: 'not_sent', roll_no: '2' }),
     ];
-    const next = growMillBatchRolls(rows, 3, fields);
-    expect(next.map((item) => item.millWorkStatus)).toEqual(['not_sent', 'new', 'sent']);
+    const next = growReceiptRolls(rows, 3, fields);
+    expect(next.map((item) => item.rollWorkStatus)).toEqual(['not_sent', 'new', 'sent']);
     expect(next.at(-1)?.locked).toBe(true);
   });
 
   it('does not drop locked sent rolls when shrinking', () => {
     const rows = [
-      row({ localId: 'open', id: 'open', locked: false, millWorkStatus: 'not_sent', roll_no: '2' }),
-      row({ localId: 'sent', id: 'sent', locked: true, millWorkStatus: 'sent', roll_no: '1' }),
+      row({ localId: 'open', id: 'open', locked: false, rollWorkStatus: 'not_sent', roll_no: '2' }),
+      row({ localId: 'sent', id: 'sent', locked: true, rollWorkStatus: 'sent', roll_no: '1' }),
     ];
-    const next = growMillBatchRolls(rows, 1, fields);
+    const next = growReceiptRolls(rows, 1, fields);
     expect(next).toHaveLength(1);
     expect(next[0].id).toBe('sent');
   });
 
   it('sorts assign drafts with not-sent first', () => {
-    const sorted = sortMillAssignDrafts([
+    const sorted = sortAssignDrafts([
       row({ localId: 'sent', locked: true }),
       row({ localId: 'open', locked: false }),
     ]);
@@ -90,7 +88,7 @@ describe('seedWarehouseFieldValues', () => {
   it('fills catalog cells from mill declared attributes', () => {
     expect(
       seedWarehouseFieldValues(
-        { length_m: 42, mill_snapshot: { attributes: { gsm: '160' } } },
+        { length_m: 42, attributes: { gsm: '160' } },
         {},
         [gsm, width],
       ),
@@ -100,7 +98,7 @@ describe('seedWarehouseFieldValues', () => {
   it('keeps a warehouse value that was already recorded', () => {
     expect(
       seedWarehouseFieldValues(
-        { length_m: 42, mill_snapshot: { attributes: { gsm: '160' } } },
+        { length_m: 42, attributes: { gsm: '160' } },
         { gsm: '158' },
         [gsm, width],
       ),
@@ -108,6 +106,6 @@ describe('seedWarehouseFieldValues', () => {
   });
 
   it('does not seed an em dash into the warehouse cell', () => {
-    expect(millFieldSeedText({ length_m: 1, attributes: {} }, gsm)).toBe('');
+    expect(fieldSeedText({ length_m: 1, attributes: {} }, gsm)).toBe('');
   });
 });

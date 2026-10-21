@@ -2,7 +2,7 @@ import type { ModuleManifest } from '../../core/modules/types';
 
 /**
  * Material module manifest.
- * Setup: #/material-management. Ops: #/material/mill and #/material/warehouse/*.
+ * Setup: #/material-management. Ops: #/material/warehouse/*.
  */
 export const materialManifest: ModuleManifest = {
   key: 'material',
@@ -16,12 +16,6 @@ export const materialManifest: ModuleManifest = {
     'mm_reports',
   ] as const,
   routes: [
-    {
-      path: '#/material/mill',
-      permission: 'mm_roll_entry',
-      feature: 'fabric_mill',
-      component: () => import('./pages/MmMillRouter'),
-    },
     {
       path: '#/material/process',
       permission: 'mm_inventory',

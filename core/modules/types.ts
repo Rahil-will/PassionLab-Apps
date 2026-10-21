@@ -18,7 +18,7 @@ export interface ModuleNavSection {
 }
 
 /** Sub-switch that must be on for a Material route to show. `fabric` = warehouse or mill. */
-export type MmRouteFeature = 'fabric_warehouse' | 'fabric_mill' | 'trims' | 'fabric';
+export type MmRouteFeature = 'fabric_warehouse' | 'trims' | 'fabric';
 
 export interface ModuleRouteDef {
   path: string;

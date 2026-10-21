@@ -126,6 +126,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     isUnsaved,
     setUnsaved,
     pendingSaveAction,
+    unsavedPrompt,
     userProfile,
     initRouteFromHash,
   } = useNavigationStore();
@@ -312,7 +313,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
           )}
 
-          {(showNav(RoutePath.MATERIAL_FABRICS) || showNav(RoutePath.MATERIAL_WAREHOUSE) || showNav(RoutePath.MATERIAL_MILL)) && Boolean(accessCtx.modulesEnabled?.material) && (
+          {(showNav(RoutePath.MATERIAL_FABRICS) || showNav(RoutePath.MATERIAL_WAREHOUSE)) && Boolean(accessCtx.modulesEnabled?.material) && (
           <div>
             <p className={`px-2.5 font-bold text-blue-400 uppercase tracking-wider mb-1.5 text-[8px] ${collapsed ? 'hidden' : ''}`}>Material</p>
             {showNav(RoutePath.MATERIAL_FABRICS) && (
@@ -336,18 +337,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               isOpen={false}
               onToggle={() => {}}
               onClick={() => handleNavRequest(RoutePath.MATERIAL_WAREHOUSE)}
-              onNavRequest={handleNavRequest}
-            />
-            )}
-            {showNav(RoutePath.MATERIAL_MILL) && (
-            <SidebarItem collapsed={collapsed}
-              id="fabric-mill"
-              icon={Scissors}
-              label="Fabric Mill"
-              active={currentRoute === RoutePath.MATERIAL_MILL || currentRoute.startsWith('#/material/mill')}
-              isOpen={false}
-              onToggle={() => {}}
-              onClick={() => handleNavRequest(RoutePath.MATERIAL_MILL)}
               onNavRequest={handleNavRequest}
             />
             )}
@@ -444,10 +433,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               id="material-management"
               icon={Package}
               label="Material Management"
-              active={
-                currentRoute === RoutePath.MATERIAL_MANAGEMENT ||
-                currentRoute === RoutePath.WORK_CENTER_MATERIAL
-              }
+              active={currentRoute === RoutePath.MATERIAL_MANAGEMENT}
               isOpen={false}
               onToggle={() => {}}
               onClick={() => handleNavRequest(RoutePath.MATERIAL_MANAGEMENT)}
@@ -542,7 +528,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         onClose={cancelNav}
         onSave={confirmSaveAndLeave}
         onDiscard={confirmDiscard}
-        discardLabel="Discard & Continue"
+        title={unsavedPrompt?.title}
+        body={unsavedPrompt?.body}
+        confirmLabel={unsavedPrompt?.confirmLabel}
+        cancelLabel={unsavedPrompt?.cancelLabel}
+        discardLabel={unsavedPrompt?.discardLabel ?? 'Discard & Continue'}
+        hideSave={unsavedPrompt?.hideSave}
       />
 
       <Modal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}>

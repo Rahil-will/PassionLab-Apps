@@ -8,7 +8,12 @@ interface UnsavedChangesModalProps {
   onClose: () => void;
   onSave: () => void | Promise<void>;
   onDiscard: () => void;
+  title?: string;
+  body?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
   discardLabel?: string;
+  hideSave?: boolean;
   saving?: boolean;
 }
 
@@ -18,7 +23,12 @@ export const UnsavedChangesModal: React.FC<UnsavedChangesModalProps> = ({
   onClose,
   onSave,
   onDiscard,
+  title = 'Unsaved Changes',
+  body = 'You have unsaved modifications. What would you like to do?',
+  confirmLabel = 'Save Changes',
+  cancelLabel,
   discardLabel = 'Discard & Continue',
+  hideSave = false,
   saving = false,
 }) => (
   <Modal isOpen={isOpen} onClose={onClose}>
@@ -34,22 +44,29 @@ export const UnsavedChangesModal: React.FC<UnsavedChangesModalProps> = ({
         <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm ring-4 ring-amber-50">
           <AlertTriangle size={32} />
         </div>
-        <h3 className="text-base font-bold text-slate-900 mb-2">Unsaved Changes</h3>
+        <h3 className="text-base font-bold text-slate-900 mb-2">{title}</h3>
         <p className="text-slate-500 text-xs max-w-[260px] leading-relaxed">
-          You have unsaved modifications. What would you like to do?
+          {body}
         </p>
       </div>
 
       <div className="p-6 pt-2 flex flex-col gap-3">
-        <DesktopWriteGate>
-          <Button
-            onClick={() => void onSave()}
-            disabled={saving}
-            className="w-full shadow-lg shadow-blue-100 py-2.5 text-xs"
-          >
-            Save Changes
+        {hideSave ? null : (
+          <DesktopWriteGate>
+            <Button
+              onClick={() => void onSave()}
+              disabled={saving}
+              className="w-full shadow-lg shadow-blue-100 py-2.5 text-xs"
+            >
+              {confirmLabel}
+            </Button>
+          </DesktopWriteGate>
+        )}
+        {cancelLabel ? (
+          <Button onClick={onClose} disabled={saving} className="w-full py-2.5 text-xs">
+            {cancelLabel}
           </Button>
-        </DesktopWriteGate>
+        ) : null}
         <Button variant="danger-light" onClick={onDiscard} disabled={saving} className="w-full text-xs">
           {discardLabel}
         </Button>

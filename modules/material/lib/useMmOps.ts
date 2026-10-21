@@ -3,9 +3,7 @@ import { queryKeys } from '../../../lib/queryKeys';
 import { useNavigationStore } from '../../../stores/navigationStore';
 import {
   mmGetInChallanRolls,
-  mmGetMillBoard,
   mmGetWarehouseBoard,
-  mmGetMillLine,
   mmGetOrderFabricLines,
   mmGetRackOpsBoard,
   mmGetStyleWarehouse,
@@ -19,15 +17,10 @@ import {
   mmListStoreStock,
   mmListWarehouseStock,
   mmListStockMovements,
-  mmGetExpectedBoard,
-  mmGetUnallocatedMill,
-  mmListMillStock,
   mmGetFptSummary,
   type MmInChallanDetail,
   type MmInChallanHeader,
-  type MmMillBoardOrder,
   type MmWarehouseBoardOrder,
-  type MmMillLine,
   type MmOrderColorway,
   type MmRackMaster,
   type MmReconciliationLine,
@@ -40,9 +33,6 @@ import {
   type MmWarehouseDispatchBoard,
   type MmWarehouseStockList,
   type MmStockMovementList,
-  type MmExpectedBoard,
-  type MmUnallocatedMill,
-  type MmMillStockList,
 } from './mmRpc';
 
 function unwrap<T>(res: { ok: true; data: T } | { ok: false; message: string }): T {
@@ -88,7 +78,7 @@ export function useMmWarehouseDashboard(enabled = true) {
   });
 }
 
-export function useMmInChallans(source: 'mill' | 'vendor', status = '') {
+export function useMmInChallans(source: 'inhouse' | 'vendor', status = '') {
   const factoryId = useNavigationStore((s) => s.factoryId);
   return useQuery({
     queryKey: queryKeys.mmInChallans(factoryId ?? '', source, status),
@@ -156,20 +146,6 @@ export function useMmStoreStock(styleMaterialId: string | null, enabled = true) 
   });
 }
 
-export function useMmMillBoard(orderIds: string[], enabled = true) {
-  const factoryId = useNavigationStore((s) => s.factoryId);
-  const key = [...orderIds].sort().join(',');
-  return useQuery({
-    queryKey: queryKeys.mmMillBoard(factoryId ?? '', key),
-    queryFn: async (): Promise<MmMillBoardOrder[]> => {
-      const data = unwrap(await mmGetMillBoard(orderIds));
-      return asList(data.orders);
-    },
-    enabled: Boolean(factoryId && enabled && orderIds.length > 0),
-    staleTime: 15_000,
-  });
-}
-
 export function useMmWarehouseBoard(orderIds: string[], enabled = true) {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const key = [...orderIds].sort().join(',');
@@ -181,39 +157,6 @@ export function useMmWarehouseBoard(orderIds: string[], enabled = true) {
     },
     enabled: Boolean(factoryId && enabled && orderIds.length > 0),
     staleTime: 15_000,
-  });
-}
-
-function catalogCategory(value?: string | null): string {
-  const raw = (value ?? '').trim();
-  if (!raw || raw.toLowerCase() === 'fabric' || raw.toLowerCase() === 'trim') return '';
-  return raw;
-}
-
-export function useMmMillLine(
-  orderId: string | null,
-  colorwayId: string | null,
-  fabricLineId: string | null,
-) {
-  const factoryId = useNavigationStore((s) => s.factoryId);
-  return useQuery({
-    queryKey: queryKeys.mmMillLine(factoryId ?? '', orderId ?? '', colorwayId ?? '', fabricLineId ?? ''),
-    queryFn: async (): Promise<MmMillLine> => {
-      const line = unwrap(await mmGetMillLine(orderId!, colorwayId!, fabricLineId!));
-      if (catalogCategory(line.fabric_category)) return line;
-      try {
-        const colorways = asList(unwrap(await mmGetOrderFabricLines(orderId!)).colorways);
-        const fabric = colorways
-          .find((row) => row.id === colorwayId)
-          ?.fabrics.find((row) => row.id === fabricLineId);
-        const category = catalogCategory(fabric?.fabric_category);
-        return category ? { ...line, fabric_category: category } : line;
-      } catch {
-        return line;
-      }
-    },
-    enabled: Boolean(factoryId && orderId && colorwayId && fabricLineId),
-    staleTime: 10_000,
   });
 }
 
@@ -322,55 +265,6 @@ export function useMmStockMovements(search: string, kind: string, page: number, 
     },
     enabled: Boolean(factoryId && enabled),
     staleTime: 15_000,
-  });
-}
-
-export function useMmExpectedBoard(status: string, search: string, page: number, enabled = true) {
-  const factoryId = useNavigationStore((s) => s.factoryId);
-  return useQuery({
-    queryKey: queryKeys.mmExpectedBoard(factoryId ?? '', status, search, page),
-    queryFn: async (): Promise<MmExpectedBoard> => {
-      const data = unwrap(await mmGetExpectedBoard(status, search, 20, (page - 1) * 20));
-      return {
-        total: Number(data.total) || 0,
-        rows: asList(data.rows),
-      };
-    },
-    enabled: Boolean(factoryId && enabled),
-    staleTime: 15_000,
-  });
-}
-
-export function useMmMillStock(search: string, alloc: string, place: string, page: number, enabled = true) {
-  const factoryId = useNavigationStore((s) => s.factoryId);
-  return useQuery({
-    queryKey: queryKeys.mmMillStock(factoryId ?? '', search, alloc, place, page),
-    queryFn: async (): Promise<MmMillStockList> => {
-      const data = unwrap(await mmListMillStock(search, alloc, place, page, 100));
-      return {
-        total: Number(data.total) || 0,
-        inspect_pending: Number(data.inspect_pending) || 0,
-        rows: asList(data.rows),
-      };
-    },
-    enabled: Boolean(factoryId && enabled),
-    staleTime: 15_000,
-  });
-}
-
-export function useMmUnallocatedMill(enabled = true) {
-  const factoryId = useNavigationStore((s) => s.factoryId);
-  return useQuery({
-    queryKey: queryKeys.mmUnallocatedMill(factoryId ?? ''),
-    queryFn: async (): Promise<MmUnallocatedMill> => {
-      const data = unwrap(await mmGetUnallocatedMill());
-      return {
-        batches: asList(data.batches),
-        rolls: asList(data.rolls),
-      };
-    },
-    enabled: Boolean(factoryId && enabled),
-    staleTime: 10_000,
   });
 }
 

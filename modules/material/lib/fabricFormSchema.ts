@@ -10,7 +10,6 @@ import type {
   MmFabricFormGroupPatch,
   MmFabricFormSchema,
   MmFabricSaveRow,
-  MmFabricWhen,
 } from './mmFabricRpc';
 
 export type FabricFormValues = Record<string, string>;
@@ -19,11 +18,6 @@ const COLUMN_KEY_ALIASES: Record<string, string> = {
   fabric_type: 'fabric_type_id',
   construction: 'construction_id',
 };
-
-function whenMet(when: MmFabricWhen | null | undefined, values: FabricFormValues): boolean {
-  if (!when) return false;
-  return Object.entries(when).every(([key, allowed]) => allowed.includes(values[key] ?? ''));
-}
 
 const CORE_KEYS = new Set([
   'code', 'name', 'fabric_type', 'construction', 'composition',
@@ -49,15 +43,12 @@ export function fieldAppliesToType(
 
 export function isFieldVisible(field: MmFabricFormField, values: FabricFormValues): boolean {
   if (!field.visible) return false;
-  if (!fieldAppliesToType(field, values.fabric_type || null)) return false;
-  if (!field.visible_when) return true;
-  return whenMet(field.visible_when, values);
+  return fieldAppliesToType(field, values.fabric_type || null);
 }
 
 export function isFieldRequired(field: MmFabricFormField, values: FabricFormValues): boolean {
   if (!isFieldVisible(field, values)) return false;
-  if (field.required) return true;
-  return whenMet(field.required_when, values);
+  return field.required;
 }
 
 export function schemaFields(schema: MmFabricFormSchema | null | undefined): MmFabricFormField[] {
@@ -88,10 +79,10 @@ export function compositionFromInput(raw: string | undefined): MmFabricCompositi
     if (parsed.length > 0) return parsed;
   }
   const rows: MmFabricComposition[] = [];
-  const pattern = /(\d+(?:\.\d+)?)\s*%\s*([^,]+)/g;
+  const pattern = /(\d+(?:\.\d+)?)\s*%\s*([^%]+?)(?=\s*[-,/]?\s*\d+(?:\.\d+)?\s*%|$)/g;
   let match: RegExpExecArray | null = pattern.exec(text);
   while (match) {
-    const fiber = match[2].trim();
+    const fiber = match[2].replace(/^[\s,\-/]+|[\s,\-/]+$/g, '').trim();
     if (fiber) rows.push({ fiber, pct: Number(match[1]) });
     match = pattern.exec(text);
   }

@@ -55,7 +55,7 @@ export function MmProcReportsV4Panel() {
         <div className="flex flex-wrap items-end gap-2 xl:ml-auto">
           <LabeledDatePicker label="From" value={from} onChange={setFrom} />
           <LabeledDatePicker label="To" value={to} onChange={setTo} />
-          <SelectDropdown
+          <SelectDropdown size="compact"
             label="Group by"
             value={groupBy}
             onChange={(v) => setGroupBy((v as GroupBy) || 'unit_process')}

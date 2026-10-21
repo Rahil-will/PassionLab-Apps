@@ -15,13 +15,13 @@ export function inboundWhen(row: MmInChallanHeader): string | null {
   return row.sent_at ?? row.received_at;
 }
 
-/** Mill for internal inbound; vendor name for external GRNs. */
+/** In-house for internal inbound; vendor name for external GRNs. */
 export function inboundSourceLabel(row: MmInChallanHeader): string {
   if (row.source === 'vendor') {
     const name = (row.supplier_name ?? '').trim();
     return name || 'Vendor';
   }
-  return 'Mill';
+  return 'In-house';
 }
 
 export function inboundStatusDot(status: string): string {
@@ -74,7 +74,7 @@ export function isInboundPhysicallyIn(row: MmInChallanHeader): boolean {
   return row.status === 'received' || row.status === 'partial' || row.status === 'short_closed';
 }
 
-/** Mill/vendor challan dispatched to warehouse, not received yet. */
+/** In-house or vendor challan dispatched to warehouse, not received yet. */
 export function isInboundAwaitingReceive(row: MmInChallanHeader): boolean {
   return row.status === 'pending' || row.status === 'in_transit';
 }

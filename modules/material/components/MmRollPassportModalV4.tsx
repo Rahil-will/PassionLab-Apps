@@ -5,7 +5,22 @@ import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
 import { queryKeys } from '../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../stores';
 import { mmQcApproveDeviation, mmQcGetRoll, mmQcVoid } from '../lib/mmV4Rpc';
+import { qcCaptureOriginLabel } from '../lib/qcTolerance';
+import {
+  MmRejectedDispositionModal,
+  MmReportDamageModal,
+  rollCanReportDamage,
+  rollIsRejected,
+  rollUnitId,
+} from './MmRollDamageActions';
+import { MmRollProcessMark } from './MmProcessStatus';
 import { unitFormOptionLabel } from '../lib/mmUnitForm';
+import { formatStoredQty, formatStoredWidth, unitBase, useFabricUnits } from '../lib/units';
+
+function numericAttr(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 
 function statusBadgeVariant(
   status: string | null | undefined,
@@ -18,10 +33,15 @@ function statusBadgeVariant(
 }
 
 function custodyLabel(side: string | null | undefined): string {
-  if (side === 'mill') return 'At mill';
   if (side === 'processing') return 'At processing';
   if (side === 'warehouse') return 'Warehouse';
   return '—';
+}
+
+function statusLine(label: string, status: unknown, origin: string | null): string {
+  const text = String(status ?? 'NONE');
+  if (text === 'NONE' || !origin) return `${label} ${text}`;
+  return `${label} ${text} (${origin})`;
 }
 
 export function MmRollPassportModalV4({
@@ -37,6 +57,8 @@ export function MmRollPassportModalV4({
   const { showNotification } = useNotificationStore();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [damageOpen, setDamageOpen] = useState(false);
+  const [dispositionOpen, setDispositionOpen] = useState(false);
 
   const passportQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'rollPassport', rollId ?? ''] as const,
@@ -49,6 +71,11 @@ export function MmRollPassportModalV4({
   });
 
   const roll = passportQ.data?.roll;
+  const units = useFabricUnits(roll);
+  const widthInches = numericAttr(roll?.attributes?.width_in) ?? numericAttr(roll?.attributes?.actual_width_in) ?? roll?.spec?.width?.actual ?? roll?.spec?.width?.target ?? null;
+  const storedQty = unitBase(units.qtyUnit) === 'kg' ? roll?.weight_kg : roll?.length_m;
+  const qtyText = formatStoredQty(storedQty == null ? null : Number(storedQty), units.qtyUnit);
+  const widthText = formatStoredWidth(widthInches, units.widthUnit);
   const passport = passportQ.data?.passport ?? {};
   const tests = passportQ.data?.tests ?? [];
   const inspections = passportQ.data?.inspections ?? [];
@@ -57,6 +84,10 @@ export function MmRollPassportModalV4({
   const allocations = passportQ.data?.allocations ?? [];
   const cutApprovals = passportQ.data?.cut_approvals ?? [];
 
+  const latestTest = tests.find((t) => !t.voided_at && !t.superseded_by) ?? tests[0];
+  const latestInspection = inspections.find((i) => !i.voided_at) ?? inspections[0];
+  const testOrigin = qcCaptureOriginLabel(latestTest?.origin);
+  const inspectionOrigin = qcCaptureOriginLabel(latestInspection?.origin);
   const latestTestId = String(tests.find((t) => !t.voided_at && !t.superseded_by)?.id ?? tests[0]?.id ?? '');
   const latestInspId = String(
     inspections.find((i) => !i.voided_at)?.id ?? inspections[0]?.id ?? '',
@@ -129,13 +160,18 @@ export function MmRollPassportModalV4({
               {roll?.dye_lot ? ` · dye ${roll.dye_lot}` : ''}
               {roll?.process_round != null ? ` · round ${roll.process_round}` : ''}
               {` · ${custodyLabel(roll?.custody?.side)}`}
+              {widthText !== '—' ? ` · ${widthText}` : ''}
+              {qtyText ? ` · ${qtyText}` : ''}
             </p>
+            <div className="mt-1">
+              <MmRollProcessMark status={roll?.process_status} />
+            </div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <Badge variant={statusBadgeVariant(roll?.test_status)}>
-                Test {String(roll?.test_status ?? passport.test_status ?? 'NONE')}
+                {statusLine('Test', roll?.test_status ?? passport.test_status, testOrigin)}
               </Badge>
               <Badge variant={statusBadgeVariant(roll?.inspection_status)}>
-                Insp {String(roll?.inspection_status ?? passport.inspection_status ?? 'NONE')}
+                {statusLine('Insp', roll?.inspection_status ?? passport.inspection_status, inspectionOrigin)}
               </Badge>
               {(roll?.missing_keys ?? []).map((key) => (
                 <Badge key={key} variant="warning">
@@ -169,6 +205,7 @@ export function MmRollPassportModalV4({
                           className={muted ? 'text-slate-400 line-through' : 'text-slate-700'}
                         >
                           {String(t.result ?? '—')}
+                          {qcCaptureOriginLabel(t.origin) ? ` (${qcCaptureOriginLabel(t.origin)})` : ''}
                           {t.tested_at ? ` · ${String(t.tested_at)}` : ''}
                           {t.voided_at ? ' · void' : ''}
                           {t.superseded_by ? ' · superseded' : ''}
@@ -191,6 +228,7 @@ export function MmRollPassportModalV4({
                         className={insp.voided_at ? 'text-slate-400 line-through' : 'text-slate-700'}
                       >
                         {String(insp.result ?? '—')}
+                        {qcCaptureOriginLabel(insp.origin) ? ` (${qcCaptureOriginLabel(insp.origin)})` : ''}
                         {insp.points_per_100_sqyd != null
                           ? ` · ${String(insp.points_per_100_sqyd)} /100`
                           : ''}
@@ -309,6 +347,16 @@ export function MmRollPassportModalV4({
               >
                 Void inspection
               </Button>
+              {roll && rollCanReportDamage(roll) ? (
+                <Button type="button" size="sm" variant="secondary" onClick={() => setDamageOpen(true)}>
+                  Report damage
+                </Button>
+              ) : null}
+              {roll && rollIsRejected(roll) && rollUnitId(roll) ? (
+                <Button type="button" size="sm" variant="secondary" onClick={() => setDispositionOpen(true)}>
+                  Disposition
+                </Button>
+              ) : null}
             </div>
           </DesktopWriteGate>
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
@@ -316,6 +364,28 @@ export function MmRollPassportModalV4({
           </Button>
         </div>
       </div>
+      {roll ? (
+        <>
+          <MmReportDamageModal
+            open={damageOpen}
+            rolls={[roll]}
+            onClose={() => setDamageOpen(false)}
+            onDone={(message) => {
+              showNotification(message, 'success');
+              void passportQ.refetch();
+            }}
+          />
+          <MmRejectedDispositionModal
+            open={dispositionOpen}
+            unitIds={rollUnitId(roll) ? [rollUnitId(roll) as string] : []}
+            onClose={() => setDispositionOpen(false)}
+            onDone={(message) => {
+              showNotification(message, 'success');
+              void passportQ.refetch();
+            }}
+          />
+        </>
+      ) : null}
     </Modal>
   );
 }

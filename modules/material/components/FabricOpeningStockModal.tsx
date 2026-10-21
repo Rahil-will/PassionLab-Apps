@@ -6,6 +6,7 @@ import React, { useState } from 'react';
 import { Button, Input, Modal, SelectDropdown } from '../../../components/ui';
 import { useNotificationStore } from '../../../stores';
 import { saveFabricOpeningStock, type MmFabric } from '../lib/mmFabricRpc';
+import { parseQtyUnit, qtyFromStored, qtyLabel, qtyToStored, type QtyUnit } from '../lib/units';
 import { fmtNum } from '../lib/fabricStock';
 import { FabricPicker } from './FabricPicker';
 
@@ -53,12 +54,14 @@ export function FabricOpeningStockPanel({
   onSaved,
   draft,
   uom: uomProp,
+  qtyUnit: qtyUnitProp,
   onDraftChange,
 }: {
   fabric?: MmFabric;
   onSaved?: () => void;
   draft?: OpeningStockDraft;
   uom?: 'kg' | 'm';
+  qtyUnit?: QtyUnit;
   onDraftChange?: (next: OpeningStockDraft) => void;
 }) {
   const { showNotification } = useNotificationStore();
@@ -70,7 +73,7 @@ export function FabricOpeningStockPanel({
   const qtyValue = pending && draft ? draft.qty : qty;
   const countValue = pending && draft ? draft.count : count;
   const unitValue = pending && draft ? draft.unitForm : unitForm;
-  const uom = uomProp ?? (fabric?.uom === 'kg' ? 'kg' : 'm');
+  const qtyUnit = qtyUnitProp ?? parseQtyUnit(fabric?.qty_unit ?? uomProp ?? fabric?.uom);
   const unitLabel = UNIT_OPTIONS.find((option) => option.value === unitValue)?.label ?? 'Rolls';
 
   function patchDraft(next: Partial<OpeningStockDraft>) {
@@ -91,7 +94,8 @@ export function FabricOpeningStockPanel({
     }
     if (!fabric || !onSaved) return;
     setSaving(true);
-    const res = await saveFabricOpeningStock(fabric.id, qtyN, countN, unitForm);
+    const storedQty = qtyToStored(qtyN, qtyUnit) ?? qtyN;
+    const res = await saveFabricOpeningStock(fabric.id, storedQty, countN, unitForm);
     setSaving(false);
     if (res.ok === false) {
       showNotification(res.message, 'error');
@@ -113,7 +117,7 @@ export function FabricOpeningStockPanel({
       </div>
       <div className="p-4 space-y-3">
         <Input
-          label={`Quantity (${uom})`}
+          label={`Quantity (${qtyLabel(qtyUnit)})`}
           value={qtyValue}
           inputMode="decimal"
           onChange={(e) => (pending ? patchDraft({ qty: e.target.value }) : setQty(e.target.value))}
@@ -148,7 +152,7 @@ export function FabricOpeningStockPanel({
       <p className="px-4 py-2.5 border-t border-slate-100 text-[10px] text-slate-400">
         {pending
           ? 'Warehouse only. Optional, and added when you create the fabric.'
-          : 'Adds free warehouse stock. It does not replace what is already in, and it is not mill stock.'}
+          : 'Adds free warehouse stock. It does not replace what is already in.'}
       </p>
     </div>
   );
@@ -167,7 +171,7 @@ export function FabricOpeningStockModal({
   const [count, setCount] = useState('');
   const [unitForm, setUnitForm] = useState<'roll' | 'lap' | 'pieces'>('roll');
   const [saving, setSaving] = useState(false);
-  const uom = picked?.uom === 'kg' ? 'kg' : picked ? 'm' : '';
+  const qtyUnit = picked ? parseQtyUnit(picked.qty_unit ?? picked.uom) : null;
   const unitLabel = UNIT_OPTIONS.find((option) => option.value === unitForm)?.label ?? 'Rolls';
 
   async function save() {
@@ -186,7 +190,8 @@ export function FabricOpeningStockModal({
       return;
     }
     setSaving(true);
-    const res = await saveFabricOpeningStock(picked.id, qtyN, countN, unitForm);
+    const storedQty = qtyUnit ? (qtyToStored(qtyN, qtyUnit) ?? qtyN) : qtyN;
+    const res = await saveFabricOpeningStock(picked.id, storedQty, countN, unitForm);
     setSaving(false);
     if (res.ok === false) {
       showNotification(res.message, 'error');
@@ -216,7 +221,7 @@ export function FabricOpeningStockModal({
           onClear={() => setPicked(null)}
         />
         <Input
-          label={uom ? `Quantity (${uom})` : 'Quantity'}
+          label={qtyUnit ? `Quantity (${qtyLabel(qtyUnit)})` : 'Quantity'}
           value={qty}
           inputMode="decimal"
           onChange={(e) => setQty(e.target.value)}
@@ -253,20 +258,21 @@ export function FabricWarehouseStockCard({ fabric }: { fabric: MmFabric }) {
   const allocated = Math.max(0, onHand - available);
   const demand = fabric.position?.demand ?? 0;
   const short = fabric.position?.short ?? 0;
-  const uom = fabric.uom === 'kg' ? 'kg' : 'm';
+  const qtyUnit = parseQtyUnit(fabric.qty_unit ?? fabric.uom);
+  const showQty = (value: number) => fmtNum(qtyFromStored(value, qtyUnit) ?? 0);
   const cells = [
-    ['On hand', fmtNum(onHand)],
-    ['Available', fmtNum(available)],
-    ['Allocated', fmtNum(allocated)],
-    ['Demand', fmtNum(demand)],
-    ['Short', fmtNum(short)],
+    ['On hand', showQty(onHand)],
+    ['Available', showQty(available)],
+    ['Allocated', showQty(allocated)],
+    ['Demand', showQty(demand)],
+    ['Short', showQty(short)],
   ];
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
       <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Warehouse stock</span>
         <p className="text-[10px] text-slate-500 mt-0.5">
-          Fabric warehouse only, in {uom}. Mill and processing quantities are not included.
+          Fabric warehouse only, in {qtyLabel(qtyUnit)}. Processing quantities are not included.
         </p>
       </div>
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 p-4">

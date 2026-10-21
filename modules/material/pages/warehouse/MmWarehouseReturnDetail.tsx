@@ -63,7 +63,6 @@ function printDocFor(
       lot_no: roll.lot_no,
       batch_no: null,
       attributes: { style_name: roll.style_name ?? '' },
-      mill_snapshot: null,
     })),
   };
 }

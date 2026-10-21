@@ -14,7 +14,7 @@ function row(partial: Partial<MmInChallanHeader>): MmInChallanHeader {
   return {
     id: 'c1',
     challan_no: 'MILL-1',
-    source: 'mill',
+    source: 'inhouse',
     status: 'received',
     supplier_name: null,
     sent_at: null,
@@ -94,7 +94,7 @@ describe('inboundPassedRolls', () => {
 
 describe('inboundDocKind', () => {
   it('labels mill documents as challan and vendor as GRN', () => {
-    expect(inboundDocKind(row({ source: 'mill' }))).toBe('Challan');
+    expect(inboundDocKind(row({ source: 'inhouse' }))).toBe('Challan');
     expect(inboundDocKind(row({ source: 'vendor' }))).toBe('GRN');
   });
 });

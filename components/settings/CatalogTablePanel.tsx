@@ -190,7 +190,7 @@ interface CatalogTableCellProps {
 }
 
 export const catalogSerialCellClass =
-  `text-center text-slate-500 tabular-nums !px-1 w-14 max-w-[3.5rem] ${tdBorder}`;
+  `!text-center text-slate-500 tabular-nums !px-1 w-14 max-w-[3.5rem] ${tdBorder}`;
 
 export const catalogNumericCellClass =
   `text-center text-slate-500 tabular-nums text-[10px] ${tdBorder}`;

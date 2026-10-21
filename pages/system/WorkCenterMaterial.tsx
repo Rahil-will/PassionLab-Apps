@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, LayoutList, Package } from 'lucide-react';
+import { ChevronRight, Layers, LayoutList, Package, Scissors, Workflow } from 'lucide-react';
 import { PageShell } from '../../components/layout/PageShell';
 import { WorkCenterEditorCard } from '../../components/layout/WorkCenterEditorCard';
 import { UnsavedChangesModal } from '../../components/settings';
@@ -24,33 +24,64 @@ import MmTrimParamsPage, {
 import MmRackMasterPage, {
   type MmRackMasterHandle,
 } from '../../modules/material/pages/MmRackMasterPage';
+import MmProcessesPage, {
+  type MmProcessesHandle,
+} from '../../modules/material/pages/MmProcessesPage';
+import MmProcessFormPage, {
+  type MmProcessFormHandle,
+} from '../../modules/material/pages/MmProcessFormPage';
 import MmProcessVendorsPage, {
   type MmProcessVendorsHandle,
 } from '../../modules/material/pages/MmProcessVendorsPage';
 import MmFabricVendorsPage, {
   type MmFabricVendorsHandle,
 } from '../../modules/material/pages/MmFabricVendorsPage';
-import MmMillsPage, {
-  type MmMillsHandle,
-} from '../../modules/material/pages/MmMillsPage';
 import MmFabricStagesPage, {
   type MmFabricStagesHandle,
 } from '../../modules/material/pages/MmFabricStagesPage';
 import FabricFormSchemaEditor, {
   type FabricFormSchemaEditorHandle,
 } from '../../modules/material/pages/fabrics/FabricFormSchemaEditor';
+import ReceiptFormSchemaEditor, {
+  type ReceiptFormSchemaEditorHandle,
+} from '../../modules/material/pages/fabrics/ReceiptFormSchemaEditor';
 
 type MaterialSection =
   | 'types'
   | 'fabric-form'
+  | 'fabric-receiving-form'
   | 'categories'
   | 'test-fabric'
   | 'trim-params'
   | 'racks'
+  | 'processes'
+  | 'process-form'
   | 'process-vendors'
   | 'fabric-vendors'
-  | 'mills'
   | 'fabric-stages';
+
+type MaterialTab = 'fabric' | 'trims' | 'processing';
+
+const TABS: { id: MaterialTab; label: string; icon: React.ElementType }[] = [
+  { id: 'fabric', label: 'Fabric', icon: Layers },
+  { id: 'trims', label: 'Trims', icon: Scissors },
+  { id: 'processing', label: 'Processing', icon: Workflow },
+];
+
+const SECTION_TAB: Record<MaterialSection, MaterialTab> = {
+  types: 'fabric',
+  'fabric-form': 'fabric',
+  'fabric-receiving-form': 'fabric',
+  categories: 'fabric',
+  'test-fabric': 'fabric',
+  'fabric-stages': 'fabric',
+  'fabric-vendors': 'fabric',
+  'trim-params': 'trims',
+  processes: 'processing',
+  'process-form': 'processing',
+  'process-vendors': 'processing',
+  racks: 'fabric',
+};
 
 const SECTIONS: { id: MaterialSection; label: string; hint: string }[] = [
   { id: 'types', label: 'Fabric types', hint: 'Each type, and the constructions that belong to it.' },
@@ -59,50 +90,68 @@ const SECTIONS: { id: MaterialSection; label: string; hint: string }[] = [
     label: 'Fabric requirement form',
     hint: 'Fields on the fabric form. A dropdown with values, or a text or number input.',
   },
+  {
+    id: 'fabric-receiving-form',
+    label: 'Fabric receiving form',
+    hint: 'What to capture when fabric arrives: receipt details and per-roll columns.',
+  },
   { id: 'categories', label: 'Fabric categories', hint: 'Where it is used (shell, lining, pocketing).' },
   { id: 'test-fabric', label: 'Fabric testing parameters', hint: 'What to record when a roll is tested.' },
-  { id: 'trim-params', label: 'Trim requirement parameters', hint: 'Trim categories and types used on the order.' },
-  { id: 'racks', label: 'Fabric rack management', hint: 'Create racks and bins, and set how many rolls each holds.' },
   {
-    id: 'process-vendors',
-    label: 'Process vendors',
-    hint: 'Processes your fabric goes through, and which vendor can do each. In-house processing = a vendor named In-house.',
+    id: 'fabric-stages',
+    label: 'Fabric stages',
+    hint: 'Stage order, labels, and which stages are finished and ready to cut.',
   },
   {
     id: 'fabric-vendors',
     label: 'Fabric vendors',
-    hint: 'Outside suppliers you receive fabric from (vendor GRN).',
+    hint: 'In-house and external suppliers. One default vendor for each source.',
+  },
+  { id: 'trim-params', label: 'Trim requirement parameters', hint: 'Trim categories and types used on the order.' },
+  {
+    id: 'processes',
+    label: 'Processes',
+    hint: 'Add a process and where it is done.',
   },
   {
-    id: 'mills',
-    label: 'Mills',
-    hint: 'Mills and the machines on each.',
+    id: 'process-form',
+    label: 'Process requirement form',
+    hint: '',
   },
   {
-    id: 'fabric-stages',
-    label: 'Fabric stages',
-    hint: 'Stage order, labels, and which stages can be cut.',
+    id: 'process-vendors',
+    label: 'Process vendors',
+    hint: 'Which vendor does each process. In-house processing is the In-house vendor.',
   },
+  { id: 'racks', label: 'Rack management', hint: 'Create racks and bins, and set how many rolls each holds.' },
 ];
 
 const FABRIC_SECTIONS = new Set<MaterialSection>([
   'types',
   'fabric-form',
+  'fabric-receiving-form',
+  'categories',
+  'test-fabric',
   'fabric-stages',
-  'process-vendors',
+  'fabric-vendors',
+  'racks',
 ]);
 
 function resolveSection(raw: string | undefined): MaterialSection | null {
   if (!raw) return null;
   if (raw === 'types' || raw === 'fabric-types') return 'types';
   if (raw === 'fabric-form' || raw === 'params' || raw === 'form-setup') return 'fabric-form';
+  if (raw === 'fabric-receiving-form' || raw === 'receiving-form') return 'fabric-receiving-form';
   if (raw === 'test-fabric') return 'test-fabric';
   if (raw === 'trim-params') return 'trim-params';
   if (raw === 'categories') return 'categories';
   if (raw === 'racks') return 'racks';
+  if (raw === 'processes' || raw === 'process') return 'processes';
+  if (raw === 'process-form' || raw === 'process-requirement') return 'process-form';
   if (raw === 'process-vendors') return 'process-vendors';
   if (raw === 'fabric-vendors') return 'fabric-vendors';
-  if (raw === 'mills' || raw === 'facilities' || raw === 'facilities-machines' || raw === 'machines') return 'mills';
+  if (raw === 'processing-facilities') return 'process-vendors';
+  if (raw === 'facilities' || raw === 'facilities-machines' || raw === 'machines' || raw === 'production-facilities') return 'fabric-vendors';
   if (raw === 'fabric-stages' || raw === 'stages') return 'fabric-stages';
   return null;
 }
@@ -112,13 +161,11 @@ export function WorkCenterMaterial() {
   const materialFeatures = useMmMaterialFeatures(enabled);
   const featuresReady = materialFeatures.isSuccess;
   const warehouseOn = !featuresReady || Boolean(materialFeatures.data?.fabric_warehouse);
-  const millOn = !featuresReady || Boolean(materialFeatures.data?.fabric_mill);
-  const fabricOn = !featuresReady || Boolean(materialFeatures.data?.fabric_warehouse || materialFeatures.data?.fabric_mill);
+  const fabricOn = !featuresReady || Boolean(materialFeatures.data?.fabric_warehouse);
   const trimsOn = !featuresReady || Boolean(materialFeatures.data?.trims);
   const sections = SECTIONS.filter((item) => {
     if (item.id === 'trim-params') return trimsOn;
-    if (item.id === 'fabric-vendors') return warehouseOn;
-    if (item.id === 'mills') return millOn;
+    if (item.id === 'fabric-vendors' || item.id === 'racks') return warehouseOn;
     if (FABRIC_SECTIONS.has(item.id)) return fabricOn;
     return true;
   });
@@ -129,7 +176,9 @@ export function WorkCenterMaterial() {
   const { showNotification } = useNotificationStore();
   const { isLoading: bundleLoading } = useMmConfigBundle(enabled);
 
-  const [section, setSection] = useState<MaterialSection | null>(resolveSection(routeSection));
+  const initialSection = resolveSection(routeSection);
+  const [section, setSection] = useState<MaterialSection | null>(initialSection);
+  const [tab, setTab] = useState<MaterialTab>(initialSection ? SECTION_TAB[initialSection] : 'fabric');
   const [isUnsaved, setIsUnsaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -137,13 +186,15 @@ export function WorkCenterMaterial() {
 
   const typesRef = useRef<MmFabricTypesHandle>(null);
   const formRef = useRef<FabricFormSchemaEditorHandle>(null);
+  const receiptFormRef = useRef<ReceiptFormSchemaEditorHandle>(null);
   const categoriesRef = useRef<MmFabricCategoriesHandle>(null);
   const testingRef = useRef<MmFabricTestingHandle>(null);
   const trimRef = useRef<MmTrimParamsHandle>(null);
   const racksRef = useRef<MmRackMasterHandle>(null);
+  const processesRef = useRef<MmProcessesHandle>(null);
+  const processFormRef = useRef<MmProcessFormHandle>(null);
   const processRef = useRef<MmProcessVendorsHandle>(null);
   const fabricVendorsRef = useRef<MmFabricVendorsHandle>(null);
-  const millsRef = useRef<MmMillsHandle>(null);
   const stagesRef = useRef<MmFabricStagesHandle>(null);
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
 
@@ -157,17 +208,24 @@ export function WorkCenterMaterial() {
       return;
     }
     const next = resolveSection(routeSection);
-    if (next) setSection(next);
+    if (next) {
+      setSection(next);
+      setTab(SECTION_TAB[next]);
+    }
   }, [routeSection, requestNavigate]);
 
   useEffect(() => {
     if (!section) return;
     if (section === 'trim-params' && !trimsOn) setSection(null);
     else if (section === 'fabric-vendors' && !warehouseOn) setSection(null);
-    else if (section === 'mills' && !millOn) setSection(null);
     else if (FABRIC_SECTIONS.has(section) && !fabricOn) setSection(null);
-  }, [section, fabricOn, warehouseOn, millOn, trimsOn]);
+  }, [section, fabricOn, warehouseOn, trimsOn]);
 
+
+  const visibleTabs = TABS.filter((item) => sections.some((row) => SECTION_TAB[row.id] === item.id));
+  const activeTab = visibleTabs.some((item) => item.id === tab) ? tab : (visibleTabs[0]?.id ?? 'fabric');
+  const tabSections = sections.filter((item) => SECTION_TAB[item.id] === activeTab);
+  const activeTabLabel = TABS.find((item) => item.id === activeTab)?.label ?? 'Material';
 
   const doSelect = (id: MaterialSection) => {
     setSection(id);
@@ -185,6 +243,22 @@ export function WorkCenterMaterial() {
     doSelect(id);
   };
 
+  const handleTab = (id: MaterialTab) => {
+    if (id === activeTab) return;
+    const first = sections.find((item) => SECTION_TAB[item.id] === id);
+    if (!first) return;
+    const apply = () => {
+      setTab(id);
+      doSelect(first.id);
+    };
+    if (isUnsaved) {
+      setPendingAction(() => apply);
+      setShowUnsavedDialog(true);
+      return;
+    }
+    apply();
+  };
+
   const markDirty = useCallback((value: boolean) => {
     setIsUnsaved(value);
     setNavUnsaved(value);
@@ -197,12 +271,14 @@ export function WorkCenterMaterial() {
       let ok = true;
       if (section === 'types') ok = (await typesRef.current?.save()) ?? false;
       else if (section === 'fabric-form') ok = (await formRef.current?.save()) ?? false;
+      else if (section === 'fabric-receiving-form') ok = (await receiptFormRef.current?.save()) ?? false;
       else if (section === 'categories') ok = (await categoriesRef.current?.save()) ?? false;
       else if (section === 'test-fabric') ok = (await testingRef.current?.save()) ?? false;
       else if (section === 'racks') ok = (await racksRef.current?.save()) ?? false;
+      else if (section === 'processes') ok = (await processesRef.current?.save()) ?? false;
+      else if (section === 'process-form') ok = (await processFormRef.current?.save()) ?? false;
       else if (section === 'process-vendors') ok = (await processRef.current?.save()) ?? false;
       else if (section === 'fabric-vendors') ok = (await fabricVendorsRef.current?.save()) ?? false;
-      else if (section === 'mills') ok = (await millsRef.current?.save()) ?? false;
       else if (section === 'fabric-stages') ok = (await stagesRef.current?.save()) ?? false;
       else ok = (await trimRef.current?.save()) ?? false;
       if (ok) {
@@ -280,13 +356,38 @@ export function WorkCenterMaterial() {
             unsaved: isUnsaved,
           }}
         >
-        <div className="flex flex-1 min-h-0 overflow-hidden gap-6 pt-3">
+        <div className="shrink-0 z-20 bg-slate-50 pt-3 pb-3">
+          <div className="flex items-center justify-between bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-0.5 px-1.5">
+              {visibleTabs.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleTab(item.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Icon size={13} />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-1 min-h-0 overflow-hidden gap-6">
           <div className="w-72 max-h-full bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col shrink-0 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Material</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{activeTabLabel}</span>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto thin-scrollbar p-2 space-y-1">
-              {sections.map((item) => (
+              {tabSections.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => handleSelect(item.id)}
@@ -305,13 +406,15 @@ export function WorkCenterMaterial() {
                       }`}
                     />
                   </div>
-                  <p
-                    className={`mt-1 text-[10px] font-normal leading-snug ${
-                      section === item.id ? 'text-blue-600/80' : 'text-slate-500'
-                    }`}
-                  >
-                    {item.hint}
-                  </p>
+                  {item.hint ? (
+                    <p
+                      className={`mt-1 text-[10px] font-normal leading-snug ${
+                        section === item.id ? 'text-blue-600/80' : 'text-slate-500'
+                      }`}
+                    >
+                      {item.hint}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -324,18 +427,22 @@ export function WorkCenterMaterial() {
                   <MmFabricTypesPage ref={typesRef} onDirtyChange={markDirty} />
                 ) : section === 'fabric-form' ? (
                   <FabricFormSchemaEditor ref={formRef} onDirtyChange={markDirty} />
+                ) : section === 'fabric-receiving-form' ? (
+                  <ReceiptFormSchemaEditor ref={receiptFormRef} onDirtyChange={markDirty} />
                 ) : section === 'categories' ? (
                   <MmFabricCategoriesPage ref={categoriesRef} onDirtyChange={markDirty} />
                 ) : section === 'test-fabric' ? (
                   <MmFabricTestingPage ref={testingRef} onDirtyChange={markDirty} />
                 ) : section === 'racks' ? (
                   <MmRackMasterPage ref={racksRef} onDirtyChange={markDirty} />
+                ) : section === 'processes' ? (
+                  <MmProcessesPage ref={processesRef} onDirtyChange={markDirty} />
+                ) : section === 'process-form' ? (
+                  <MmProcessFormPage ref={processFormRef} onDirtyChange={markDirty} />
                 ) : section === 'process-vendors' ? (
                   <MmProcessVendorsPage ref={processRef} onDirtyChange={markDirty} />
                 ) : section === 'fabric-vendors' ? (
                   <MmFabricVendorsPage ref={fabricVendorsRef} onDirtyChange={markDirty} />
-                ) : section === 'mills' ? (
-                  <MmMillsPage ref={millsRef} onDirtyChange={markDirty} />
                 ) : section === 'fabric-stages' ? (
                   <MmFabricStagesPage ref={stagesRef} onDirtyChange={markDirty} />
                 ) : (

@@ -1,4 +1,5 @@
 import type { MmStockBucket, MmStockTotals } from './mmFabricRpc';
+import { formatStoredQty, parseQtyUnit, unitBase } from './units';
 
 const QTY = new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 });
 
@@ -6,13 +7,33 @@ export function fmtNum(value: number | null | undefined): string {
   return QTY.format(Number(value) || 0);
 }
 
-/** On-hand text. kg/m use `on_hand`; mixed prints both measures. */
+/** Joins kg and metres that are actually on the stock. A null or zero side is left off. */
+export function presentMeasures(kg: number | null | undefined, metres: number | null | undefined): string {
+  const parts: string[] = [];
+  if (kg != null && Number(kg) > 0) parts.push(`${fmtNum(Number(kg))} kg`);
+  if (metres != null && Number(metres) > 0) parts.push(`${fmtNum(Number(metres))} m`);
+  return parts.length > 0 ? parts.join(' · ') : '0';
+}
+
+/** On-hand text. kg/m use `on_hand`. Mixed prints only the measures that are present. */
 export function fmtQty(
   totals: Pick<MmStockTotals, 'on_hand' | 'on_hand_kg' | 'on_hand_m'>,
   uom: 'kg' | 'm' | 'mixed',
 ): string {
-  if (uom === 'mixed') return `${fmtNum(totals.on_hand_kg)} kg · ${fmtNum(totals.on_hand_m)} m`;
+  if (uom === 'mixed') return presentMeasures(totals.on_hand_kg, totals.on_hand_m);
   return `${fmtNum(totals.on_hand)} ${uom}`;
+}
+
+/** One fabric's quantity. KG reads qty_kg. Length, including yards, reads qty_m. */
+export function fabricUomQty(
+  uom: string | null | undefined,
+  qtyKg: number | null | undefined,
+  qtyM: number | null | undefined,
+  qtyUnit?: string | null,
+): string {
+  const unit = parseQtyUnit(qtyUnit ?? uom);
+  const value = unitBase(unit) === 'kg' ? qtyKg : qtyM;
+  return formatStoredQty(value == null ? null : Number(value), unit);
 }
 
 export function fmtUomQty(value: number | null | undefined, uom: 'kg' | 'm' | 'mixed'): string {
@@ -21,7 +42,6 @@ export function fmtUomQty(value: number | null | undefined, uom: 'kg' | 'm' | 'm
 }
 
 const BUCKET_LABELS: Record<MmStockBucket, string> = {
-  at_mill: 'At mill',
   at_processing: 'At processing',
   qc_pending: 'QC pending',
   on_hold: 'On hold',

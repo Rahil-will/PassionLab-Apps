@@ -1,169 +1,175 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Filter, Search } from 'lucide-react';
-import { Card, SelectDropdown } from '../../../../components/ui';
+import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
+import { Card } from '../../../../components/ui';
 import { PageShell } from '../../../../components/layout/PageShell';
-import { Pagination } from '../../../../components/Pagination';
 import { usePageHeader } from '../../../../components/Breadcrumb';
 import { useDebouncedValue } from '../../../../hooks/useDebouncedValue';
-import { type MmInChallanHeader } from '../../lib/mmRpc';
-import {
-  inboundDocKind,
-  inboundHasPendingTests,
-  inboundOpsStatus,
-  inboundOpsStatusFilterOptions,
-  isInboundPhysicallyIn,
-  type InboundOpsStatus,
-} from '../../lib/inboundDisplay';
-import { useMmInChallans } from '../../lib/useMmOps';
-import { MmInboundChallanTable } from '../../components/MmInboundChallanTable';
+import { queryKeys } from '../../../../lib/queryKeys';
+import { useNavigationStore } from '../../../../stores';
+import { RoutePath } from '../../../../types';
+import { dateLabel } from '../../lib/mmRollDraft';
+import { mmProcListChallans, mmWhListReceipts, type MmV4ProcChallanListRow, type MmWhReceiptRow } from '../../lib/mmV4Rpc';
+import { whTd, whTdHold, whTdMuted, whTdRolls, whTh, whThHold, whThRolls } from './whTable';
 
-const PAGE_SIZE = 20;
+type TestDoc = {
+  id: string;
+  kind: 'in_challan' | 'process_challan';
+  no: string;
+  source: string;
+  receivedAt: string | null;
+  from: string;
+  fabric: string;
+  rolls: number;
+  notTested: number;
+  waiting: boolean;
+};
 
-type DocFilter = '' | 'GRN' | 'Challan';
-type StatusFilter = '' | InboundOpsStatus;
-type OriginFilter = '' | 'mill' | 'vendor';
+function receiptDoc(row: MmWhReceiptRow, source: string): TestDoc {
+  const pending = Number(row.qc_pending ?? 0);
+  return {
+    id: row.id,
+    kind: 'in_challan',
+    no: row.grn_no || '—',
+    source,
+    receivedAt: row.received_at ?? null,
+    from: row.from?.name || '—',
+    fabric: row.fabric?.name || '—',
+    rolls: Number(row.rolls ?? 0),
+    notTested: pending,
+    waiting: pending > 0,
+  };
+}
 
-function haystack(row: MmInChallanHeader): string {
-  return [
-    row.challan_no,
-    row.reference_no,
-    row.style_name,
-    row.style_ref,
-    row.buyer_name,
-    row.po_number,
-    row.color_name,
-    row.fabric_name,
-    row.fabric_type,
-    row.fabric_category,
-    row.supplier_name,
-    row.source,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+function processDoc(row: MmV4ProcChallanListRow): TestDoc {
+  const waiting = row.tested !== true;
+  const rolls = Number(row.counts?.rolls ?? row.counts?.out ?? 0);
+  const process = typeof row.process_type === 'string' ? row.process_type : row.process_type?.name || '';
+  return {
+    id: row.id,
+    kind: 'process_challan',
+    no: row.challan_no,
+    source: 'Process return',
+    receivedAt: row.sent_at ?? row.created_at ?? null,
+    from: row.unit?.name || '—',
+    fabric: process || '—',
+    rolls,
+    notTested: waiting ? rolls : 0,
+    waiting,
+  };
+}
+
+function byQueue(a: TestDoc, b: TestDoc): number {
+  if (a.waiting !== b.waiting) return a.waiting ? -1 : 1;
+  const aTime = a.receivedAt ? Date.parse(a.receivedAt) : Number.POSITIVE_INFINITY;
+  const bTime = b.receivedAt ? Date.parse(b.receivedAt) : Number.POSITIVE_INFINITY;
+  const aStamp = Number.isFinite(aTime) ? aTime : Number.POSITIVE_INFINITY;
+  const bStamp = Number.isFinite(bTime) ? bTime : Number.POSITIVE_INFINITY;
+  if (a.waiting && b.waiting) return aStamp - bStamp;
+  return bStamp - aStamp;
 }
 
 export default function MmWarehouseTestingList() {
-  const mill = useMmInChallans('mill', '');
-  const vendor = useMmInChallans('vendor', '');
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterDoc, setFilterDoc] = useState<DocFilter>('');
-  const [filterStatus, setFilterStatus] = useState<StatusFilter>('');
-  const [filterOrigin, setFilterOrigin] = useState<OriginFilter>('');
-  const [page, setPage] = useState(1);
-  const debouncedSearch = useDebouncedValue(searchQuery, 300);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, filterDoc, filterStatus, filterOrigin]);
+  const factoryId = useNavigationStore((s) => s.factoryId);
+  const requestNavigate = useNavigationStore((s) => s.requestNavigate);
+  const [search, setSearch] = useState('');
+  const debounced = useDebouncedValue(search, 300);
 
   usePageHeader({
-    subtitle: 'Open a GRN or mill challan to enter test results for each roll. Invoice inspection is view-only on the inbound document.',
+    subtitle: 'All challans. Received earlier and still not tested are listed first.',
+  });
+
+  const docsQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'testingDocs', 'all', debounced] as const,
+    queryFn: async () => {
+      const [external, internal, returned, process] = await Promise.all([
+        mmWhListReceipts({ source: 'external', search: debounced || null, limit: 200 }),
+        mmWhListReceipts({ source: 'internal', search: debounced || null, limit: 200 }),
+        mmWhListReceipts({ source: 'process_return', search: debounced || null, limit: 200 }),
+        mmProcListChallans({ status: 'returned', search: debounced || null }),
+      ]);
+      if (external.ok === false) throw new Error(external.message);
+      if (internal.ok === false) throw new Error(internal.message);
+      if (returned.ok === false) throw new Error(returned.message);
+      if (process.ok === false) throw new Error(process.message);
+      const linked = new Set(
+        (returned.data.rows ?? []).map((row) => row.process_challan?.id).filter((id): id is string => Boolean(id)),
+      );
+      return {
+        external: external.data.rows ?? [],
+        internal: internal.data.rows ?? [],
+        returned: returned.data.rows ?? [],
+        process: (process.data.rows ?? []).filter((row) => !linked.has(row.id)),
+      };
+    },
+    enabled: Boolean(factoryId),
   });
 
   const rows = useMemo(() => {
-    const all = [...(mill.data ?? []), ...(vendor.data ?? [])].filter(isInboundPhysicallyIn);
-    return all.sort((a, b) => {
-      const pendingA = inboundHasPendingTests(a) ? 0 : 1;
-      const pendingB = inboundHasPendingTests(b) ? 0 : 1;
-      if (pendingA !== pendingB) return pendingA - pendingB;
-      return String(b.received_at ?? b.sent_at ?? '').localeCompare(String(a.received_at ?? a.sent_at ?? ''));
-    });
-  }, [mill.data, vendor.data]);
-
-  const filtered = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (filterOrigin && row.source !== filterOrigin) return false;
-      if (filterDoc && inboundDocKind(row) !== filterDoc) return false;
-      if (filterStatus && inboundOpsStatus(row) !== filterStatus) return false;
-      if (q && !haystack(row).includes(q)) return false;
-      return true;
-    });
-  }, [rows, debouncedSearch, filterOrigin, filterDoc, filterStatus]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const pagination = {
-    page: safePage,
-    setPage,
-    pageCount,
-    total: filtered.length,
-    start: filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1,
-    end: Math.min(safePage * PAGE_SIZE, filtered.length),
-  };
-
-  const pageError = mill.error ?? vendor.error;
-  const pageLoading = (mill.isLoading && !mill.data) || (vendor.isLoading && !vendor.data);
+    const data = docsQ.data;
+    if (!data) return [];
+    return [
+      ...data.external.map((row) => receiptDoc(row, 'GRN')),
+      ...data.internal.map((row) => receiptDoc(row, 'Internal receipt')),
+      ...data.returned.map((row) => receiptDoc(row, 'Process return')),
+      ...data.process.map(processDoc),
+    ].sort(byQueue);
+  }, [docsQ.data]);
 
   return (
     <PageShell
-      loading={pageLoading}
-      error={pageError}
-      onRetry={() => {
-        void mill.refetch();
-        void vendor.refetch();
-      }}
+      loading={docsQ.isLoading}
+      error={docsQ.error}
+      onRetry={() => { void docsQ.refetch(); }}
       skeleton="table"
       className="w-full pb-20"
     >
       <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
-        <div className="px-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-3">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center bg-slate-50/50 gap-3">
           <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
             <Search size={14} className="text-slate-400 shrink-0" />
             <input
-              className="text-xs bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
-              placeholder="Search GRN, challan, style, fabric..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
-            <SelectDropdown
-              value={filterDoc}
-              onChange={(v) => setFilterDoc(v as DocFilter)}
-              options={[
-                { value: '', label: 'All documents' },
-                { value: 'GRN', label: 'GRN' },
-                { value: 'Challan', label: 'Challan' },
-              ]}
-              icon={Filter}
-              className="w-36"
-            />
-            <SelectDropdown
-              value={filterStatus}
-              onChange={(v) => setFilterStatus(v as StatusFilter)}
-              options={inboundOpsStatusFilterOptions(false)}
-              icon={Filter}
-              className="w-36"
-            />
-            <SelectDropdown
-              value={filterOrigin}
-              onChange={(v) => setFilterOrigin(v as OriginFilter)}
-              options={[
-                { value: '', label: 'Mill and vendor' },
-                { value: 'mill', label: 'Mill' },
-                { value: 'vendor', label: 'Vendor' },
-              ]}
-              icon={Filter}
-              className="w-full sm:w-36"
+              className="text-[11px] bg-transparent border-b border-slate-200 focus:border-blue-500 focus:outline-none py-1 flex-1 min-w-0"
+              placeholder="Search challan, vendor, unit"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
-        {(filtered.length > PAGE_SIZE || filterStatus || filterDoc || filterOrigin || debouncedSearch) && (
-          <div className="px-4 py-1.5 border-b border-slate-100 bg-white text-[10px] text-slate-500">
-            Page {pagination.page} of {pagination.pageCount} ({pagination.start}-{pagination.end} of {filtered.length}{' '}
-            GRNs / challans)
-          </div>
-        )}
-        {pageRows.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[11px] text-slate-400">No GRNs or challans match this filter.</p>
-        ) : (
-          <MmInboundChallanTable rows={pageRows} variant="testing" />
-        )}
-        <Pagination {...pagination} />
+        <div className="overflow-auto">
+          <table className="w-full min-w-[860px] border-collapse">
+            <thead>
+              <tr>
+                <th className={whTh}>Received</th>
+                <th className={whTh}>Challan</th>
+                <th className={whTh}>Source</th>
+                <th className={whTh}>From</th>
+                <th className={whTh}>Fabric</th>
+                <th className={whThRolls}>Rolls</th>
+                <th className={whThHold}>Not tested</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-10 text-center text-[11px] text-slate-400">No challans.</td></tr>
+              ) : rows.map((row) => (
+                <tr
+                  key={`${row.kind}-${row.id}`}
+                  className="hover:bg-slate-50/80 cursor-pointer"
+                  onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id: row.id, kind: row.kind })}
+                >
+                  <td className={whTdMuted}>{dateLabel(row.receivedAt)}</td>
+                  <td className={whTd}>{row.no}</td>
+                  <td className={whTd}>{row.source}</td>
+                  <td className={`${whTd} truncate`}>{row.from}</td>
+                  <td className={`${whTd} truncate`}>{row.fabric}</td>
+                  <td className={whTdRolls}>{row.rolls}</td>
+                  <td className={whTdHold}>{row.notTested}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </PageShell>
   );

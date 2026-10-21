@@ -199,16 +199,16 @@ export function ToggleField({
 }) {
   const on = value === 'true';
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={() => onChange(on ? 'false' : 'true')}
-      className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${on ? 'bg-blue-600' : 'bg-slate-300'}`}
-    >
-      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'left-5' : 'left-0.5'}`} />
-    </button>
+    <label className="inline-flex items-center gap-2 text-[11px] text-slate-700">
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 rounded border-slate-300"
+        checked={on}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
+      />
+      <span>{on ? 'Yes' : 'No'}</span>
+    </label>
   );
 }
 

@@ -10,7 +10,8 @@ import { queryKeys } from '../../../../lib/queryKeys';
 import { useNavigationStore, useNotificationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
 import { MmLockedRollsTable } from '../../components/MmLockedRollsTable';
-import { fieldsForType, formatQtyM, millChallanStatusLabel } from '../../lib/mmRollDraft';
+import { fieldsForType, formatQtyM, challanStatusLabel } from '../../lib/mmRollDraft';
+import { formatStoredQty } from '../../lib/units';
 import { mmCreateStoreChallan, type MmCutGateBlocked } from '../../lib/mmRpc';
 import { mmQcApproveCutAtRisk, mmWhListReadiness } from '../../lib/mmV4Rpc';
 import { useInvalidateMmOps, useMmStyleWarehouse, useMmWarehouseDispatchBoard } from '../../lib/useMmOps';
@@ -41,6 +42,12 @@ function cutGateLabel(code: string, stage?: string | null): string {
       return 'On hold';
     case 'NOT_AVAILABLE':
       return 'Not available';
+    case 'SPEC_GSM':
+      return 'GSM out of spec';
+    case 'SPEC_WIDTH':
+      return 'Width out of spec';
+    case 'COLOUR_MISMATCH':
+      return 'Colour differs from style';
     default:
       return code;
   }
@@ -129,6 +136,7 @@ export default function MmWarehouseDispatchPage() {
   const activeTypeId = activePending[0]?.fabric_type_id ?? null;
   const fields = fieldsForType(testFields, activeTypeId);
   const uom = activePending[0]?.uom ?? null;
+  const qtyUnit = activePending[0]?.qty_unit ?? uom;
 
   const centreRolls = useMemo(() => {
     const rolls = activePending.flatMap((row) => row.rolls.map((roll) => ({ ...roll, selectable: true as const })));
@@ -152,7 +160,7 @@ export default function MmWarehouseDispatchPage() {
       if (res.ok === false) throw new Error(res.message);
       return res.data.rows ?? [];
     },
-    enabled: Boolean(factoryId && styleMaterialId && selectedIds.length > 0),
+    enabled: Boolean(factoryId && styleMaterialId),
   });
 
   const readinessByUnit = useMemo(() => {
@@ -172,6 +180,19 @@ export default function MmWarehouseDispatchPage() {
     }
     return map;
   }, [readinessQ.data]);
+
+  const dispatchRolls = useMemo(() => centreRolls.map((roll) => {
+    const gate = readinessByUnit.get(roll.id) ?? readinessByUnit.get(roll.unit_code);
+    const row = readinessQ.data?.find((item) => item.stock_unit_id === roll.id || item.roll_id === roll.id || item.roll_code === roll.unit_code);
+    return {
+      ...roll,
+      stage_code: row?.stage_code ?? gate?.stage ?? null,
+      stage_label: row?.stage_label ?? null,
+      color: row?.color ?? null,
+      color_ref: row?.color_ref ?? null,
+      finished: row?.finished ?? null,
+    };
+  }), [centreRolls, readinessByUnit, readinessQ.data]);
 
   const blockedByUnit = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -240,7 +261,7 @@ export default function MmWarehouseDispatchPage() {
       }
       setBlocked([]);
       showNotification(
-        `${res.data.challan_no} · ${selectedIds.length} rolls · ${millChallanStatusLabel('pending')}`,
+        `${res.data.challan_no} · ${selectedIds.length} rolls · ${challanStatusLabel('pending')}`,
         'success',
       );
       await invalidate();
@@ -349,7 +370,7 @@ export default function MmWarehouseDispatchPage() {
                       {row.color_name} · {row.fabric_name}
                     </p>
                     <p className={`text-[10px] mt-1 tabular-nums ${on ? 'text-blue-700' : 'text-slate-500'}`}>
-                      {formatQtyM(row.qty, row.uom)}
+                      {formatStoredQty(row.qty, row.qty_unit ?? row.uom)}
                     </p>
                   </button>
                 );
@@ -371,7 +392,7 @@ export default function MmWarehouseDispatchPage() {
                   <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Total rolls</p>
                 </div>
                 <div>
-                  <p className="text-[13px] font-bold text-slate-800 tabular-nums">{formatQtyM(batchQty, uom)}</p>
+                  <p className="text-[13px] font-bold text-slate-800 tabular-nums">{formatStoredQty(batchQty, qtyUnit)}</p>
                   <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Total qty</p>
                 </div>
                 <div>
@@ -392,10 +413,11 @@ export default function MmWarehouseDispatchPage() {
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">
             <MmLockedRollsTable
-              rolls={centreRolls}
+              rolls={dispatchRolls}
               fields={fields}
               uom={uom}
               selectable
+              showRollState
               selected={selected}
               onToggle={(id, on) => {
                 setSelected((prev) => {
@@ -521,7 +543,7 @@ export default function MmWarehouseDispatchPage() {
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2">
                 <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Total qty</p>
-                <p className="text-[13px] font-bold text-slate-800 tabular-nums mt-0.5">{formatQtyM(selectedQty, uom)}</p>
+                <p className="text-[13px] font-bold text-slate-800 tabular-nums mt-0.5">{formatStoredQty(selectedQty, qtyUnit)}</p>
               </div>
             </div>
             <div className="flex flex-col gap-2">

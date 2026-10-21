@@ -34,6 +34,10 @@ const config: Config = {
           600: '#2563eb',
           700: '#1d4ed8',
         },
+        tolerance: {
+          out: '#FDECEC',
+          'out-dark': 'rgba(239, 68, 68, 0.18)',
+        },
       },
     },
   },

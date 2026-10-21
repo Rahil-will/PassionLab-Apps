@@ -12,7 +12,7 @@ import { RoutePath } from '../../../../types';
 import { fabricTypeCategoryLine } from '../../components/MmFabricSummaryCard';
 import type { MmWarehouseFabricCell } from '../../lib/mmRpc';
 import { useMmWarehouseBoard } from '../../lib/useMmOps';
-import { millRequiredWord, millWordDot, millWordText } from '../mill/millStatus';
+import { requiredWord, wordDot, wordText } from '../../lib/fabricLineStatus';
 
 const PAGE_SIZE = 20;
 
@@ -20,7 +20,7 @@ type WhFilter = '' | 'Pending' | 'Met';
 
 function fabricRequiredWord(cell: MmWarehouseFabricCell) {
   const have = Number(cell.qty_passed_m ?? 0);
-  return millRequiredWord(cell.required_m, have);
+  return requiredWord(cell.required_m, have);
 }
 
 function fabricTypeKey(cell: MmWarehouseFabricCell): string {
@@ -93,7 +93,7 @@ interface FabricRow {
   cell: MmWarehouseFabricCell;
 }
 
-export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?: 'summary' | 'dispatch' }) {
+export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?: 'summary' | 'dispatch' | 'expected' }) {
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
   const { buyers } = useBuyersCatalog(factoryId, 'core');
@@ -180,7 +180,9 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
     subtitle:
       intent === 'dispatch'
         ? 'Each row is one style, color, and fabric. Open it to see dispatches or send more to cutting.'
-        : 'Each row is one style, color, and fabric — same split as Expected receipts. Meters are never added across fabrics.',
+        : intent === 'expected'
+          ? 'What is still expected. One row per style, colour, and fabric.'
+          : 'Style-wise fabric status before dispatch. One row per style, colour, and fabric.',
   }, [intent]);
 
   const pageReady = !listQuery.isLoading && (pageOrderIds.length === 0 || !boardQuery.isLoading);
@@ -206,10 +208,10 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
         void boardQuery.refetch();
       }}
       skeleton="table"
-      className="w-full pb-20"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0 overflow-hidden"
     >
-      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl">
-        <div className="px-4 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-3">
+      <Card noPadding className="shadow-sm border-slate-200 overflow-hidden rounded-xl flex-1 min-h-0 flex flex-col">
+        <div className="shrink-0 px-4 py-2 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/50 gap-2">
           <div className="flex items-center gap-2 flex-1 max-w-sm min-w-0">
             <Search size={14} className="text-slate-400 shrink-0" />
             <input
@@ -220,7 +222,7 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
             />
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
-            <SelectDropdown
+            <SelectDropdown size="compact"
               value={filterFabric}
               onChange={setFilterFabric}
               options={[
@@ -230,7 +232,7 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
               icon={Filter}
               className="w-36"
             />
-            <SelectDropdown
+            <SelectDropdown size="compact"
               value={filterStatus}
               onChange={(v) => setFilterStatus(v as WhFilter)}
               options={[
@@ -241,7 +243,7 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
               icon={Filter}
               className="w-36"
             />
-            <SelectDropdown
+            <SelectDropdown size="compact"
               value={filterBuyer}
               onChange={setFilterBuyer}
               options={[
@@ -261,26 +263,28 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
             {!filterStatus && !filterFabric ? ' · completed orders hidden' : ''}
           </div>
         )}
-        <div className="overflow-x-auto">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full min-w-[1080px] table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '9%' }} />
               <col style={{ width: '13%' }} />
-              <col style={{ width: '5%' }} />
-              <col style={{ width: '9%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
               <col style={{ width: '11%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '5%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '9%' }} />
+              <col style={{ width: '6%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th className={thCls}>Style</th>
                 <th className={thCls}>Buyer / PO</th>
-                <th className={thCls}>Color</th>
+                <th className={thCls}>Style color</th>
                 <th className={thCls}>Fabric</th>
+                <th className={thCls}>Fabric color</th>
                 <th className={thCenterCls}>UOM</th>
                 <th className={thReqCls}>Required</th>
                 <th className={thRecvCls}>Received</th>
@@ -292,7 +296,7 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
             <tbody>
               {fabricRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                  <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
                     No fabrics match this page.
                   </td>
                 </tr>
@@ -316,18 +320,14 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
                       <span className="block truncate">{order.buyer_name || '—'}</span>
                       <span className="block text-[10px] text-slate-400 truncate">{order.po_number || '—'}</span>
                     </td>
-                    <td className={`${tdCls} truncate`}>{cell.color_name}</td>
+                    <td className={`${tdCls} truncate`}>{cell.color_name || '—'}</td>
                     <td className={tdCls}>
-                      <span className="block font-medium text-slate-800 truncate">
-                        {cell.fabric_code ? (
-                          <span className="font-mono text-[10px] font-semibold text-slate-500 mr-1">{cell.fabric_code}</span>
-                        ) : null}
-                        {cell.fabric_name}
-                      </span>
+                      <span className="block font-medium text-slate-800 truncate">{cell.fabric_name}</span>
                       {typeCategory !== '—' ? (
                         <span className="block text-[10px] text-slate-400 truncate">{typeCategory}</span>
                       ) : null}
                     </td>
+                    <td className={`${tdCls} truncate`}>{cell.fabric_color || '—'}</td>
                     <td className={`${tdCenterCls} text-slate-500`}>{fabricUom(cell) || '—'}</td>
                     <td className={tdReqCls}>
                       <span className="block text-[11px] font-semibold text-blue-800 tabular-nums">
@@ -356,9 +356,9 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
                       subClass="text-green-800/80"
                     />
                     <td className={tdCenterCls}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(requiredWord)}`} />
-                        <span className={`text-[10px] font-bold ${millWordText(requiredWord)}`}>
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${wordDot(requiredWord)}`} />
+                        <span className={`text-[10px] font-bold ${wordText(requiredWord)}`}>
                           {requiredWord}
                         </span>
                       </span>
@@ -369,7 +369,9 @@ export default function MmWarehouseStylesPage({ intent = 'summary' }: { intent?:
             </tbody>
           </table>
         </div>
-        <Pagination {...pagination} />
+        <div className="shrink-0 border-t border-slate-100">
+          <Pagination {...pagination} />
+        </div>
       </Card>
     </PageShell>
   );

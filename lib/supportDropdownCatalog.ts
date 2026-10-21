@@ -31,6 +31,8 @@ export const SUPPORT_DROPDOWN_CATALOG: SupportDropdownDef[] = [
   { category: 'season', appName: 'Season', defaultValues: ['SS25', 'AW25', 'SS26', 'AW26', 'SS27', 'AW27'] },
   { category: 'fabric_uom', appName: 'Fabric UOM', defaultValues: ['m', 'yd', 'kg'] },
   { category: 'trim_uom', appName: 'Trim UOM', defaultValues: ['pc', 'set', 'dozen', 'kg'] },
+  { category: 'qty_uom', appName: 'Qty UOM', defaultValues: ['KG', 'MTR', 'YD'] },
+  { category: 'width_uom', appName: 'Width UOM', defaultValues: ['Inches', 'CM'] },
 ];
 
 /** Display label → DB value for rejection_audit_type dropdown. */

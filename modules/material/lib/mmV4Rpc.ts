@@ -35,22 +35,19 @@ async function callRpc<T>(name: string, args: Record<string, unknown> = {}): Pro
 
 export type MmV4TestStatus = 'NONE' | 'STALE' | 'FAILED' | 'HOLD' | 'INCOMPLETE' | 'PASS';
 export type MmV4InspectionStatus = 'NONE' | 'STALE' | 'FAILED' | 'PASS';
-export type MmV4CustodySide = 'mill' | 'processing' | 'warehouse' | 'none';
-export type MmV4FacilityKind = 'mill' | 'process_unit' | 'warehouse' | 'vendor';
+export type MmV4CustodySide = 'processing' | 'warehouse' | 'none';
+export type MmV4FacilityKind = 'process_unit' | 'warehouse' | 'vendor';
 export type MmV4Ownership = 'internal' | 'external';
 export type MmV4ReturnMode = 'same_rolls' | 're_rolled';
-export type MmV4TestLevel = 'roll' | 'lot';
 export type MmV4BatchKind = 'style' | 'general';
-export type MmMillBatchPurpose = 'style' | 'open_po' | 'stock';
+export type MmReceiptPurpose = 'style' | 'open_po' | 'stock';
 export type MmV4ProcPurpose = 'fresh' | 'reprocess';
-export type MmV4ProcSide = 'mill' | 'warehouse';
-export type MmV4QcSiteSide = 'mill' | 'processing' | 'warehouse';
-export type MmV4QcScopeKind = 'mill_batch' | 'process_challan' | 'process_lot' | 'in_challan' | 'rolls';
+export type MmV4ProcSide = 'warehouse';
+export type MmV4QcSiteSide = 'processing' | 'warehouse';
+export type MmV4QcScopeKind = 'process_challan' | 'process_lot' | 'in_challan' | 'rolls';
 export type MmV4QcResult = 'pass' | 'fail' | 'hold';
 export type MmV4QcOrigin = 'own' | 'vendor_certificate' | 'process_unit_report' | 'migrated';
 export type MmV4DueReason = 'new' | 'reprocessed' | 'failed' | 'hold' | 'incomplete';
-
-export type MmOutputUnitForm = 'keep' | 'roll' | 'lap';
 
 export type MmV4GateCode =
   | 'STAGE_NOT_CUTTABLE'
@@ -76,11 +73,47 @@ export type MmV4MachineSpecs = {
   [key: string]: unknown;
 };
 
+export type MmRollFinished = {
+  finished: boolean;
+  missing?: Array<'stage' | 'colour' | string>;
+  needs_colour?: boolean;
+};
+
+export type MmRollSpecBand = {
+  target?: number | null;
+  actual?: number | null;
+  tol_pct?: number | null;
+  ok?: boolean | null;
+};
+
+export type MmRollSpec = {
+  ok?: boolean;
+  checked?: boolean;
+  basis?: 'greige' | 'finished' | string;
+  gsm?: MmRollSpecBand;
+  width?: MmRollSpecBand;
+};
+
+export type MmRollProcessStatus = {
+  state: 'at_process' | 'done';
+  process?: string | null;
+  challan_id?: string | null;
+  challan_no?: string | null;
+  since?: string | null;
+  label?: string | null;
+};
+
+export type MmReceiptProcessSummary = {
+  label?: string | null;
+  state: 'at_process' | 'done' | 'none';
+  process?: string | null;
+  rolls?: number | null;
+};
+
 export type MmV4RollRow = {
   roll_id: string;
   roll_code: string;
   origin?: string | null;
-  mill_batch_id?: string | null;
   batch_no?: string | null;
   fabric_type_id?: string | null;
   fabric_type_name?: string | null;
@@ -100,10 +133,16 @@ export type MmV4RollRow = {
   shade?: string | null;
   lot_no?: string | null;
   color_ref?: string | null;
-  mill_roll_id?: string | null;
+  /** Roll colour from mm_rolls.color_name. */
+  color?: string | null;
+  stage_label?: string | null;
+  finished?: MmRollFinished | null;
+  spec?: MmRollSpec | null;
   stock_unit_id?: string | null;
   qty_available?: number | null;
   uom?: string | null;
+  qty_unit?: string | null;
+  width_unit?: string | null;
   custody?: { side: MmV4CustodySide; status?: string | null; [key: string]: unknown } | null;
   style?: {
     style_name?: string | null;
@@ -112,8 +151,16 @@ export type MmV4RollRow = {
     fabric_line?: string | null;
     [key: string]: unknown;
   } | null;
+  booked_style?: string | null;
+  booked_style_material_id?: string | null;
   test_status?: MmV4TestStatus | string | null;
   inspection_status?: MmV4InspectionStatus | string | null;
+  /** Latest test on this roll. Null when the roll has never been tested. */
+  last_test?: {
+    result?: string | null;
+    origin?: 'own' | 'vendor_certificate' | 'migrated' | null;
+    tested_at?: string | null;
+  } | null;
   failed_test_id?: string | null;
   inspection_id?: string | null;
   failed_inspection_id?: string | null;
@@ -124,6 +171,11 @@ export type MmV4RollRow = {
   attributes?: Record<string, unknown> | null;
   gate?: { codes: string[]; overridden?: string[]; cut_ready?: boolean };
   location?: { id?: string; code?: string | null; name?: string | null } | null;
+  /** Present when the roll row carries its warehouse receipt. */
+  in_challan_id?: string | null;
+  receipt_id?: string | null;
+  receipt_no?: string | null;
+  process_status?: MmRollProcessStatus | null;
 };
 
 export type MmV4RollWrite = {
@@ -163,6 +215,7 @@ export type MmV4Machine = {
   name?: string | null;
   specs?: MmV4MachineSpecs | null;
   is_active?: boolean;
+  process_type_id?: string | null;
 };
 
 export type MmV4FabricStage = {
@@ -170,7 +223,6 @@ export type MmV4FabricStage = {
   label: string;
   seq?: number | null;
   can_cut?: boolean;
-  is_initial?: boolean;
   is_active?: boolean;
 };
 
@@ -184,14 +236,11 @@ export type MmV4ProcessType = {
   resets_testing?: boolean;
   resets_inspection?: boolean;
   machine_kinds?: string[];
-  /** null keeps the roll's form. */
-  output_unit_form?: 'roll' | 'lap' | null;
 };
 
 export type MmV4Config = {
   stages: MmV4FabricStage[];
   facilities: MmV4Facility[];
-  machines: MmV4Machine[];
   process_types: MmV4ProcessType[];
   unit_forms: string[];
   width_forms: string[];
@@ -212,129 +261,12 @@ export type MmV4FacilitySave = {
   process_type_ids?: string[];
 };
 
-export type MmV4MachineSave = {
-  id?: string;
-  facility_id: string;
-  machine_kind: string;
-  code: string;
-  name?: string | null;
-  specs?: MmV4MachineSpecs | null;
-  is_active?: boolean;
-};
-
 export type MmV4FabricStageSave = {
   code: string;
   label: string;
   seq?: number | null;
   can_cut?: boolean;
-  is_initial?: boolean;
   is_active?: boolean;
-};
-
-export type MmV4ProcessTypeRulesSave = {
-  id?: string;
-  name?: string;
-  sort_order?: number | null;
-  active?: boolean;
-  output_stage_code?: string | null;
-  default_return_mode?: MmV4ReturnMode;
-  resets_testing?: boolean;
-  resets_inspection?: boolean;
-  machine_kinds?: string[];
-  output_unit_form?: MmOutputUnitForm | null;
-};
-
-export type MmV4TestFieldRuleSave = {
-  field_id: string;
-  test_level: MmV4TestLevel;
-  required_at_stages: string[];
-};
-
-export type MmV4MillBatchSave = {
-  facility_id?: string | null;
-  style_material_id?: string | null;
-  order_id?: string | null;
-  colorway_id?: string | null;
-  colorway_material_id?: string | null;
-  fabric_type_id?: string | null;
-  batch_no?: string | null;
-  mill_ref?: string | null;
-  production_date?: string | null;
-  initial_stage_code?: string | null;
-  yarn_lot?: string | null;
-  yarn_count?: string | null;
-  color_ref?: string | null;
-  fabric_ref_name?: string | null;
-  remarks?: string | null;
-  intent_style_material_ids?: string[];
-  purpose?: MmMillBatchPurpose | null;
-  customer_name?: string | null;
-  po_ref?: string | null;
-  mill_order_id?: string | null;
-  rolls: MmV4RollWrite[];
-};
-
-export type MmV4MillBatchListFilter = {
-  facility_id?: string | null;
-  batch_kind?: MmV4BatchKind | null;
-  fabric_type_id?: string | null;
-  search?: string | null;
-};
-
-export type MmV4CustodyBucket = {
-  qty?: number;
-  rolls?: number;
-  laps?: number;
-  pieces?: number;
-};
-
-export type MmV4MillBatchListRow = {
-  id: string;
-  batch_no: string;
-  batch_kind?: MmV4BatchKind | string | null;
-  mill_ref?: string | null;
-  production_date?: string | null;
-  color_ref?: string | null;
-  initial_stage_code?: string | null;
-  facility?: { id?: string; code?: string; name?: string } | null;
-  fabric_type_name?: string | null;
-  fabric_type_id?: string | null;
-  fabric_id?: string | null;
-  fabric_code?: string | null;
-  fabric_name?: string | null;
-  fabric_uom?: string | null;
-  fabric_ref_name?: string | null;
-  purpose?: MmMillBatchPurpose | string | null;
-  customer_name?: string | null;
-  po_ref?: string | null;
-  style?: Record<string, unknown> | null;
-  intents?: Array<Record<string, unknown>>;
-  counts?: {
-    total?: number;
-    at_mill?: number;
-    at_process?: number;
-    dispatched?: number;
-    closed?: number;
-    unallocated_at_mill?: number;
-    qty_m?: number;
-    qty_kg?: number;
-  };
-  buckets?: {
-    at_mill?: MmV4CustodyBucket;
-    at_process?: MmV4CustodyBucket;
-    dispatched?: MmV4CustodyBucket;
-  };
-  stages?: Record<string, number>;
-  machines?: Array<{ id?: string; code?: string; name?: string | null }>;
-  [key: string]: unknown;
-};
-
-export type MmV4MillBatchDetail = {
-  batch: Record<string, unknown>;
-  intents: Array<Record<string, unknown>>;
-  rolls: MmV4RollRow[];
-  process_challans: Array<Record<string, unknown>>;
-  tests: Array<Record<string, unknown>>;
 };
 
 export type MmV4RollTags = {
@@ -350,9 +282,12 @@ export type MmV4RollTags = {
 
 export type MmV4ProcSend = {
   side: MmV4ProcSide;
-  unit_facility_id: string;
   process_type_id: string;
   roll_ids: string[];
+  unit_facility_id?: string | null;
+  inhouse?: boolean;
+  machine_id?: string | null;
+  field_values?: Record<string, string | number | null>;
   challan_no?: string | null;
   unit_ref_no?: string | null;
   sent_at?: string | null;
@@ -362,17 +297,6 @@ export type MmV4ProcSend = {
   remarks?: string | null;
   target_color?: string | null;
   target_shade?: string | null;
-};
-
-export type MmV4ProcLotSave = {
-  id?: string;
-  lot_no: string;
-  machine_id?: string | null;
-  started_at?: string | null;
-  ended_at?: string | null;
-  remarks?: string | null;
-  out_line_ids?: string[];
-  remove?: boolean;
 };
 
 export type MmV4ProcReturn = {
@@ -394,6 +318,8 @@ export type MmV4ProcReturn = {
     grade?: string | null;
     dye_lot?: string | null;
     lot_id?: string | null;
+    actual_gsm?: number | null;
+    actual_width_in?: number | null;
   }>;
   re_rolled?: Array<{
     out_line_ids: string[];
@@ -409,6 +335,8 @@ export type MmV4ProcReturn = {
       grade?: string | null;
       dye_lot?: string | null;
       lot_id?: string | null;
+      actual_gsm?: number | null;
+      actual_width_in?: number | null;
     }>;
   }>;
   write_offs?: Array<{ out_line_id: string; reason: string }>;
@@ -437,7 +365,12 @@ export type MmV4ProcChallanListRow = {
   kg_in?: number | null;
   returns?: number | null;
   tested?: boolean | null;
+  sent_at?: string | null;
+  created_at?: string | null;
   age_days?: number | null;
+  place?: 'inhouse' | 'external' | string | null;
+  machine?: { id?: string; code?: string; name?: string } | null;
+  field_values?: Record<string, unknown> | null;
   [key: string]: unknown;
 };
 
@@ -451,18 +384,60 @@ export type MmV4ProcChallanDetail = {
   reprocess_challans?: Array<Record<string, unknown>>;
 };
 
+export type MmQcLimit = {
+  mode?: string | null;
+  target?: number | null;
+  min?: number | null;
+  max?: number | null;
+  text?: string | null;
+} | null;
+
+export type MmQcScopeDocument = {
+  kind?: string | null;
+  kind_label?: string | null;
+  id?: string | null;
+  no?: string | null;
+  date?: string | null;
+  party?: string | null;
+  party_ref?: string | null;
+  po_no?: string | null;
+  purpose?: string | null;
+  stage_code?: string | null;
+  stage_label?: string | null;
+  colour?: string | null;
+  fabric?: { id?: string | null; code?: string | null; name?: string | null; uom?: string | null; qty_unit?: string | null; width_unit?: string | null } | null;
+  process?: string | null;
+  returned_at?: string | null;
+  remarks?: string | null;
+  roll_count?: number | null;
+};
+
+export type MmQcScopeSession = {
+  session_id: string;
+  tested_at?: string | null;
+  tested_by?: string | { name?: string | null; full_name?: string | null } | null;
+  rolls?: number | null;
+  pass?: number | null;
+  hold?: number | null;
+  fail?: number | null;
+};
+
 export type MmV4QcScope = {
   stage_code?: string | null;
   fabric_type?: Record<string, unknown> | null;
   mixed_fabric_types?: boolean;
+  document?: MmQcScopeDocument | null;
+  sessions?: MmQcScopeSession[];
   fields: Array<{
     id: string;
     key: string;
     label: string;
     data_type: string;
     options?: unknown;
-    test_level?: MmV4TestLevel | string | null;
     required?: boolean;
+    tolerance?: number | null;
+    tolerance_on?: boolean | null;
+    limit?: MmQcLimit;
   }>;
   defect_types: Array<Record<string, unknown>>;
   rolls: MmV4RollRow[];
@@ -531,6 +506,9 @@ export type MmV4RollListFilter = {
   fabric_type_id?: string | null;
   search?: string | null;
   available_for?: 'process' | 'dispatch' | 'test' | 'cut' | null;
+  receipt_id?: string | null;
+  fabric_id?: string | null;
+  booked_style_material_id?: string | null;
   limit?: number | null;
 };
 
@@ -572,7 +550,7 @@ export type MmV4VendorGrnSave = {
 
 export const mmGetV4Config = () => callRpc<MmV4Config>('mm_get_v4_config');
 
-export type MmPartnerKind = 'process_vendor' | 'fabric_vendor' | 'mill';
+export type MmPartnerKind = 'process_vendor' | 'fabric_vendor' | 'inhouse';
 
 export type MmPartnerRow = {
   id: string;
@@ -583,8 +561,14 @@ export type MmPartnerRow = {
   row_version?: number | null;
   in_use?: boolean;
   process_type_ids?: string[] | null;
+  fabric_type_ids?: string[] | null;
+  qc_at_source?: 'none' | 'tested' | 'tested_inspected' | string | null;
+  fabric_types?: Array<{ id?: string; name?: string } | string> | null;
   processes?: Array<{ id?: string; name?: string } | string> | null;
   machine_count?: number | null;
+  inhouse?: boolean;
+  is_default?: boolean;
+  remarks?: string | null;
 };
 
 export type MmPartnerSave = {
@@ -596,6 +580,10 @@ export type MmPartnerSave = {
   is_active?: boolean;
   row_version?: number;
   process_type_ids?: string[];
+  fabric_type_ids?: string[];
+  qc_at_source?: 'none' | 'tested' | 'tested_inspected';
+  is_default?: boolean;
+  remarks?: string | null;
 };
 
 export const mmListPartners = (kind: MmPartnerKind, includeInactive = true) =>
@@ -607,26 +595,47 @@ export const mmListPartners = (kind: MmPartnerKind, includeInactive = true) =>
 export const mmSavePartner = (row: MmPartnerSave) =>
   callRpc<{ id: string }>('mm_save_partner', { p_row: row });
 
+export type MmChallanFieldType = 'text' | 'number' | 'select';
+
+export type MmChallanField = {
+  key?: string;
+  label: string;
+  type: MmChallanFieldType;
+  required?: boolean;
+  options?: string[];
+};
+
 export type MmProcessRow = {
   id: string;
   name: string;
   output_stage_code?: string | null;
   output_stage_label?: string | null;
-  output_unit_form?: MmOutputUnitForm | string | null;
   active?: boolean;
   sort_order?: number | null;
   vendor_count?: number | null;
   in_use?: boolean;
+  done_inhouse?: boolean;
+  done_external?: boolean;
+  challan_fields?: MmChallanField[];
+  machine_kinds?: string[];
+  vendors?: Array<{ id: string; name: string; is_active?: boolean }>;
+  vendor_ids?: string[];
 };
 
 export type MmProcessSave = {
   id?: string;
   name: string;
   output_stage_code?: string | null;
-  output_unit_form?: MmOutputUnitForm;
   active?: boolean;
   sort_order?: number;
+  done_inhouse?: boolean;
+  done_external?: boolean;
+  challan_fields?: MmChallanField[];
 };
+
+export function madeAtLabel(row: { name: string; inhouse?: boolean }): string {
+  return row.inhouse ? 'In-house' : row.name;
+}
 
 export const mmListProcesses = () =>
   callRpc<{ rows?: MmProcessRow[] }>('mm_list_processes');
@@ -637,87 +646,223 @@ export const mmSaveProcess = (row: MmProcessSave) =>
 export const mmDefaultWarehouse = () =>
   callRpc<{ id: string; name: string }>('mm_default_warehouse');
 
-export const mmSaveMachine = (row: MmV4MachineSave) =>
-  callRpc<{ id: string }>('mm_save_machine', { p_row: row });
-
 export const mmSaveFabricStage = (row: MmV4FabricStageSave) =>
   callRpc<{ code: string }>('mm_save_fabric_stage', { p_row: row });
 
-export const mmSaveProcessTypeRules = (row: MmV4ProcessTypeRulesSave) =>
-  callRpc<{ id: string }>('mm_save_process_type_rules', { p_row: row });
-
-export const mmSaveTestFieldRules = (rules: MmV4TestFieldRuleSave[]) =>
-  callRpc<{ updated: number }>('mm_save_test_field_rules', { p_rules: rules });
-
-// ── Mill ────────────────────────────────────────────────────────────────────
-
-export const mmMillSaveBatchV4 = (payload: MmV4MillBatchSave) =>
-  callRpc<{ id: string; batch_no: string; roll_count: number }>('mm_mill_save_batch_v4', {
-    p_payload: payload,
-  });
-
-export type MmV4MillDispatch = {
-  roll_ids?: string[];
-  mill_roll_ids?: string[];
-  to_facility_id: string;
-  challan_no?: string | null;
-  reference_no?: string | null;
-  sent_at?: string | null;
-  remarks?: string | null;
+export type MmWhReceiveRoll = {
+  roll_no?: string | null;
+  length_m?: number | null;
+  weight_kg?: number | null;
+  shade?: string | null;
+  dye_lot?: string | null;
+  color?: string | null;
+  values?: Record<string, string | number | boolean | null>;
+  test?: { result: string; values: Record<string, string | number | boolean | null> };
 };
 
-export type MmV4MillDispatchResult = {
-  id: string;
-  challan_no: string;
-  roll_count: number;
-  to_facility: { id: string; code: string; name: string };
-};
-
-export const mmMillDispatchV2 = (payload: MmV4MillDispatch) =>
-  callRpc<MmV4MillDispatchResult>('mm_mill_dispatch_v2', { p_payload: payload });
-
-export type MmV4MillBatchPatch = {
-  batch_no?: string;
-  mill_ref?: string | null;
-  production_date?: string | null;
-  yarn_lot?: string | null;
-  yarn_count?: string | null;
-  color_ref?: string | null;
-  remarks?: string | null;
-  facility_id?: string;
-  purpose?: MmMillBatchPurpose;
+export type MmWhReceivePayload = {
+  source: 'internal' | 'external';
+  from_facility_id?: string | null;
+  party_challan_no?: string | null;
+  invoice_ref?: string | null;
+  lr_no?: string | null;
+  container_no?: string | null;
+  po_no?: string | null;
+  received_at?: string | null;
+  grn_no?: string | null;
+  fabric_id: string;
+  stage_code: string;
+  uom?: 'm' | 'kg' | string | null;
+  unit_form?: string | null;
+  width_form?: string | null;
+  color?: string | null;
+  dye_lot?: string | null;
+  purpose?: MmReceiptPurpose | null;
+  style_material_id?: string | null;
   customer_name?: string | null;
   po_ref?: string | null;
-  row_version?: number;
+  remarks?: string | null;
+  field_values?: Record<string, string | number | boolean | null>;
+  rolls: MmWhReceiveRoll[];
 };
 
-export const mmMillUpdateBatchV4 = (batchId: string, payload: MmV4MillBatchPatch) =>
-  callRpc<MmV4MillBatchDetail>('mm_mill_update_batch_v4', {
-    p_batch_id: batchId,
-    p_payload: payload,
+export type MmWhReceiveResult = {
+  id: string;
+  grn_no: string;
+  roll_count: number;
+  qc_tests_created?: number;
+  booked?: number;
+  allocated?: number;
+  return_no?: string | null;
+  challan_status?: string | null;
+};
+
+export type MmWhProcessReturnPayload = {
+  source: 'process_return';
+  process_challan_id: string;
+  party_challan_no?: string | null;
+  po_no?: string | null;
+  received_at?: string | null;
+  remarks?: string | null;
+  field_values?: Record<string, string | number | boolean | null>;
+  rolls: Array<{
+    out_line_id: string;
+    qty: number;
+    values?: Record<string, string | number | boolean | null>;
+  }>;
+};
+
+export type MmWhReceiptRow = {
+  id: string;
+  grn_no: string;
+  received_at?: string | null;
+  source?: 'internal' | 'external' | 'process_return' | string | null;
+  process_challan?: { id?: string; no?: string | null } | null;
+  from?: { id?: string | null; name?: string | null } | null;
+  party_challan_no?: string | null;
+  invoice_ref?: string | null;
+  lr_no?: string | null;
+  container_no?: string | null;
+  po_no?: string | null;
+  purpose?: MmReceiptPurpose | string | null;
+  customer_name?: string | null;
+  po_ref?: string | null;
+  style?: string | Record<string, unknown> | null;
+  style_material_id?: string | null;
+  fabric?: { id?: string; code?: string; name?: string; type_id?: string | null; type_name?: string | null; uom?: string | null; qty_unit?: string | null; width_unit?: string | null } | null;
+  stage_code?: string | null;
+  stage_label?: string | null;
+  color?: string | null;
+  rolls?: number | null;
+  unit_form?: string | null;
+  qty?: number | null;
+  returned_qty?: number | null;
+  returned_rolls?: number | null;
+  uom?: string | null;
+  qc_pending?: number | null;
+  machine?: { id?: string | null; code?: string | null; name?: string | null } | null;
+  shift?: string | null;
+  remarks?: string | null;
+  process_summary?: MmReceiptProcessSummary[] | null;
+};
+
+export type MmWhReceiptDetail = {
+  receipt: Record<string, unknown> & {
+    id?: string;
+    grn_no?: string | null;
+    challan_no?: string | null;
+    source?: string | null;
+    from?: { id?: string | null; name?: string | null } | null;
+    fabric?: { id?: string; code?: string; name?: string; color_method?: string | null; uom?: string | null; qty_unit?: string | null; width_unit?: string | null } | null;
+    stage_code?: string | null;
+    stage_label?: string | null;
+    style?: string | Record<string, unknown> | null;
+    style_material_id?: string | null;
+    purpose?: string | null;
+    color?: string | null;
+    color_ref?: string | null;
+    machine?: { id?: string; code?: string; name?: string | null } | null;
+    party_challan_no?: string | null;
+    po_no?: string | null;
+    customer_name?: string | null;
+    po_ref?: string | null;
+    received_at?: string | null;
+    uom?: string | null;
+    remarks?: string | null;
+    field_values?: Record<string, unknown> | null;
+    process_summary?: MmReceiptProcessSummary[] | null;
+  };
+  process_summary?: MmReceiptProcessSummary[] | null;
+  form?: {
+    fabric_type_id?: string | null;
+    sections?: Array<{
+      key?: string;
+      label?: string;
+      fields?: Array<{
+        key?: string;
+        label?: string;
+        section?: string;
+        tier?: string;
+        data_type?: string;
+      }>;
+    }>;
+  };
+  rolls: MmV4RollRow[];
+  tests?: Array<{ id?: string; result?: string | null; origin?: string | null; tested_at?: string | null }>;
+  process_challan?: { id?: string; no?: string | null; process?: string | null; status?: string | null } | null;
+};
+
+export const mmWhReceive = (payload: MmWhReceivePayload | MmWhProcessReturnPayload) =>
+  callRpc<MmWhReceiveResult>('mm_wh_receive', { p_payload: payload });
+
+export const mmWhListReceipts = (filter: {
+  source?: string | null;
+  purpose?: string | null;
+  search?: string | null;
+  limit?: number | null;
+} = {}) =>
+  callRpc<{ rows: MmWhReceiptRow[] }>('mm_wh_list_receipts', { p_filter: filter });
+
+export const mmWhGetReceipt = (id: string) =>
+  callRpc<MmWhReceiptDetail>('mm_wh_get_receipt', { p_id: id });
+
+export type MmRecvProcessChallanRow = {
+  id: string;
+  challan_no: string;
+  sent_at?: string | null;
+  unit_ref_no?: string | null;
+  unit?: { id?: string; name?: string | null } | null;
+  process?: string | null;
+  target_color?: string | null;
+  fabric?: { id?: string; code?: string | null; name?: string | null; fabric_type_id?: string | null } | null;
+  rolls_out?: number | null;
+  qty_out?: number | null;
+  uom?: string | null;
+};
+
+export type MmRecvProcessChallanDetail = {
+  challan: {
+    id?: string;
+    challan_no: string;
+    unit?: { id?: string; name?: string | null } | null;
+    process?: { name?: string | null; output_stage_code?: string | null } | null;
+    target_color?: string | null;
+    fabric?: { id?: string; code?: string | null; name?: string | null; fabric_type_id?: string | null; uom?: string | null; qty_unit?: string | null; width_unit?: string | null } | null;
+  };
+  rolls: Array<{
+    out_line_id: string;
+    roll_code: string;
+    qty_sent?: number | null;
+    uom?: string | null;
+    color?: string | null;
+    shade?: string | null;
+    dye_lot?: string | null;
+  }>;
+  form?: unknown;
+};
+
+export const mmRecvProcessChallans = (search = '') =>
+  callRpc<{ rows: MmRecvProcessChallanRow[] }>('mm_recv_process_challans', {
+    p_filter: { search: search || null },
   });
 
-export const mmMillSaveBatchV5 = (payload: MmV4MillBatchSave & { fabric_id?: string }) =>
-  callRpc<{ id: string; batch_no: string; roll_count: number; fabric_id?: string }>('mm_mill_save_batch_v5', {
-    p_payload: payload,
-  });
+export const mmRecvGetProcessChallan = (id: string) =>
+  callRpc<MmRecvProcessChallanDetail>('mm_recv_get_process_challan', { p_id: id });
 
-export const mmMillSaveBatchV6 = (payload: MmV4MillBatchSave & { fabric_id?: string }) =>
-  callRpc<{ id: string; batch_no: string; roll_count: number; fabric_id?: string; purpose?: string }>('mm_mill_save_batch_v6', {
-    p_payload: payload,
-  });
+export type MmSourceTestField = {
+  id: string;
+  key: string;
+  label: string;
+  data_type: string;
+  options?: unknown;
+  tolerance_text?: string | null;
+  tolerance_min?: number | null;
+  tolerance_max?: number | null;
+  tolerance_target?: number | null;
+};
 
-export const mmMillAddRollsV4 = (batchId: string, rolls: MmV4RollWrite[]) =>
-  callRpc<{ id: string; added: number }>('mm_mill_add_rolls_v4', {
-    p_batch_id: batchId,
-    p_rolls: rolls,
-  });
-
-export const mmSetBatchStyleIntents = (batchId: string, styleMaterialIds: string[]) =>
-  callRpc<{ id: string }>('mm_set_batch_style_intents', {
-    p_batch_id: batchId,
-    p_style_material_ids: styleMaterialIds,
-  });
+export const mmListTestFields = (fabricTypeId: string) =>
+  callRpc<MmSourceTestField[]>('mm_list_test_fields', { p_fabric_type_id: fabricTypeId });
 
 export const mmSetRollTags = (rollIds: string[], tags: MmV4RollTags) =>
   callRpc<{ updated: number }>('mm_set_roll_tags', {
@@ -725,23 +870,14 @@ export const mmSetRollTags = (rollIds: string[], tags: MmV4RollTags) =>
     p_tags: tags,
   });
 
-export const mmMillListBatchesV4 = (filter: MmV4MillBatchListFilter = {}) =>
-  callRpc<{ rows: MmV4MillBatchListRow[] }>('mm_mill_list_batches_v4', { p_filter: filter });
-
-export const mmMillGetBatchV4 = (batchId: string) =>
-  callRpc<MmV4MillBatchDetail>('mm_mill_get_batch_v4', { p_batch_id: batchId });
+export const mmSetRollColour = (payload: { roll_ids: string[]; color: string; dye_lot?: string | null }) =>
+  callRpc<{ updated: number; color: string }>('mm_set_roll_colour', { p_payload: payload });
 
 // ── Processing ──────────────────────────────────────────────────────────────
 
 export const mmProcSend = (payload: MmV4ProcSend) =>
   callRpc<{ id: string; challan_no: string; roll_count: number }>('mm_proc_send', {
     p_payload: payload,
-  });
-
-export const mmProcSaveLots = (challanId: string, lots: MmV4ProcLotSave[]) =>
-  callRpc<{ saved: number }>('mm_proc_save_lots', {
-    p_challan_id: challanId,
-    p_lots: lots,
   });
 
 export const mmProcReturn = (payload: MmV4ProcReturn) =>
@@ -779,16 +915,37 @@ export const mmQcSaveTest = (payload: MmV4QcSaveTest) =>
     p_payload: payload,
   });
 
+export type MmQcTestGridRow = {
+  roll_id: string;
+  result: MmV4QcResult;
+  values: Record<string, unknown>;
+  remarks?: string | null;
+};
+
 export const mmQcSaveInspections = (payload: MmV4QcSaveInspections) =>
   callRpc<{
     rows: Array<{
-      roll_id: string;
-      inspection_id: string;
-      result: string;
-      points_per_100_sqyd: number;
-      threshold: number;
+      roll_id?: string | null;
+      inspection_id?: string | null;
+      result?: string | null;
+      points_per_100_sqyd?: number | null;
+      threshold?: number | null;
     }>;
   }>('mm_qc_save_inspections', { p_payload: payload });
+
+export const mmQcSaveTestGrid = (payload: {
+  scope_kind: 'in_challan' | 'process_challan';
+  scope_id: string;
+  site_side?: MmV4QcSiteSide | null;
+  origin?: MmV4QcOrigin | null;
+  rows: MmQcTestGridRow[];
+}) =>
+  callRpc<{
+    saved: number;
+    session_id?: string | null;
+    test_ids?: Array<string | null>;
+    out_of_tolerance?: Array<{ roll_id?: string | null; roll_code?: string | null; keys?: string[] | null }>;
+  }>('mm_qc_save_test_grid', { p_payload: payload });
 
 export const mmQcApproveDeviation = (kind: 'test' | 'inspection', id: string, reason: string) =>
   callRpc<{ id: string }>('mm_qc_approve_deviation', {
@@ -837,12 +994,6 @@ export const mmQcListQueue = (filter: MmV4QcQueueFilter = {}) =>
   callRpc<{ rows: MmV4RollRow[] }>('mm_qc_list_queue', { p_filter: filter });
 
 // ── Warehouse / rolls / reports ─────────────────────────────────────────────
-
-export const mmWhSaveVendorGrnV4 = (payload: MmV4VendorGrnSave) =>
-  callRpc<Record<string, unknown>>('mm_wh_save_vendor_grn_v4', { p_payload: payload });
-
-export const mmWhSaveVendorGrnV5 = (payload: MmV4VendorGrnSave & { fabric_id?: string }) =>
-  callRpc<Record<string, unknown>>('mm_wh_save_vendor_grn_v5', { p_payload: payload });
 
 export const mmWhListReadiness = (filter: MmV4ReadinessFilter = {}) =>
   callRpc<{ rows: MmV4RollRow[] }>('mm_wh_list_readiness', {
@@ -897,9 +1048,11 @@ export type MmAllocateTarget = {
   colorway_material_id?: string | null;
 };
 
-export type MmAllocateSide = 'warehouse' | 'processing' | 'mill';
+export type MmAllocateSide = 'warehouse' | 'processing';
 
-export type MmAllocateWarning = 'colour_mismatch' | 'gsm_out_of_tolerance';
+export type MmAllocateMode = 'allocate' | 'book';
+
+export type MmAllocateWarning = 'colour_mismatch' | 'gsm_out_of_tolerance' | 'gsm_out_of_spec' | 'width_out_of_spec';
 
 export type MmAllocateCheckRoll = {
   roll_id: string;
@@ -913,6 +1066,9 @@ export type MmAllocateCheckRoll = {
   grade?: string | null;
   colour?: string | null;
   gsm?: number | null;
+  mode?: MmAllocateMode | string | null;
+  booked_style_material_id?: string | null;
+  spec?: MmRollSpec | null;
   qty?: number | null;
   qty_kg?: number | null;
   qty_m?: number | null;
@@ -952,20 +1108,26 @@ export type MmStyleFabricPositionRow = {
   colorway_id: string;
   colorway_name?: string | null;
   colour?: string | null;
+  fabric_color?: string | null;
   colorway_material_id: string | null;
   style_material_id: string | null;
   line_name?: string | null;
   line_type?: string | null;
   placement?: string | null;
-  fabric?: { id: string; code: string; name: string } | null;
+  fabric?: { id: string; code: string; name: string; fabric_type?: string | null } | null;
+  fabric_type?: string | null;
+  fabric_category?: string | null;
   uom?: 'kg' | 'm' | string | null;
   required: number;
   allocated: number;
-  at_mill: { qty: number; rolls: number; laps: number };
   at_processing: { qty: number; rolls: number; laps: number };
-  in_warehouse: { qty: number; rolls: number; laps: number; ready_to_cut: number };
+  in_warehouse: { qty: number; rolls: number; laps: number; ready_to_cut: number; ready_rolls?: number; ready_laps?: number };
   remnants?: { qty: number; units: number };
   issued: { qty: number; units: number };
+  booked?: { qty: number; rolls: number; laps?: number };
+  uncovered?: number;
+  order_cancelled?: boolean;
+  release_suggested?: boolean;
   stages?: Array<{ stage_code: string; stage_label: string; can_cut: boolean; qty: number; rolls: number }>;
   short: number;
   short_closed?: boolean;
@@ -988,10 +1150,14 @@ export type MmStyleFabricPositionFilter = {
 export const mmStyleFabricPosition = (filter: MmStyleFabricPositionFilter = {}) =>
   callRpc<{ rows: MmStyleFabricPositionRow[] }>('mm_style_fabric_position', { p_filter: filter });
 
-export const mmAllocateCheck = (payload: MmAllocateTarget & { roll_ids: string[] }) =>
+export const mmAllocateCheck = (payload: MmAllocateTarget & { roll_ids: string[]; mode?: MmAllocateMode }) =>
   callRpc<MmAllocateCheck>('mm_allocate_check', { p_payload: payload });
 
-export const mmAllocateRollsV4 = (payload: MmAllocateTarget & { roll_ids: string[]; confirm?: boolean }) =>
+export const mmAllocateRollsV4 = (payload: MmAllocateTarget & {
+  roll_ids: string[];
+  confirm?: boolean;
+  override_reason?: string | null;
+}) =>
   callRpc<{
     count: number;
     qty: number;
@@ -1007,6 +1173,7 @@ export const mmAllocateAutoPick = (
     sides?: MmAllocateSide[];
     same_dye_lot?: boolean;
     include_warned?: boolean;
+    mode?: MmAllocateMode;
   },
 ) =>
   callRpc<{
@@ -1022,3 +1189,12 @@ export const mmAllocateAutoPick = (
 
 export const mmUnallocateRollsV4 = (rollIds: string[]) =>
   callRpc<{ count: number }>('mm_unallocate_rolls_v4', { p_payload: { roll_ids: rollIds } });
+
+export const mmBookRolls = (payload: MmAllocateTarget & { roll_ids: string[] }) =>
+  callRpc<{ count: number; qty: number; style_material_id: string; position?: MmStyleFabricPositionRow }>(
+    'mm_book_rolls',
+    { p_payload: payload },
+  );
+
+export const mmUnbookRolls = (rollIds: string[]) =>
+  callRpc<{ count: number }>('mm_unbook_rolls', { p_payload: { roll_ids: rollIds } });

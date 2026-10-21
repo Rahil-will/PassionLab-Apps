@@ -125,7 +125,7 @@ export default function MmWarehouseDispatchHistoryPage() {
             />
           </div>
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:ml-auto">
-            <SelectDropdown
+            <SelectDropdown size="compact"
               value={filterStatus}
               onChange={(v) => setFilterStatus(v as StatusFilter)}
               options={[
@@ -137,7 +137,7 @@ export default function MmWarehouseDispatchHistoryPage() {
               icon={Filter}
               className="w-44"
             />
-            <SelectDropdown
+            <SelectDropdown size="compact"
               value={filterBuyer}
               onChange={setFilterBuyer}
               options={[

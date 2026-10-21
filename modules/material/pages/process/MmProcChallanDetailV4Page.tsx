@@ -1,100 +1,73 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
-import { Badge, Button, Input, Modal, SelectDropdown } from '../../../../components/ui';
-import { LabeledDatePicker } from '../../../../components/SingleDatePicker';
-import { PageShell } from '../../../../components/layout/PageShell';
-import { usePageHeader } from '../../../../components/Breadcrumb';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Button, Card } from '../../../../components/ui';
 import { DesktopWriteGate } from '../../../../components/DesktopWriteGate';
-import { MmProcSendModalV4 } from '../../components/MmProcSendModalV4';
-import { MmQcInspectModalV4 } from '../../components/MmQcInspectModalV4';
-import { MmQcTestModalV4 } from '../../components/MmQcTestModalV4';
-import { MmSegmentControl } from '../../components/MmSegmentControl';
+import { MmProcQuickReceiveModal } from '../../components/MmProcQuickReceiveModal';
+import { PageShell } from '../../../../components/layout/PageShell';
 import { queryKeys } from '../../../../lib/queryKeys';
-import { useNavigationStore, useNotificationStore } from '../../../../stores';
+import { useNavigationStore } from '../../../../stores';
 import { RoutePath } from '../../../../types';
-import {
-  mmProcGetChallan,
-  mmProcReturn,
-  mmProcSaveLots,
-  mmProcVoidChallan,
-  type MmV4ProcSide,
-  type MmV4ReturnMode,
-} from '../../lib/mmV4Rpc';
+import { finishedText, rollColour, rollStageLabel } from '../../lib/rollColour';
+import { mmProcGetChallan, type MmRollFinished } from '../../lib/mmV4Rpc';
 import { useMmV4Config } from '../../lib/useMmV4Config';
-import { unitFormOptionLabel } from '../../lib/mmUnitForm';
+import { dateLabel } from '../../lib/mmRollDraft';
+import { formatStoredQty, parseQtyUnit, unitBase, useMmUnits } from '../../lib/units';
+import { emptyProcChallanFacts, loadProcChallanFacts, procChallanStatus, processorLabel } from '../../lib/procChallanFacts';
+import { MmStatusDot } from '../../components/MmStatusDot';
 
 const th =
-  'px-2 py-1.5 text-[9px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
-const td = 'px-2 py-1.5 text-[11px] text-slate-700 border-b border-slate-100';
-const inputCls = 'h-8 w-full border border-slate-200 rounded px-2 text-[11px]';
+  'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
+const thFirst =
+  'pl-4 pr-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap overflow-hidden';
+const td = 'px-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
+const tdFirst = 'pl-4 pr-2.5 py-2.5 text-[11px] text-slate-700 border-b border-slate-100 max-w-0 overflow-hidden';
 
-function todayIso(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
+function lineQty(line: Record<string, unknown>): string {
+  const unit = parseQtyUnit(line.qty_unit ?? line.uom);
+  const raw = unitBase(unit) === 'kg' ? Number(line.qty_kg ?? line.qty) : Number(line.qty_m ?? line.qty);
+  if (!Number.isFinite(raw)) return '—';
+  return formatStoredQty(raw, unit);
 }
 
-type SameDraft = {
-  include: boolean;
-  qty: string;
-  qty_kg: string;
-  shade: string;
-  color_ref: string;
-  stage_code: string;
-  unit_form: string;
-  width_form: string;
-  grade: string;
-  dye_lot: string;
-};
+function lineStatus(value: string): string {
+  const status = value.toLowerCase();
+  if (status === 'out' || status === 'open') return 'Still out';
+  if (status === 'returned') return 'Came back';
+  if (status === 'void') return 'Void';
+  return value || '—';
+}
 
-type ReRollOutput = {
-  unit_code: string;
-  qty: string;
-  qty_kg: string;
-  shade: string;
-  stage_code: string;
-  unit_form: string;
-  width_form: string;
-  grade: string;
-  dye_lot: string;
-};
+function fieldText(challan: Record<string, unknown>, key: string | undefined): string {
+  const values = (challan.field_values && typeof challan.field_values === 'object')
+    ? challan.field_values as Record<string, unknown>
+    : {};
+  const raw = key ? values[key] : undefined;
+  if (raw != null && String(raw).trim()) return String(raw);
+  if (key === 'target_color' && challan.target_color != null && String(challan.target_color).trim()) {
+    return String(challan.target_color);
+  }
+  if (key === 'target_shade' && challan.target_shade != null && String(challan.target_shade).trim()) {
+    return String(challan.target_shade);
+  }
+  return '—';
+}
+
+function Fact({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={wide ? 'min-w-0 col-span-2 md:col-span-3' : 'min-w-0'}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`text-[12px] font-semibold text-slate-800 mt-0.5 ${wide ? '' : 'truncate'}`}>{value || '—'}</p>
+    </div>
+  );
+}
 
 export default function MmProcChallanDetailV4Page() {
+  useMmUnits();
   const id = useNavigationStore((s) => s.routeParams.id) ?? '';
   const factoryId = useNavigationStore((s) => s.factoryId);
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-  const { showNotification } = useNotificationStore();
-  const queryClient = useQueryClient();
-  const { data: v4 } = useMmV4Config(true);
-
-  const [returnMode, setReturnMode] = useState<MmV4ReturnMode>('same_rolls');
-  const [sameDrafts, setSameDrafts] = useState<Record<string, SameDraft>>({});
-  const [reRollLineIds, setReRollLineIds] = useState<string[]>([]);
-  const [reRollOutputs, setReRollOutputs] = useState<ReRollOutput[]>([
-    { unit_code: '', qty: '', qty_kg: '', shade: '', stage_code: '', unit_form: '', width_form: 'open', grade: '', dye_lot: '' },
-  ]);
-  const [writeOffId, setWriteOffId] = useState('');
-  const [writeOffReason, setWriteOffReason] = useState('');
-  const [returnedAt, setReturnedAt] = useState(todayIso());
-  const [returnRemarks, setReturnRemarks] = useState('');
-  const [deliverToWh, setDeliverToWh] = useState(false);
-  const [dispatchNo, setDispatchNo] = useState('');
-  const [dispatchRef, setDispatchRef] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [voidOpen, setVoidOpen] = useState(false);
-  const [voidReason, setVoidReason] = useState('');
-  const [reprocessOpen, setReprocessOpen] = useState(false);
-  const [testOpen, setTestOpen] = useState(false);
-  const [inspectOpen, setInspectOpen] = useState(false);
-  const [returnedIds, setReturnedIds] = useState<string[]>([]);
-  const [returnQc, setReturnQc] = useState<'test' | 'inspect' | null>(null);
-  const [lotNo, setLotNo] = useState('');
-  const [lotMachineId, setLotMachineId] = useState('');
-  const [lotLineIds, setLotLineIds] = useState<string[]>([]);
-
-  usePageHeader({ subtitle: 'Process challan — lots, return, and loss.' });
+  const [receiveOpen, setReceiveOpen] = useState(false);
+  const { data: v4 } = useMmV4Config();
 
   const detailQ = useQuery({
     queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'procChallanV4', id] as const,
@@ -105,199 +78,45 @@ export default function MmProcChallanDetailV4Page() {
     },
     enabled: Boolean(factoryId && id),
   });
+  const factsQ = useQuery({
+    queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'procChallanFacts', id] as const,
+    queryFn: () => loadProcChallanFacts([id]),
+    enabled: Boolean(factoryId && id),
+  });
 
   const challan = detailQ.data?.challan ?? {};
   const outLines = detailQ.data?.out_lines ?? [];
-  const lots = detailQ.data?.lots ?? [];
-  const returns = detailQ.data?.returns ?? [];
-  const loss = detailQ.data?.loss ?? null;
 
-  const unit = (challan.unit ?? {}) as {
-    id?: string;
-    name?: string;
-    ownership?: string;
-  };
-  const processType = (challan.process_type ?? {}) as {
-    id?: string;
-    name?: string;
-    output_stage_code?: string | null;
-    default_return_mode?: string | null;
-    output_unit_form?: 'roll' | 'lap' | null;
-  };
-  const comesBackAs = processType.output_unit_form === 'roll'
-    ? 'Roll'
-    : processType.output_unit_form === 'lap'
-      ? 'Lap'
-      : 'Same as sent';
-  const side = (String(challan.side ?? 'mill') === 'warehouse' ? 'warehouse' : 'mill') as MmV4ProcSide;
-  const isInternal = unit.ownership !== 'external';
-  const openLines = outLines.filter((l) => {
-    const st = String(l.line_status ?? l.status ?? 'out').toLowerCase();
-    return st === 'out' || st === 'open';
-  });
-  const defaultStage = processType.output_stage_code || v4?.stages?.[0]?.code || '';
-  const unitForms = v4?.unit_forms ?? ['roll', 'lap'];
-  const widthForms = v4?.width_forms ?? ['tubular', 'open'];
-  const machines = useMemo(
-    () => (v4?.machines ?? []).filter((m) => m.facility_id === unit.id && m.is_active !== false),
-    [v4?.machines, unit.id],
+  const unit = (challan.unit ?? {}) as { id?: string; name?: string; ownership?: string };
+  const processType = (challan.process_type ?? {}) as { id?: string; name?: string; output_stage_code?: string | null };
+  const knownProcess = (v4?.process_types ?? []).find((row) =>
+    (processType.id && row.id === processType.id) || (processType.name && row.name === processType.name),
   );
+  const outputStageCode = String(processType.output_stage_code ?? knownProcess?.output_stage_code ?? '').trim();
+  const targetColor = String(challan.target_color ?? '').trim()
+    || (challan.field_values && typeof challan.field_values === 'object'
+      ? String((challan.field_values as Record<string, unknown>).target_color ?? '').trim()
+      : '');
+  const machine = (challan.machine ?? {}) as { code?: string; name?: string };
+  const templateFields = Array.isArray(challan.challan_fields)
+    ? challan.challan_fields as Array<{ key?: string; label?: string }>
+    : [];
+  const extraFields = templateFields.length > 0
+    ? templateFields.map((field) => ({
+      label: String(field.label || field.key || 'Field'),
+      value: fieldText(challan, field.key),
+    }))
+    : [
+      ...(challan.target_color ? [{ label: 'Target colour', value: String(challan.target_color) }] : []),
+      ...(challan.target_shade ? [{ label: 'Target shade', value: String(challan.target_shade) }] : []),
+    ];
 
-  useEffect(() => {
-    const mode = processType.default_return_mode === 're_rolled' ? 're_rolled' : 'same_rolls';
-    setReturnMode(mode);
-  }, [processType.default_return_mode, id]);
-
-  useEffect(() => {
-    const next: Record<string, SameDraft> = {};
-    for (const line of openLines) {
-      const lineId = String(line.id ?? '');
-      if (!lineId) continue;
-      next[lineId] = {
-        include: true,
-        qty: String(line.qty ?? line.length_m ?? ''),
-        qty_kg: String(line.qty_kg ?? line.weight_kg ?? ''),
-        shade: String(line.shade ?? ''),
-        color_ref: String(line.color_ref ?? ''),
-        stage_code: defaultStage,
-        unit_form: String(line.unit_form ?? ''),
-        width_form: String(line.width_form ?? widthForms[0] ?? 'open'),
-        grade: String(line.grade ?? ''),
-        dye_lot: String(line.dye_lot ?? ''),
-      };
-    }
-    setSameDrafts(next);
-  }, [id, openLines.length, defaultStage, unitForms, widthForms]);
-
-  const refresh = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'procChallanV4', id],
-    });
-    await queryClient.invalidateQueries({
-      queryKey: [...queryKeys.mmOps(factoryId ?? ''), 'procChallansV4'],
-    });
-  };
-
-  const saveLot = async () => {
-    if (!lotNo.trim()) {
-      showNotification('Enter a lot number', 'error');
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await mmProcSaveLots(id, [
-        {
-          lot_no: lotNo.trim(),
-          machine_id: isInternal ? lotMachineId || null : null,
-          out_line_ids: lotLineIds,
-        },
-      ]);
-      if (res.ok === false) throw new Error(res.message);
-      showNotification(`Saved ${res.data.saved} lots`, 'success');
-      setLotNo('');
-      setLotMachineId('');
-      setLotLineIds([]);
-      await refresh();
-    } catch (e) {
-      showNotification(e instanceof Error ? e.message : 'Save lots failed', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitReturn = async () => {
-    setBusy(true);
-    try {
-      const payload = {
-        challan_id: id,
-        returned_at: returnedAt || null,
-        remarks: returnRemarks.trim() || null,
-        deliver_to: side === 'mill' && deliverToWh ? ('warehouse' as const) : ('sender' as const),
-        dispatch:
-          side === 'mill' && deliverToWh
-            ? {
-                challan_no: dispatchNo.trim() || null,
-                reference_no: dispatchRef.trim() || null,
-                to_location: 'Warehouse',
-              }
-            : undefined,
-        same_rolls:
-          returnMode === 'same_rolls'
-            ? Object.entries(sameDrafts)
-                .filter(([, d]) => d.include)
-                .map(([out_line_id, d]) => ({
-                  out_line_id,
-                  qty: Number(d.qty),
-                  qty_kg: d.qty_kg ? Number(d.qty_kg) : null,
-                  shade: d.shade || null,
-                  color_ref: d.color_ref || null,
-                  stage_code: d.stage_code || null,
-                  unit_form: d.unit_form || null,
-                  width_form: d.width_form || null,
-                  grade: d.grade || null,
-                  dye_lot: d.dye_lot || null,
-                }))
-            : [],
-        re_rolled:
-          returnMode === 're_rolled'
-            ? [
-                {
-                  out_line_ids: reRollLineIds,
-                  outputs: reRollOutputs
-                    .filter((o) => o.unit_code.trim() && Number(o.qty) > 0)
-                    .map((o) => ({
-                      unit_code: o.unit_code.trim(),
-                      qty: Number(o.qty),
-                      qty_kg: o.qty_kg ? Number(o.qty_kg) : null,
-                      shade: o.shade || null,
-                      stage_code: o.stage_code || defaultStage || null,
-                      unit_form: o.unit_form || null,
-                      width_form: o.width_form || null,
-                      grade: o.grade || null,
-                      dye_lot: o.dye_lot || null,
-                    })),
-                },
-              ]
-            : [],
-        write_offs:
-          writeOffId && writeOffReason.trim()
-            ? [{ out_line_id: writeOffId, reason: writeOffReason.trim() }]
-            : [],
-      };
-      const res = await mmProcReturn(payload);
-      if (res.ok === false) throw new Error(res.message);
-      const codes = (res.data.outputs ?? []).map((o) => o.unit_code).join(', ');
-      setReturnedIds((res.data.outputs ?? []).map((o) => o.roll_id).filter(Boolean));
-      showNotification(
-        `Return ${res.data.return_no}${codes ? ` · ${codes}` : ''}`,
-        'success',
-      );
-      await refresh();
-    } catch (e) {
-      showNotification(e instanceof Error ? e.message : 'Return failed', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const runVoid = async () => {
-    if (!voidReason.trim()) {
-      showNotification('Enter a void reason', 'error');
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await mmProcVoidChallan(id, voidReason.trim());
-      if (res.ok === false) throw new Error(res.message);
-      showNotification('Challan voided', 'success');
-      setVoidOpen(false);
-      await refresh();
-    } catch (e) {
-      showNotification(e instanceof Error ? e.message : 'Void failed', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
+  const facts = factsQ.data?.get(id) ?? emptyProcChallanFacts();
+  const status = procChallanStatus(String(challan.status ?? 'open'));
+  const canReceive = outLines.some((line) => {
+    const lineState = String(line.line_status ?? line.status ?? 'out').toLowerCase();
+    return lineState === 'out' || lineState === 'open' || lineState === '';
+  });
 
   if (!id) {
     return (
@@ -308,563 +127,139 @@ export default function MmProcChallanDetailV4Page() {
   }
 
   return (
-    <PageShell loading={detailQ.isLoading} skeleton="table">
-      <div className="flex flex-col gap-4 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 mb-1"
-              onClick={() => requestNavigate(RoutePath.MATERIAL_PROCESS)}
-            >
-              <ArrowLeft size={12} /> Processing
-            </button>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[15px] font-semibold text-slate-900">
-                {String(challan.challan_no ?? '—')}
-              </h2>
-              <Badge variant="outline">{side === 'warehouse' ? 'Warehouse' : 'Mill'}</Badge>
-              {unit.ownership ? (
-                <Badge variant="outline">
-                  {unit.ownership === 'external' ? 'External' : 'In-house'}
-                </Badge>
-              ) : null}
-              <Badge variant={String(challan.status) === 'returned' ? 'success' : 'warning'}>
-                {String(challan.status ?? 'open')}
-              </Badge>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Vendor {unit.name || '—'} · {processType.name || '—'}
-              {challan.unit_ref_no ? ` · ref ${String(challan.unit_ref_no)}` : ''}
-              {challan.target_color ? ` · Target colour ${String(challan.target_color)}` : ''}
+    <PageShell
+      loading={detailQ.isLoading}
+      skeleton="table"
+      className="flex flex-col h-[calc(100dvh-8.5rem)] min-h-0"
+    >
+      <Card noPadding className="flex-1 min-h-0 shadow-sm border-slate-200 overflow-hidden rounded-xl flex flex-col">
+        <div className="shrink-0 px-4 py-3 border-b border-slate-100 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[13px] font-semibold text-slate-900">Process challan</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+              {String(challan.challan_no ?? '—')}
             </p>
           </div>
-          <DesktopWriteGate>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="secondary" onClick={() => setTestOpen(true)}>
-                Test this challan
-              </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={() => setInspectOpen(true)}>
-                Inspect this challan
-              </Button>
-              <Button type="button" size="sm" variant="secondary" onClick={() => setReprocessOpen(true)}>
-                Reprocess
-              </Button>
+          <div className="flex items-center gap-3 shrink-0">
+            {String(challan.status ?? '').toLowerCase() === 'returned' ? (
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
-                disabled={returns.length > 0}
-                onClick={() => setVoidOpen(true)}
+                onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id, kind: 'process_challan' })}
               >
-                Void
+                Test rolls
               </Button>
+            ) : null}
+            {canReceive ? (
+              <DesktopWriteGate>
+                <Button type="button" size="sm" onClick={() => setReceiveOpen(true)}>
+                  Quick receive
+                </Button>
+              </DesktopWriteGate>
+            ) : null}
+            <span className="inline-flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+              <span className={`text-[10px] font-bold ${status.text}`}>{status.label}</span>
+            </span>
+          </div>
+        </div>
+        <div className="shrink-0 px-4 py-3 border-b border-slate-100 grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 min-w-0">
+            <Fact label="Fabric" value={facts.fabric} wide />
+            <Fact label="Process" value={processType.name || '—'} />
+            <Fact label="Processor" value={processorLabel({
+              place: String(challan.place ?? ''),
+              unit,
+              machine,
+            })} />
+            <Fact label="Challan no" value={String(challan.challan_no ?? '—')} />
+            <Fact label="Unit ref no" value={String(challan.unit_ref_no ?? '—')} />
+            <Fact label="Qty" value={facts.sentQty} />
+            <Fact label="Rolls / laps" value={facts.sentCount} />
+            <Fact label="Received at" value={facts.receivedAt} />
+            <Fact label="Received qty" value={facts.receivedQty} />
+            <Fact label="Received rolls / laps" value={facts.receivedCount} />
+            {extraFields.map((field) => (
+              <Fact key={field.label} label={field.label} value={field.value} />
+            ))}
+          </div>
+          <div className="flex flex-col gap-3 min-w-0">
+            <Fact label="Sent date" value={dateLabel(String(challan.sent_at ?? challan.created_at ?? ''))} />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Remarks</p>
+              <p className="text-[12px] text-slate-800 mt-0.5 whitespace-pre-wrap">{String(challan.remarks ?? '').trim() || '—'}</p>
             </div>
-          </DesktopWriteGate>
+          </div>
         </div>
 
         {detailQ.isError ? (
-          <p className="text-[12px] text-red-600">
+          <p className="px-4 py-3 text-[12px] text-red-600">
             {detailQ.error instanceof Error ? detailQ.error.message : 'Could not load challan'}
           </p>
         ) : null}
 
-        {loss ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-            Loss {String(loss.loss_pct ?? '—')}%
-            {loss.loss_pct_kg != null ? ` · kg ${String(loss.loss_pct_kg)}%` : ''}
-          </div>
-        ) : null}
-
-        <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-          <div className="px-3 py-2 border-b border-slate-100 text-[12px] font-semibold text-slate-800">
-            Sent rolls
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse">
-              <thead>
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full table-fixed border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr>
+                <th className={thFirst}>Roll</th>
+                <th className={`${th} !text-center`}>Status</th>
+                <th className={th}>Qty</th>
+                <th className={th}>Shade</th>
+                <th className={th}>Stage</th>
+                <th className={th}>Colour</th>
+                <th className={th}>Finished</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outLines.length === 0 ? (
                 <tr>
-                  <th className={th}>Roll</th>
-                  <th className={th}>Status</th>
-                  <th className={`${th} text-right`}>Qty</th>
-                  <th className={th}>Shade</th>
-                  <th className={th}>Stage</th>
+                  <td colSpan={7} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    No rolls on this challan.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {outLines.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-[12px] text-slate-400">
-                      No lines
+              ) : (
+                outLines.map((line) => (
+                  <tr key={String(line.id)}>
+                    <td className={`${tdFirst} truncate font-semibold text-slate-800`}>
+                      {String(line.unit_code ?? line.roll_code ?? '—')}
+                    </td>
+                    <td className={`${td} text-center`}>
+                      <MmStatusDot label={lineStatus(String(line.line_status ?? line.status ?? 'out'))} />
+                    </td>
+                    <td className={`${td} truncate tabular-nums`}>{lineQty(line)}</td>
+                    <td className={`${td} truncate`}>{String(line.shade ?? '—')}</td>
+                    <td className={`${td} truncate`}>{rollStageLabel({
+                      stage_label: line.stage_label == null ? null : String(line.stage_label),
+                      stage_code: line.stage_code == null ? null : String(line.stage_code),
+                    }, v4?.stages)}</td>
+                    <td className={`${td} truncate`}>{rollColour({
+                      color: line.color == null ? null : String(line.color),
+                      color_ref: line.color_ref == null ? null : String(line.color_ref),
+                    })}</td>
+                    <td className={td}>
+                      {(() => {
+                        const mark = finishedText(line.finished as MmRollFinished | null | undefined);
+                        return <span className={mark.className}>{mark.text}</span>;
+                      })()}
                     </td>
                   </tr>
-                ) : (
-                  outLines.map((line) => (
-                    <tr key={String(line.id)}>
-                      <td className={`${td} font-semibold`}>
-                        {String(line.unit_code ?? line.roll_code ?? '—')}
-                      </td>
-                      <td className={td}>{String(line.line_status ?? line.status ?? 'out')}</td>
-                      <td className={`${td} text-right tabular-nums`}>
-                        {line.qty != null ? Number(line.qty) : '—'}
-                      </td>
-                      <td className={td}>{String(line.shade ?? '—')}</td>
-                      <td className={td}>{String(line.stage_code ?? '—')}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-
-        <div className="border border-slate-200 rounded-xl bg-white p-3 flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-[12px] font-semibold text-slate-800">
-              Lots{isInternal ? '' : ' (optional)'}
-            </h3>
-          </div>
-          {lots.length > 0 ? (
-            <ul className="text-[11px] text-slate-600 space-y-1">
-              {lots.map((lot) => (
-                <li key={String(lot.id ?? lot.lot_no)}>
-                  {String(lot.lot_no)}
-                  {lot.machine_id ? ` · machine` : ''}
-                  {Array.isArray(lot.out_line_ids) ? ` · ${lot.out_line_ids.length} rolls` : ''}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[11px] text-slate-400">No lots yet</p>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Input label="Lot no" value={lotNo} onChange={(e) => setLotNo(e.target.value)} />
-            {isInternal ? (
-              <SelectDropdown
-                label="Machine"
-                value={lotMachineId}
-                onChange={setLotMachineId}
-                options={[
-                  { value: '', label: '—' },
-                  ...machines.map((m) => ({ value: m.id, label: m.code || m.name || m.id })),
-                ]}
-              />
-            ) : null}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {openLines.map((line) => {
-              const lineId = String(line.id);
-              const on = lotLineIds.includes(lineId);
-              return (
-                <label key={lineId} className="inline-flex items-center gap-1 text-[11px] text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() =>
-                      setLotLineIds((cur) =>
-                        on ? cur.filter((x) => x !== lineId) : [...cur, lineId],
-                      )
-                    }
-                  />
-                  {String(line.unit_code ?? line.roll_code ?? lineId.slice(0, 6))}
-                </label>
-              );
-            })}
-          </div>
-          <DesktopWriteGate>
-            <Button type="button" size="sm" disabled={busy} onClick={() => void saveLot()}>
-              Save lot
-            </Button>
-          </DesktopWriteGate>
-        </div>
-
-        {openLines.length > 0 ? (
-          <div className="border border-slate-200 rounded-xl bg-white p-3 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-[12px] font-semibold text-slate-800">Record return</h3>
-                <p className="text-[10px] text-slate-500">
-                  Comes back as: {comesBackAs}
-                </p>
-              </div>
-              <MmSegmentControl<MmV4ReturnMode>
-                value={returnMode}
-                onChange={setReturnMode}
-                options={[
-                  { value: 'same_rolls', label: 'Same rolls' },
-                  { value: 're_rolled', label: 'Re-rolled' },
-                ]}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <LabeledDatePicker label="Returned date" value={returnedAt} onChange={setReturnedAt} />
-              <Input
-                label="Remarks"
-                value={returnRemarks}
-                onChange={(e) => setReturnRemarks(e.target.value)}
-              />
-            </div>
-
-            {returnMode === 'same_rolls' ? (
-              <div className="overflow-x-auto border border-slate-100 rounded-lg">
-                <table className="w-full min-w-[880px] border-collapse">
-                  <thead>
-                    <tr>
-                      <th className={th} />
-                      <th className={th}>Roll</th>
-                      <th className={th}>Qty</th>
-                      <th className={th}>Kg</th>
-                      <th className={th}>Shade</th>
-                      <th className={th}>Stage</th>
-                      <th className={th}>Form</th>
-                      <th className={th}>Width</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openLines.map((line) => {
-                      const lineId = String(line.id);
-                      const d = sameDrafts[lineId];
-                      if (!d) return null;
-                      return (
-                        <tr key={lineId}>
-                          <td className={td}>
-                            <input
-                              type="checkbox"
-                              checked={d.include}
-                              onChange={(e) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, include: e.target.checked },
-                                }))
-                              }
-                            />
-                          </td>
-                          <td className={`${td} font-medium`}>
-                            {String(line.unit_code ?? line.roll_code ?? '—')}
-                          </td>
-                          <td className={td}>
-                            <input
-                              className={inputCls}
-                              value={d.qty}
-                              onChange={(e) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, qty: e.target.value },
-                                }))
-                              }
-                            />
-                          </td>
-                          <td className={td}>
-                            <input
-                              className={inputCls}
-                              value={d.qty_kg}
-                              onChange={(e) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, qty_kg: e.target.value },
-                                }))
-                              }
-                            />
-                          </td>
-                          <td className={td}>
-                            <input
-                              className={inputCls}
-                              value={d.shade}
-                              onChange={(e) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, shade: e.target.value },
-                                }))
-                              }
-                            />
-                          </td>
-                          <td className={td}>
-                            <SelectDropdown
-                              value={d.stage_code}
-                              onChange={(v) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, stage_code: v },
-                                }))
-                              }
-                              options={(v4?.stages ?? []).map((s) => ({
-                                value: s.code,
-                                label: s.label || s.code,
-                              }))}
-                              className="w-28"
-                            />
-                          </td>
-                          <td className={td}>
-                            <SelectDropdown
-                              value={d.unit_form}
-                              onChange={(v) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, unit_form: v },
-                                }))
-                              }
-                              options={unitForms.map((f) => ({
-                                value: f,
-                                label: unitFormOptionLabel(f),
-                              }))}
-                              className="w-24"
-                            />
-                          </td>
-                          <td className={td}>
-                            <SelectDropdown
-                              value={d.width_form}
-                              onChange={(v) =>
-                                setSameDrafts((prev) => ({
-                                  ...prev,
-                                  [lineId]: { ...d, width_form: v },
-                                }))
-                              }
-                              options={widthForms.map((f) => ({
-                                value: f,
-                                label: f === 'tubular' ? 'Tubular' : f === 'open' ? 'Open' : f,
-                              }))}
-                              className="w-24"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {openLines.map((line) => {
-                    const lineId = String(line.id);
-                    const on = reRollLineIds.includes(lineId);
-                    return (
-                      <label key={lineId} className="inline-flex items-center gap-1 text-[11px]">
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={() =>
-                            setReRollLineIds((cur) =>
-                              on ? cur.filter((x) => x !== lineId) : [...cur, lineId],
-                            )
-                          }
-                        />
-                        {String(line.unit_code ?? line.roll_code)}
-                      </label>
-                    );
-                  })}
-                </div>
-                {reRollOutputs.map((out, idx) => (
-                  <div key={idx} className="grid grid-cols-2 sm:grid-cols-4 gap-2 border border-slate-100 rounded-lg p-2">
-                    <Input
-                      label="New roll no"
-                      value={out.unit_code}
-                      onChange={(e) =>
-                        setReRollOutputs((rows) =>
-                          rows.map((r, i) => (i === idx ? { ...r, unit_code: e.target.value } : r)),
-                        )
-                      }
-                    />
-                    <Input
-                      label="Qty"
-                      value={out.qty}
-                      onChange={(e) =>
-                        setReRollOutputs((rows) =>
-                          rows.map((r, i) => (i === idx ? { ...r, qty: e.target.value } : r)),
-                        )
-                      }
-                    />
-                    <Input
-                      label="Kg"
-                      value={out.qty_kg}
-                      onChange={(e) =>
-                        setReRollOutputs((rows) =>
-                          rows.map((r, i) => (i === idx ? { ...r, qty_kg: e.target.value } : r)),
-                        )
-                      }
-                    />
-                    <Input
-                      label="Shade"
-                      value={out.shade}
-                      onChange={(e) =>
-                        setReRollOutputs((rows) =>
-                          rows.map((r, i) => (i === idx ? { ...r, shade: e.target.value } : r)),
-                        )
-                      }
-                    />
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    setReRollOutputs((rows) => [
-                      ...rows,
-                      {
-                        unit_code: '',
-                        qty: '',
-                        qty_kg: '',
-                        shade: '',
-                        stage_code: defaultStage,
-                        unit_form: String(
-                          openLines.find((line) => reRollLineIds.includes(String(line.id ?? '')))?.unit_form ?? '',
-                        ),
-                        width_form: widthForms[0] ?? 'open',
-                        grade: '',
-                        dye_lot: '',
-                      },
-                    ])
-                  }
-                >
-                  Add output roll
-                </Button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-slate-100 pt-3">
-              <SelectDropdown
-                label="Write-off roll (optional)"
-                value={writeOffId}
-                onChange={setWriteOffId}
-                options={[
-                  { value: '', label: '—' },
-                  ...openLines.map((l) => ({
-                    value: String(l.id),
-                    label: String(l.unit_code ?? l.roll_code ?? l.id),
-                  })),
-                ]}
-              />
-              <Input
-                label="Write-off reason"
-                value={writeOffReason}
-                onChange={(e) => setWriteOffReason(e.target.value)}
-              />
-            </div>
-
-            {side === 'mill' ? (
-              <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">
-                <label className="inline-flex items-center gap-2 text-[12px] text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={deliverToWh}
-                    onChange={(e) => setDeliverToWh(e.target.checked)}
-                  />
-                  Deliver straight to warehouse
-                </label>
-                {deliverToWh ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      label="Dispatch challan no"
-                      value={dispatchNo}
-                      onChange={(e) => setDispatchNo(e.target.value)}
-                    />
-                    <Input
-                      label="Reference"
-                      value={dispatchRef}
-                      onChange={(e) => setDispatchRef(e.target.value)}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <DesktopWriteGate>
-              <Button type="button" size="sm" disabled={busy} onClick={() => void submitReturn()}>
-                {busy ? 'Saving…' : 'Record return'}
-              </Button>
-            </DesktopWriteGate>
-          </div>
-        ) : null}
-
-        {returns.length > 0 ? (
-          <div className="border border-slate-200 rounded-xl bg-white p-3">
-            <h3 className="text-[12px] font-semibold text-slate-800 mb-2">Returns history</h3>
-            <ul className="text-[11px] text-slate-600 space-y-1">
-              {returns.map((ret, idx) => (
-                <li key={String(ret.id ?? idx)}>
-                  {String(ret.return_no ?? ret.id ?? `Return ${idx + 1}`)}
-                  {ret.returned_at ? ` · ${String(ret.returned_at)}` : ''}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
-
-      <Modal isOpen={voidOpen} onClose={() => setVoidOpen(false)} className="max-w-md">
-        <div className="p-5 flex flex-col gap-3">
-          <h4 className="text-[14px] font-semibold text-slate-900">Void challan</h4>
-          <Input
-            label="Reason"
-            value={voidReason}
-            onChange={(e) => setVoidReason(e.target.value)}
-          />
-          <div className="flex justify-end gap-2">
-            <Button type="button" size="sm" variant="secondary" onClick={() => setVoidOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" size="sm" disabled={busy} onClick={() => void runVoid()}>
-              Void
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <MmProcSendModalV4
-        open={reprocessOpen}
-        side={side}
-        purpose="reprocess"
-        parentChallanId={id}
-        onClose={() => setReprocessOpen(false)}
-        onSent={(newId) => {
-          setReprocessOpen(false);
-          requestNavigate(RoutePath.MATERIAL_PROCESS_DETAIL, { id: newId });
-        }}
-      />
-
-      {returnedIds.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={() => setReturnQc('test')}>
-            Test returned rolls
-          </Button>
-          <Button type="button" size="sm" variant="secondary" onClick={() => setReturnQc('inspect')}>
-            Inspect returned rolls
-          </Button>
-        </div>
-      ) : null}
-
-      <MmQcTestModalV4
-        open={testOpen || returnQc === 'test'}
-        scopeKind={returnQc === 'test' ? 'rolls' : 'process_challan'}
-        scopeId={returnQc === 'test' ? null : id}
-        rollIds={returnQc === 'test' ? returnedIds : undefined}
-        defaultSiteSide="processing"
-        onClose={() => {
-          setTestOpen(false);
-          setReturnQc(null);
-        }}
-        onSaved={() => {
-          setTestOpen(false);
-          setReturnQc(null);
-          void refresh();
-        }}
-      />
-      <MmQcInspectModalV4
-        open={inspectOpen || returnQc === 'inspect'}
-        scopeKind={inspectOpen ? 'process_challan' : 'rolls'}
-        scopeId={inspectOpen ? id : null}
-        rollIds={inspectOpen ? undefined : returnedIds}
-        defaultSiteSide="processing"
-        onClose={() => {
-          setInspectOpen(false);
-          setReturnQc(null);
-        }}
-        onSaved={() => {
-          setInspectOpen(false);
-          setReturnQc(null);
-          void refresh();
-        }}
+      </Card>
+      <MmProcQuickReceiveModal
+        open={receiveOpen}
+        challanId={id}
+        factoryId={factoryId ?? ''}
+        outLines={outLines}
+        stages={v4?.stages ?? []}
+        outputStageCode={outputStageCode}
+        targetColor={targetColor}
+        onClose={() => setReceiveOpen(false)}
       />
     </PageShell>
   );

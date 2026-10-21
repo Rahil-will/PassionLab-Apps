@@ -204,6 +204,7 @@ export interface LabeledDatePickerProps {
   labelClassName?: string;
   /** `card` = bordered wrapper; `form` = full field; `pill` = dropdown-style pill only */
   variant?: 'card' | 'form' | 'pill';
+  size?: 'default' | 'compact';
 }
 
 /** Form field wrapper — matches Input / SelectDropdown on Create Order when variant=form. */
@@ -216,6 +217,7 @@ export const LabeledDatePicker: React.FC<LabeledDatePickerProps> = ({
   className = '',
   labelClassName = 'block font-medium text-slate-700 mb-1.5',
   variant = 'card',
+  size = 'compact',
 }) => (
   <div className={`w-full ${className}`}>
     {label ? (
@@ -227,7 +229,7 @@ export const LabeledDatePicker: React.FC<LabeledDatePickerProps> = ({
         onChange={onChange}
         minDate={minDate}
         maxDate={maxDate}
-        size="compact"
+        size={size}
         className="w-full"
         emptyLabel="Select date"
       />

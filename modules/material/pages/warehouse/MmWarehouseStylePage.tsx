@@ -30,7 +30,6 @@ import { MmLockedRollsTable } from '../../components/MmLockedRollsTable';
 import { MmStyleTestedRollsPanel } from './MmStyleTestedRollsPanel';
 import {
   type MmStyleWarehouseChallan,
-  type MmStyleWarehouseColor,
   type MmStyleWarehouseFabric,
   type MmStyleWarehouseReadiness,
   type MmStyleWarehouseRoll,
@@ -42,12 +41,13 @@ import {
   fieldsForType,
   formatQtyM,
   formatWhen,
-  millChallanStatusClass,
-  millChallanStatusLabel,
-  millDateTimeParts,
+  challanStatusClass,
+  challanStatusLabel,
+  dateTimeParts,
 } from '../../lib/mmRollDraft';
-import { millRequiredWord, millWordDot, millWordText } from '../mill/millStatus';
-import { storeDispatchStatusClass, storeDispatchStatusLabel } from '../../lib/inboundDisplay';
+import { requiredWord, wordDot, wordText } from '../../lib/fabricLineStatus';
+import { storeDispatchStatusLabel } from '../../lib/inboundDisplay';
+import { MmStatusDot } from '../../components/MmStatusDot';
 import {
   DEFAULT_GROUP_STEPS,
   groupStepsLabel,
@@ -57,7 +57,7 @@ import {
 } from '../../lib/mmStyleRollGroups';
 import { MmStyleGroupByBar } from './MmStyleGroupByBar';
 
-type StyleTab = 'color' | 'fabric' | 'challans' | 'rolls' | 'tested' | 'dispatch' | 'shade' | 'balance';
+type StyleTab = 'fabric' | 'challans' | 'rolls' | 'tested' | 'dispatch' | 'shade' | 'balance';
 
 type RollChallanRef = {
   id: string;
@@ -92,7 +92,6 @@ type RollColorGroup = {
 const PAGE_SIZE = 20;
 
 const TABS: { id: StyleTab; label: string; icon: LucideIcon }[] = [
-  { id: 'color', label: 'Color', icon: Palette },
   { id: 'fabric', label: 'Fabric', icon: Layers },
   { id: 'challans', label: 'Inwards challan', icon: ClipboardList },
   { id: 'rolls', label: 'Challan rolls', icon: Cylinder },
@@ -188,7 +187,7 @@ function rollsDispatched(row: MmStyleWarehouseFabric): number {
 }
 
 function fabricWord(row: MmStyleWarehouseFabric): 'Pending' | 'Met' | 'Closed' {
-  return millRequiredWord(row.required_m, qtyPassed(row));
+  return requiredWord(row.required_m, qtyPassed(row));
 }
 
 function GroupSummary({ count, qty }: { count: number; qty: number }) {
@@ -211,15 +210,15 @@ function challanRowLabel(
   rolls: MmStyleWarehouseRoll[] = [],
 ): string {
   if ((row.kind === 'store' || row.origin === 'store') && row.status === 'pending') return 'Pending receive';
-  if (row.kind === 'store' || row.origin === 'store') return millChallanStatusLabel(row.status);
-  if (row.status === 'pending' || row.status === 'in_transit') return millChallanStatusLabel(row.status);
+  if (row.kind === 'store' || row.origin === 'store') return challanStatusLabel(row.status);
+  if (row.status === 'pending' || row.status === 'in_transit') return challanStatusLabel(row.status);
   if (row.id && inboundChallanInspected(row.id, rolls)) return 'Inspection completed';
-  return millChallanStatusLabel(row.status);
+  return challanStatusLabel(row.status);
 }
 
-function challanStatusClass(label: string, status: string): string {
+function challanRowStatusClass(label: string, status: string): string {
   if (label === 'Inspection completed') return 'bg-teal-50 text-teal-800 border-teal-200';
-  return millChallanStatusClass(status);
+  return challanStatusClass(status);
 }
 
 function rollMatchesChallan(row: MmStyleWarehouseRoll, challanId: string): boolean {
@@ -228,14 +227,13 @@ function rollMatchesChallan(row: MmStyleWarehouseRoll, challanId: string): boole
 }
 
 function isReceivedLockedRoll(row: MmStyleWarehouseRoll): boolean {
-  return row.bucket !== 'mill';
+  return row.bucket !== 'transit';
 }
 
 function originLabel(origin: string): string {
-  if (origin === 'mill') return 'Mill';
   if (origin === 'vendor') return 'Vendor';
   if (origin === 'store') return 'Store';
-  return origin;
+  return 'In-house';
 }
 
 function fmtQty(value: number | null | undefined): string {
@@ -272,7 +270,7 @@ function challanRollQtys(rolls: MmStyleWarehouseRoll[]): Map<string, { passed: n
 }
 
 function ChallanWhen({ iso }: { iso: string | null | undefined }) {
-  const parts = millDateTimeParts(iso);
+  const parts = dateTimeParts(iso);
   return (
     <span className="block leading-tight">
       <span className="block truncate">{parts.date}</span>
@@ -306,6 +304,19 @@ function swatchColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
   return `hsl(${hash % 360} 42% 42%)`;
+}
+
+function fabricColorLabel(
+  lines: MmStyleWarehouseFabric[],
+  row: { style_material_id?: string | null; color_name?: string | null; fabric_name?: string | null; fabric_color?: string | null },
+): string {
+  const direct = row.fabric_color?.trim();
+  if (direct) return direct;
+  const hit = lines.find((item) =>
+    (row.style_material_id && item.style_material_id === row.style_material_id)
+    || (item.color_name === (row.color_name ?? '') && item.fabric_name === (row.fabric_name ?? '')),
+  );
+  return hit?.fabric_color?.trim() || '—';
 }
 
 function ColorSwatch({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
@@ -425,8 +436,8 @@ function CompactStat({
 function StatusWord({ word }: { word: string }) {
   return (
     <span className="inline-flex items-center justify-center gap-1.5">
-      <span className={`w-1.5 h-1.5 rounded-full ${millWordDot(word)}`} />
-      <span className={`text-[10px] font-bold ${millWordText(word)}`}>{word}</span>
+      <span className={`w-1.5 h-1.5 rounded-full ${wordDot(word)}`} />
+      <span className={`text-[10px] font-bold ${wordText(word)}`}>{word}</span>
     </span>
   );
 }
@@ -527,7 +538,6 @@ function groupStyleRolls(
 }
 
 const SEARCH_PLACEHOLDER: Record<StyleTab, string> = {
-  color: 'Search color...',
   fabric: 'Search color, fabric...',
   challans: 'Search inwards challan, color, fabric...',
   rolls: 'Search roll, location...',
@@ -549,7 +559,7 @@ export default function MmWarehouseStylePage() {
   const { data, isLoading, error, refetch } = useMmStyleWarehouse(orderId ?? null);
   const invalidate = useInvalidateMmOps();
   const { showNotification } = useNotificationStore();
-  const [tab, setTab] = useState<StyleTab>('color');
+  const [tab, setTab] = useState<StyleTab>('fabric');
   const [consumePick, setConsumePick] = useState<Record<string, boolean>>({});
   const [consumeBusy, setConsumeBusy] = useState(false);
   const balanceQuery = useMmStyleReconciliation(orderId ?? null, tab === 'balance');
@@ -658,7 +668,6 @@ export default function MmWarehouseStylePage() {
 
   const tabCounts = useMemo(
     () => ({
-      color: colors.length,
       fabric: fabrics.length,
       challans: challans.filter((row) => row.kind !== 'store').length,
       rolls: rolls.filter(isReceivedLockedRoll).length,
@@ -667,17 +676,10 @@ export default function MmWarehouseStylePage() {
       shade: warehouseRolls.length,
       balance: (balanceQuery.data ?? []).length,
     }),
-    [colors.length, fabrics.length, challans, rolls, warehouseRolls.length, balanceQuery.data],
+    [fabrics.length, challans, rolls, warehouseRolls.length, balanceQuery.data],
   );
 
   const statusOptions = useMemo(() => {
-    if (tab === 'color') {
-      return [
-        { value: '', label: 'All colors' },
-        { value: 'Ready', label: 'Ready' },
-        { value: 'Short', label: 'Short' },
-      ];
-    }
     if (tab === 'fabric') {
       return [
         { value: '', label: 'All fabrics' },
@@ -707,23 +709,13 @@ export default function MmWarehouseStylePage() {
     }
     return [
       { value: '', label: 'All inwards' },
-      { value: 'mill', label: 'Mill' },
+      { value: 'inhouse', label: 'In-house' },
       { value: 'vendor', label: 'Vendor' },
       { value: 'pending', label: 'In transit' },
       { value: 'received', label: 'Received' },
       { value: 'inspected', label: 'Inspection completed' },
     ];
   }, [tab]);
-
-  const filteredColors = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
-    return colors.filter((row) => {
-      if (statusFilter === 'Ready' && !row.ready) return false;
-      if (statusFilter === 'Short' && row.ready) return false;
-      if (q && !hay([row.color_name]).includes(q)) return false;
-      return true;
-    });
-  }, [colors, debouncedSearch, statusFilter]);
 
   const filteredFabrics = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -735,13 +727,29 @@ export default function MmWarehouseStylePage() {
     });
   }, [fabrics, debouncedSearch, statusFilter, colorFilter]);
 
+  const fabricColorGroups = useMemo(() => {
+    const groups = new Map<string, MmStyleWarehouseFabric[]>();
+    for (const row of filteredFabrics) {
+      const key = row.colorway_id || row.color_name || '—';
+      const list = groups.get(key) ?? [];
+      list.push(row);
+      groups.set(key, list);
+    }
+    return [...groups.entries()].map(([key, rows]) => ({
+      key,
+      colorName: rows[0]?.color_name || '—',
+      rows,
+    }));
+  }, [filteredFabrics]);
+
   const filteredChallans = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     return challans.filter((row) => {
       if (row.kind === 'store') return false;
       if (colorFilter && row.color_name !== colorFilter) return false;
-      if (statusFilter === 'mill' || statusFilter === 'vendor') {
-        if (row.origin !== statusFilter) return false;
+      if (statusFilter === 'inhouse' || statusFilter === 'vendor') {
+        const internal = row.origin !== 'vendor' && row.origin !== 'store';
+        if (statusFilter === 'vendor' ? row.origin !== 'vendor' : !internal) return false;
       } else if (statusFilter === 'pending') {
         if (row.status !== 'pending' && row.status !== 'in_transit') return false;
       } else if (statusFilter === 'received') {
@@ -878,11 +886,9 @@ export default function MmWarehouseStylePage() {
   );
 
   const filteredCount =
-    tab === 'color'
-      ? filteredColors.length
-      : tab === 'fabric'
-        ? filteredFabrics.length
-        : tab === 'challans'
+    tab === 'fabric'
+      ? filteredFabrics.length
+      : tab === 'challans'
           ? filteredChallans.length
           : tab === 'dispatch'
             ? filteredDispatch.length
@@ -892,11 +898,7 @@ export default function MmWarehouseStylePage() {
                 ? 0
                 : filteredRolls.length;
 
-  const paginate =
-    tab === 'fabric' ||
-    tab === 'challans' ||
-    tab === 'dispatch' ||
-    (tab === 'color' && filteredCount > PAGE_SIZE);
+  const paginate = tab === 'challans' || tab === 'dispatch';
   const pageCount = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const pageStart = (safePage - 1) * PAGE_SIZE;
@@ -909,15 +911,11 @@ export default function MmWarehouseStylePage() {
     end: Math.min(safePage * PAGE_SIZE, filteredCount),
   };
 
-  const pageColors = paginate ? filteredColors.slice(pageStart, pageStart + PAGE_SIZE) : filteredColors;
-  const pageFabrics = filteredFabrics.slice(pageStart, pageStart + PAGE_SIZE);
   const pageChallans = filteredChallans.slice(pageStart, pageStart + PAGE_SIZE);
   const pageDispatch = filteredDispatch.slice(pageStart, pageStart + PAGE_SIZE);
 
   const emptyLabel =
-    tab === 'color'
-      ? 'No colors match this filter.'
-      : tab === 'fabric'
+    tab === 'fabric'
         ? 'No fabrics match this filter.'
         : tab === 'challans'
           ? 'No inwards challans match this filter.'
@@ -967,20 +965,6 @@ export default function MmWarehouseStylePage() {
     setColorFilter('');
     setFabricFilter('');
     setChallanFilter('');
-  };
-
-  const openColorFabrics = (name: string) => {
-    setColorFilter(name);
-    setFabricFilter('');
-    setChallanFilter('');
-    setTab('fabric');
-  };
-
-  const openColorRolls = (name: string) => {
-    setColorFilter(name);
-    setFabricFilter('');
-    setChallanFilter('');
-    setTab('rolls');
   };
 
   return (
@@ -1140,7 +1124,7 @@ export default function MmWarehouseStylePage() {
               ) : null}
               {tab === 'rolls' || tab === 'tested' ? (
                 <>
-                  <SelectDropdown
+                  <SelectDropdown size="compact"
                     value={colorFilter}
                     onChange={(value) => {
                       setColorFilter(value);
@@ -1151,7 +1135,7 @@ export default function MmWarehouseStylePage() {
                     icon={Palette}
                     className="w-36"
                   />
-                  <SelectDropdown
+                  <SelectDropdown size="compact"
                     value={fabricFilter}
                     onChange={(value) => {
                       setFabricFilter(value);
@@ -1162,7 +1146,7 @@ export default function MmWarehouseStylePage() {
                     className="w-40"
                   />
                   {tab === 'rolls' ? (
-                    <SelectDropdown
+                    <SelectDropdown size="compact"
                       value={challanFilter}
                       onChange={setChallanFilter}
                       options={challanOptions}
@@ -1171,7 +1155,7 @@ export default function MmWarehouseStylePage() {
                     />
                   ) : (
                     <>
-                      <SelectDropdown
+                      <SelectDropdown size="compact"
                         value={qcFilter}
                         onChange={setQcFilter}
                         options={[
@@ -1192,7 +1176,7 @@ export default function MmWarehouseStylePage() {
                   )}
                 </>
               ) : (
-                <SelectDropdown
+                <SelectDropdown size="compact"
                   value={statusFilter}
                   onChange={setStatusFilter}
                   options={statusOptions}
@@ -1227,125 +1211,36 @@ export default function MmWarehouseStylePage() {
         ) : null}
 
         <div className="flex-1 min-h-0 overflow-auto thin-scrollbar print:overflow-visible print:h-auto">
-        {tab === 'color' && (
-          <div className="p-4">
-            {pageColors.length === 0 ? (
-              <p className="py-10 text-center text-[11px] text-slate-400">{emptyLabel}</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {pageColors.map((row: MmStyleWarehouseColor) => {
-                  const colorLines = fabrics.filter((item) => item.colorway_id === row.colorway_id);
-                  const receivedQty = colorLines.reduce((sum, item) => sum + qtyReceived(item), 0);
-                  const receivedRollCount = colorLines.reduce((sum, item) => sum + rollsReceived(item), 0);
-                  const passedQty = colorLines.reduce((sum, item) => sum + qtyPassed(item), 0);
-                  const passedRollCount = colorLines.reduce((sum, item) => sum + rollsPassed(item), 0);
-                  const dispatchedQty = colorLines.reduce((sum, item) => sum + qtyDispatched(item), 0);
-                  const dispatchedRollCount = colorLines.reduce((sum, item) => sum + rollsDispatched(item), 0);
-                  const need = Number(row.required_m || 0);
-                  const receivedPct = coveragePct(receivedQty, need);
-                  const passedPct = coveragePct(passedQty, need);
-                  const dispatchedPct = coveragePct(dispatchedQty, need);
-                  const selected = colorFilter === row.color_name;
-                  return (
-                    <div
-                      key={row.colorway_id}
-                      className={`rounded-xl border p-3.5 ${
-                        selected ? 'border-blue-300 bg-blue-50/40' : 'border-slate-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <ColorSwatch name={row.color_name} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <p className="text-[13px] font-bold text-slate-900 truncate">{row.color_name}</p>
-                            <span
-                              className={`ml-auto shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                                row.ready
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-slate-50 text-slate-500 border-slate-200'
-                              }`}
-                            >
-                              {row.ready ? 'Ready' : 'Short'}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-0.5">
-                            {row.fabric_count} {row.fabric_count === 1 ? 'fabric' : 'fabrics'}
-                            {' · '}
-                            {receivedPct}% received · {passedPct}% passed · {dispatchedPct}% dispatched
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${passedPct >= 100 ? 'bg-emerald-500' : 'bg-amber-400'}`}
-                          style={{ width: `${passedPct}%` }}
-                        />
-                      </div>
-                      <div className="mt-3 grid grid-cols-4 gap-2">
-                        <div className="rounded-lg bg-blue-50/80 border border-blue-100 px-2 py-1.5">
-                          <p className="text-[9px] font-semibold uppercase tracking-wide text-blue-600">Required</p>
-                          <p className="text-[12px] font-bold tabular-nums text-blue-900 mt-0.5">{fmtQty(need)}</p>
-                        </div>
-                        <div className="rounded-lg bg-amber-50/80 border border-amber-100 px-2 py-1.5">
-                          <p className="text-[9px] font-semibold uppercase tracking-wide text-amber-700">Received</p>
-                          <p className="text-[12px] font-bold tabular-nums text-amber-900 mt-0.5">{fmtQty(receivedQty)}</p>
-                          <p className="text-[9px] text-amber-800/80 mt-0.5">{receivedPct}% · {fmtRolls(receivedRollCount)}</p>
-                        </div>
-                        <div className="rounded-lg bg-emerald-50/80 border border-emerald-100 px-2 py-1.5">
-                          <p className="text-[9px] font-semibold uppercase tracking-wide text-emerald-700">Passed</p>
-                          <p className="text-[12px] font-bold tabular-nums text-emerald-900 mt-0.5">{fmtQty(passedQty)}</p>
-                          <p className="text-[9px] text-emerald-800/80 mt-0.5">{passedPct}% · {fmtRolls(passedRollCount)}</p>
-                        </div>
-                        <div className="rounded-lg bg-green-50/80 border border-green-100 px-2 py-1.5">
-                          <p className="text-[9px] font-semibold uppercase tracking-wide text-green-700">Dispatched</p>
-                          <p className="text-[12px] font-bold tabular-nums text-green-900 mt-0.5">{fmtQty(dispatchedQty)}</p>
-                          <p className="text-[9px] text-green-800/80 mt-0.5">{dispatchedPct}% · {fmtRolls(dispatchedRollCount)}</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-                          onClick={() => openColorFabrics(row.color_name)}
-                        >
-                          Fabrics
-                        </button>
-                        <button
-                          type="button"
-                          className="h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
-                          onClick={() => openColorRolls(row.color_name)}
-                        >
-                          Rolls
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
         {tab === 'fabric' && (
+          fabricColorGroups.length === 0 ? (
+            <p className="px-4 py-10 text-center text-[11px] text-slate-400">{emptyLabel}</p>
+          ) : (
+            <div className="flex flex-col gap-4 py-3">
+              {fabricColorGroups.map((group) => (
+                <div key={group.key}>
+                  <div className="px-4 pb-2 flex items-center gap-2">
+                    <ColorSwatch name={group.colorName} size="sm" />
+                    <p className="text-[12px] font-bold text-slate-800 truncate">{group.colorName}</p>
+                  </div>
           <TableFrame>
             <table className="w-full min-w-[1080px] table-fixed border-collapse">
               <colgroup>
-                <col style={{ width: '11%' }} />
-                <col style={{ width: '15%' }} />
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '12%' }} />
                 <col style={{ width: '8%' }} />
-                <col style={{ width: '5%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '8%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '10%' }} />
-                <col style={{ width: '8%' }} />
+                <col style={{ width: '4%' }} />
                 <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '12%' }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th className={thFirstCls}>Color</th>
-                  <th className={thCls}>Fabric</th>
+                  <th className={thFirstCls}>Fabric</th>
+                  <th className={thCls}>Fabric colour</th>
                   <th className={thCls}>Category</th>
                   <th className={thCenterCls}>UOM</th>
                   <th className={thReqCls}>Required</th>
@@ -1358,26 +1253,30 @@ export default function MmWarehouseStylePage() {
                 </tr>
               </thead>
               <tbody>
-                {pageFabrics.length === 0 && (
-                  <tr>
-                    <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
-                      {emptyLabel}
-                    </td>
-                  </tr>
-                )}
-                {pageFabrics.map((row) => {
+                {group.rows.map((row) => {
                   const typeCategory = fabricTypeCategoryLine(row.fabric_type, row.fabric_category);
                   const word = fabricWord(row);
                   const required = Number(row.required_m || 0);
                   return (
                     <tr key={`${row.colorway_id}-${row.fabric_line_id ?? row.style_material_id ?? row.fabric_name}`}>
-                      <td className={`${tdFirstCls} truncate`}>{row.color_name}</td>
-                      <td className={tdCls}>
+                      <td className={tdFirstCls}>
                         <span className="block font-medium text-slate-800 truncate">{row.fabric_name}</span>
                         {typeCategory !== '—' ? (
                           <span className="block text-[10px] text-slate-400 truncate">{typeCategory}</span>
                         ) : null}
+                        {row.fabric_line_id || row.style_material_id ? (
+                          <button
+                            type="button"
+                            className="text-[10px] font-semibold text-blue-700 hover:text-blue-800"
+                            onClick={() => requestNavigate(RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC, {
+                              lineId: row.fabric_line_id || row.style_material_id || '',
+                            })}
+                          >
+                            Allocate / Book
+                          </button>
+                        ) : null}
                       </td>
+                      <td className={`${tdCls} truncate`}>{fabricColorLabel(fabrics, row)}</td>
                       <td className={`${tdCls} truncate`}>{row.fabric_category || '—'}</td>
                       <td className={`${tdCls} text-center tabular-nums`}>{(row.uom ?? '').trim() || '—'}</td>
                       <td className={tdReqCls}>
@@ -1428,20 +1327,25 @@ export default function MmWarehouseStylePage() {
               </tbody>
             </table>
           </TableFrame>
+                </div>
+              ))}
+            </div>
+          )
         )}
 
         {tab === 'challans' && (
           <TableFrame clip>
             <table className="w-full table-fixed border-collapse">
               <colgroup>
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '11%' }} />
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '7%' }} />
-                <col style={{ width: '9%' }} />
                 <col style={{ width: '10%' }} />
+                <col style={{ width: '11%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '6%' }} />
                 <col style={{ width: '14%' }} />
               </colgroup>
               <thead>
@@ -1451,6 +1355,7 @@ export default function MmWarehouseStylePage() {
                   <th className={thCls}>Origin</th>
                   <th className={thCls}>Color</th>
                   <th className={thCls}>Fabric</th>
+                  <th className={thCls}>Fabric colour</th>
                   <th className={thCenterCls}>Rolls</th>
                   <th className={thCenterCls}>Qty</th>
                   <th className={thWhCls}>Passed qty</th>
@@ -1460,7 +1365,7 @@ export default function MmWarehouseStylePage() {
               <tbody>
                 {pageChallans.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    <td colSpan={10} className="px-4 py-10 text-center text-[11px] text-slate-400">
                       {emptyLabel}
                     </td>
                   </tr>
@@ -1485,6 +1390,7 @@ export default function MmWarehouseStylePage() {
                         <span className="block text-[10px] text-slate-400 truncate">{row.fabric_category}</span>
                       ) : null}
                     </td>
+                    <td className={`${tdCls} truncate`}>{fabricColorLabel(fabrics, row)}</td>
                     <td className={`${tdCls} text-center tabular-nums`}>{row.roll_count}</td>
                     <td className={`${tdCls} text-center tabular-nums`}>{fmtQty(row.qty)}</td>
                     <td className={tdWhCls}>
@@ -1493,9 +1399,7 @@ export default function MmWarehouseStylePage() {
                       </span>
                     </td>
                     <td className={`${tdCls} text-center`}>
-                      <span className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${challanStatusClass(challanRowLabel(row, rolls), row.status)}`}>
-                        {challanRowLabel(row, rolls)}
-                      </span>
+                      <MmStatusDot label={challanRowLabel(row, rolls)} />
                     </td>
                   </tr>
                   );
@@ -1603,7 +1507,7 @@ export default function MmWarehouseStylePage() {
                                             </span>
                                           ) : null}
                                           {challanGroup.status ? (
-                                            <span className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${challanStatusClass(challanRowLabel(challanGroup, rolls), challanGroup.status)}`}>
+                                            <span className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${challanRowStatusClass(challanRowLabel(challanGroup, rolls), challanGroup.status)}`}>
                                               {challanRowLabel(challanGroup, rolls)}
                                             </span>
                                           ) : null}
@@ -1665,14 +1569,15 @@ export default function MmWarehouseStylePage() {
           <TableFrame>
             <table className="w-full min-w-[860px] table-fixed border-collapse">
               <colgroup>
-                <col style={{ width: '16%' }} />
                 <col style={{ width: '14%' }} />
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '18%' }} />
-                <col style={{ width: '8%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '5%' }} />
+                <col style={{ width: '5%' }} />
                 <col style={{ width: '10%' }} />
                 <col style={{ width: '10%' }} />
-                <col style={{ width: '8%' }} />
               </colgroup>
               <thead>
                 <tr>
@@ -1680,6 +1585,7 @@ export default function MmWarehouseStylePage() {
                   <th className={thCls}>When</th>
                   <th className={thCls}>Color</th>
                   <th className={thCls}>Fabric</th>
+                  <th className={thCls}>Fabric colour</th>
                   <th className={thCenterCls}>Rolls</th>
                   <th className={thCenterCls}>Qty</th>
                   <th className={thCls}>To</th>
@@ -1689,7 +1595,7 @@ export default function MmWarehouseStylePage() {
               <tbody>
                 {pageDispatch.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    <td colSpan={9} className="px-4 py-10 text-center text-[11px] text-slate-400">
                       {emptyLabel}
                     </td>
                   </tr>
@@ -1709,13 +1615,12 @@ export default function MmWarehouseStylePage() {
                         <span className="block text-[10px] text-slate-400 truncate">{row.fabric_category}</span>
                       ) : null}
                     </td>
+                    <td className={`${tdCls} truncate`}>{fabricColorLabel(fabrics, row)}</td>
                     <td className={`${tdCls} text-center tabular-nums`}>{row.roll_count}</td>
                     <td className={`${tdCls} text-center tabular-nums`}>{formatQtyM(row.qty, row.uom)}</td>
                     <td className={`${tdCls} truncate`}>Cutting store</td>
                     <td className={`${tdCls} text-center`}>
-                      <span className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${storeDispatchStatusClass(row.status)}`}>
-                        {storeDispatchStatusLabel(row.status)}
-                      </span>
+                      <MmStatusDot label={storeDispatchStatusLabel(row.status)} />
                     </td>
                   </tr>
                 ))}
@@ -1734,10 +1639,25 @@ export default function MmWarehouseStylePage() {
         {tab === 'balance' && (
           <TableFrame>
             <table className="w-full min-w-[1100px] table-fixed border-collapse">
+              <colgroup>
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+                <col style={{ width: '6%' }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th className={thFirstCls}>Color</th>
                   <th className={thCls}>Fabric</th>
+                  <th className={thCls}>Fabric colour</th>
                   <th className={thCenterCls}>Required</th>
                   <th className={thCenterCls}>Received</th>
                   <th className={thCenterCls}>On hand</th>
@@ -1752,12 +1672,12 @@ export default function MmWarehouseStylePage() {
               <tbody>
                 {balanceQuery.isLoading && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">Loading…</td>
+                    <td colSpan={12} className="px-4 py-10 text-center text-[11px] text-slate-400">Loading…</td>
                   </tr>
                 )}
                 {!balanceQuery.isLoading && balanceLines.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                    <td colSpan={12} className="px-4 py-10 text-center text-[11px] text-slate-400">
                       {balanceQuery.error instanceof Error ? balanceQuery.error.message : emptyLabel}
                     </td>
                   </tr>
@@ -1768,6 +1688,7 @@ export default function MmWarehouseStylePage() {
                     <tr key={row.style_material_id}>
                       <td className={`${tdFirstCls} truncate`}>{row.color_name || '—'}</td>
                       <td className={`${tdCls} truncate`}>{row.fabric_name}</td>
+                      <td className={`${tdCls} truncate`}>{fabricColorLabel(fabrics, row)}</td>
                       <td className={`${tdCls} text-center tabular-nums`}>{fmtQty(row.required)}</td>
                       <td className={`${tdCls} text-center tabular-nums`}>{formatQtyM(row.received, row.uom)}</td>
                       <td className={`${tdCls} text-center tabular-nums`}>{formatQtyM(row.on_hand_warehouse, row.uom)}</td>

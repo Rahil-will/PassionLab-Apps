@@ -10,6 +10,7 @@ import {
   catalogSerialCellClass,
 } from '../../../components/settings/CatalogTablePanel';
 import { DesktopWriteGate } from '../../../components/DesktopWriteGate';
+import { EditorToggle } from './EditorToggle';
 import { MmTableSaveButton } from './MmTableSaveButton';
 
 export const MM_FIELD_TYPES = [
@@ -17,14 +18,11 @@ export const MM_FIELD_TYPES = [
   { value: 'number', label: 'Number' },
   { value: 'decimal', label: 'Decimal' },
   { value: 'select', label: 'Dropdown' },
+  { value: 'checkbox', label: 'Checkbox' },
 ] as const;
 
-export const MM_CAPTURE_SITES = [
-  { value: 'either', label: 'Mill or warehouse' },
-  { value: 'mill', label: 'Mill only' },
-  { value: 'warehouse', label: 'Warehouse only' },
-  { value: 'both', label: 'Mill and warehouse' },
-] as const;
+export type MmToleranceMode = 'pm' | 'range';
+export type MmToleranceUnit = 'abs' | 'pct';
 
 export interface MmFieldRow {
   localId: string;
@@ -35,10 +33,16 @@ export interface MmFieldRow {
   options: string[];
   remarks: string;
   captureSite: string;
-  /** Fabric v4: per-roll vs per-lot test field. */
-  testLevel?: 'roll' | 'lot';
-  /** Fabric v4: stage codes where this field is required. */
-  requiredAtStages?: string[];
+  toleranceOn?: boolean;
+  toleranceMode?: MmToleranceMode;
+  /** ± value when mode is pm. */
+  tolerance?: number | null;
+  toleranceUnit?: MmToleranceUnit;
+  toleranceTarget?: number | null;
+  toleranceMin?: number | null;
+  toleranceMax?: number | null;
+  /** Server text such as "± 5%". */
+  toleranceText?: string;
 }
 
 export interface MmTypeOption {
@@ -60,8 +64,6 @@ interface MmTypeFieldsEditorProps {
   namePlaceholder: string;
   /** Testing keeps Input + dropdown chips. Requirement uses remarks only. */
   variant: 'test' | 'requirement';
-  /** When set (Fabric v4), show Level + Required-at-stages on test fields. */
-  stageOptions?: { value: string; label: string }[];
   onError?: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void | Promise<void>;
@@ -73,10 +75,68 @@ const blankForm = {
   options: [] as string[],
   remarks: '',
   captureSite: 'either',
-  testLevel: 'roll' as 'roll' | 'lot',
-  requiredAtStages: [] as string[],
+  toleranceOn: false,
+  toleranceMode: 'pm' as MmToleranceMode,
+  tolerance: '',
+  toleranceUnit: 'abs' as MmToleranceUnit,
+  toleranceTarget: '',
+  toleranceMin: '',
+  toleranceMax: '',
   editingLocalId: null as string | null,
 };
+
+function optionalNumber(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : null;
+}
+
+function toleranceFields(form: typeof blankForm): Pick<
+  MmFieldRow,
+  'toleranceOn' | 'toleranceMode' | 'tolerance' | 'toleranceUnit' | 'toleranceTarget' | 'toleranceMin' | 'toleranceMax'
+> {
+  const on = numericInput(form.dataType) && form.toleranceOn;
+  if (!on) {
+    return {
+      toleranceOn: false,
+      toleranceMode: 'pm',
+      tolerance: null,
+      toleranceUnit: 'abs',
+      toleranceTarget: null,
+      toleranceMin: null,
+      toleranceMax: null,
+    };
+  }
+  const range = form.toleranceMode === 'range';
+  return {
+    toleranceOn: true,
+    toleranceMode: range ? 'range' : 'pm',
+    tolerance: range ? null : optionalNumber(form.tolerance),
+    toleranceUnit: form.toleranceUnit === 'pct' ? 'pct' : 'abs',
+    toleranceTarget: null,
+    toleranceMin: range ? optionalNumber(form.toleranceMin) : null,
+    toleranceMax: range ? optionalNumber(form.toleranceMax) : null,
+  };
+}
+
+function tolerancePreview(row: MmFieldRow): string {
+  const server = (row.toleranceText ?? '').trim();
+  if (server) return server;
+  if (!row.toleranceOn) return '';
+  if (row.toleranceMode === 'range') {
+    if (row.toleranceMin != null && row.toleranceMax != null) return `${row.toleranceMin}–${row.toleranceMax}`;
+    if (row.toleranceMax != null) return `≤ ${row.toleranceMax}`;
+    if (row.toleranceMin != null) return `≥ ${row.toleranceMin}`;
+    return '';
+  }
+  if (row.tolerance == null) return '';
+  return row.toleranceUnit === 'pct' ? `± ${row.tolerance}%` : `± ${row.tolerance}`;
+}
+
+function numericInput(dataType: string): boolean {
+  return dataType === 'number' || dataType === 'decimal';
+}
 
 function mergeOptionDraft(current: string[], draft: string): string[] {
   const trimmed = draft.trim();
@@ -95,14 +155,12 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
       tableSubtitle,
       namePlaceholder,
       variant,
-      stageOptions,
       onError,
       onDirtyChange,
       onSaved,
     },
     ref,
   ) {
-    const showV4Rules = variant === 'test' && Array.isArray(stageOptions);
     const [typeId, setTypeId] = useState(types[0]?.id ?? '');
     const [drafts, setDrafts] = useState<Record<string, MmFieldRow[]>>({});
     const [form, setForm] = useState(blankForm);
@@ -141,7 +199,9 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
     );
 
     const formDirty = Boolean(
-      form.label.trim() || form.remarks.trim() || form.options.length || optionDraft.trim(),
+      form.label.trim() || form.remarks.trim() || form.options.length || optionDraft.trim()
+      || form.toleranceOn || form.tolerance.trim() || form.toleranceTarget.trim()
+      || form.toleranceMin.trim() || form.toleranceMax.trim(),
     );
 
     useEffect(() => {
@@ -177,7 +237,7 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
       const label = form.label.trim();
       if (!label) return;
       if (isTest && label.toLowerCase() === 'shade') {
-        onError?.('Shade is mill identity and a warehouse testing outcome, not a testing parameter');
+        onError?.('Shade is set on the roll, not a testing parameter.');
         return;
       }
       if (rows.some((r) => r.localId !== form.editingLocalId && r.label.toLowerCase() === label.toLowerCase())) {
@@ -187,6 +247,7 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
       const options = isTest && form.dataType === 'select' ? mergeOptionDraft(form.options, optionDraft) : [];
       const dataType = isTest ? form.dataType : 'text';
       const remarks = isTest ? '' : form.remarks.trim();
+      const tolerance = toleranceFields(form);
 
       if (form.editingLocalId) {
         setRows(
@@ -198,9 +259,9 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
                 dataType,
                 options,
                 remarks,
-                captureSite: isTest ? form.captureSite || 'either' : 'either',
-                testLevel: showV4Rules ? form.testLevel : r.testLevel,
-                requiredAtStages: showV4Rules ? form.requiredAtStages : r.requiredAtStages,
+                captureSite: 'either',
+                toleranceText: '',
+                ...tolerance,
               }
               : r,
           ),
@@ -216,9 +277,9 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
             dataType,
             options,
             remarks,
-            captureSite: form.captureSite || 'either',
-            testLevel: showV4Rules ? form.testLevel : 'roll',
-            requiredAtStages: showV4Rules ? form.requiredAtStages : [],
+            captureSite: 'either',
+            toleranceText: '',
+            ...tolerance,
           },
         ]);
       }
@@ -231,9 +292,14 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
         dataType: row.dataType,
         options: row.options,
         remarks: row.remarks,
-        captureSite: row.captureSite || 'either',
-        testLevel: row.testLevel === 'lot' ? 'lot' : 'roll',
-        requiredAtStages: row.requiredAtStages ?? [],
+        captureSite: 'either',
+        toleranceOn: row.toleranceOn === true,
+        toleranceMode: row.toleranceMode === 'range' ? 'range' : 'pm',
+        tolerance: row.tolerance != null && Number.isFinite(row.tolerance) ? String(row.tolerance) : '',
+        toleranceUnit: row.toleranceUnit === 'pct' ? 'pct' : 'abs',
+        toleranceTarget: row.toleranceTarget != null && Number.isFinite(row.toleranceTarget) ? String(row.toleranceTarget) : '',
+        toleranceMin: row.toleranceMin != null && Number.isFinite(row.toleranceMin) ? String(row.toleranceMin) : '',
+        toleranceMax: row.toleranceMax != null && Number.isFinite(row.toleranceMax) ? String(row.toleranceMax) : '',
         editingLocalId: row.localId,
       });
       setOptionDraft('');
@@ -255,7 +321,7 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
         }
         if (pendingLabel && activeTypeId) {
           if (isTest && pendingLabel.toLowerCase() === 'shade') {
-            onError?.('Shade is mill identity and a warehouse testing outcome, not a testing parameter');
+            onError?.('Shade is set on the roll, not a testing parameter.');
             return false;
           }
           if (rows.some((r) => r.localId !== form.editingLocalId && r.label.toLowerCase() === pendingLabel.toLowerCase())) {
@@ -265,8 +331,8 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
           const options = isTest && form.dataType === 'select' ? mergeOptionDraft(form.options, optionDraft) : [];
           const dataType = isTest ? form.dataType : 'text';
           const remarks = isTest ? '' : form.remarks.trim();
+          const tolerance = toleranceFields(form);
           const current = nextDrafts[activeTypeId] ?? savedRows(activeTypeId);
-          const captureSite = isTest ? (form.captureSite || 'either') : 'either';
           const nextRows = form.editingLocalId
             ? current.map((r) => (r.localId === form.editingLocalId
               ? {
@@ -275,9 +341,9 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
                 dataType,
                 options,
                 remarks,
-                captureSite,
-                testLevel: showV4Rules ? form.testLevel : r.testLevel,
-                requiredAtStages: showV4Rules ? form.requiredAtStages : r.requiredAtStages,
+                captureSite: 'either',
+                toleranceText: '',
+                ...tolerance,
               }
               : r))
             : [...current, {
@@ -288,9 +354,9 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
               dataType,
               options,
               remarks,
-              captureSite,
-              testLevel: showV4Rules ? form.testLevel : 'roll',
-              requiredAtStages: showV4Rules ? form.requiredAtStages : [],
+              captureSite: 'either',
+              toleranceText: '',
+              ...tolerance,
             }];
           nextDrafts = { ...nextDrafts, [activeTypeId]: nextRows };
           setDrafts(nextDrafts);
@@ -320,12 +386,10 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
           setSaving(false);
         }
       },
-    }), [dirtyTypeIds, formDirty, drafts, persist, savedRows, onDirtyChange, onError, onSaved, form, optionDraft, activeTypeId, rows, isTest, fieldNoun, showV4Rules]);
+    }), [dirtyTypeIds, formDirty, drafts, persist, savedRows, onDirtyChange, onError, onSaved, form, optionDraft, activeTypeId, rows, isTest, fieldNoun]);
 
     const tableHeaders = isTest
-      ? (showV4Rules
-        ? ['S.No', fieldNoun, 'Input', 'Where', 'Level', 'Stages', 'Options']
-        : ['S.No', fieldNoun, 'Input', 'Where', 'Options'])
+      ? ['S.No', fieldNoun, 'Input', 'Options']
       : ['S.No', fieldNoun, 'Remarks'];
 
     return (
@@ -336,7 +400,7 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
         fillHeight
         left={(
           <div className="space-y-4">
-            <SelectDropdown
+            <SelectDropdown size="compact"
               label="Fabric type"
               value={activeTypeId}
               onChange={(v) => {
@@ -362,14 +426,7 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
                 />
                 {isTest ? (
                   <>
-                    <SelectDropdown
-                      label="Where captured"
-                      value={form.captureSite}
-                      onChange={(v) => setForm({ ...form, captureSite: v })}
-                      options={MM_CAPTURE_SITES.map((site) => ({ value: site.value, label: site.label }))}
-                      className="w-full"
-                    />
-                    <SelectDropdown
+                    <SelectDropdown size="compact"
                       label="Input"
                       value={form.dataType}
                       onChange={(v) => {
@@ -380,41 +437,78 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
                       options={MM_FIELD_TYPES.map((t) => ({ value: t.value, label: t.label }))}
                       className="w-full"
                     />
-                    {showV4Rules ? (
-                      <>
-                        <SelectDropdown
-                          label="Level"
-                          value={form.testLevel}
-                          onChange={(v) =>
-                            setForm({ ...form, testLevel: v === 'lot' ? 'lot' : 'roll' })
-                          }
-                          options={[
-                            { value: 'roll', label: 'Per roll' },
-                            { value: 'lot', label: 'Per lot' },
-                          ]}
-                          className="w-full"
+                    {numericInput(form.dataType) ? (
+                      <div className="space-y-2">
+                        <EditorToggle
+                          label="Tolerance"
+                          on={form.toleranceOn}
+                          onChange={(toleranceOn) => setForm({ ...form, toleranceOn })}
                         />
-                        <div>
-                          <p className="text-[10px] font-semibold text-slate-600 mb-1">Required at stages</p>
-                          <div className="flex flex-wrap gap-2">
-                            {(stageOptions ?? []).map((stage) => (
-                              <label key={stage.value} className="text-[11px] text-slate-700 flex items-center gap-1">
-                                <input
-                                  type="checkbox"
-                                  checked={form.requiredAtStages.includes(stage.value)}
-                                  onChange={(e) => {
-                                    const requiredAtStages = e.target.checked
-                                      ? [...form.requiredAtStages, stage.value]
-                                      : form.requiredAtStages.filter((code) => code !== stage.value);
-                                    setForm({ ...form, requiredAtStages });
-                                  }}
+                        {form.toleranceOn ? (
+                          <div className="space-y-2">
+                            <div className="flex rounded-full border border-slate-200 overflow-hidden w-fit">
+                              <button
+                                type="button"
+                                className={`px-3 py-1 text-[11px] font-semibold ${form.toleranceMode !== 'range' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}
+                                onClick={() => setForm({ ...form, toleranceMode: 'pm' })}
+                              >
+                                ± around fabric spec
+                              </button>
+                              <button
+                                type="button"
+                                className={`px-3 py-1 text-[11px] font-semibold ${form.toleranceMode === 'range' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}
+                                onClick={() => setForm({ ...form, toleranceMode: 'range' })}
+                              >
+                                Range
+                              </button>
+                            </div>
+                            {form.toleranceMode === 'range' ? (
+                              <div className="grid grid-cols-2 gap-2">
+                                <Input
+                                  label="Min"
+                                  type="number"
+                                  value={form.toleranceMin}
+                                  onChange={(e) => setForm({ ...form, toleranceMin: e.target.value })}
                                 />
-                                {stage.label}
-                              </label>
-                            ))}
+                                <Input
+                                  label="Max"
+                                  type="number"
+                                  value={form.toleranceMax}
+                                  onChange={(e) => setForm({ ...form, toleranceMax: e.target.value })}
+                                />
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex items-end gap-2">
+                                  <Input
+                                    label="±"
+                                    type="number"
+                                    value={form.tolerance}
+                                    onChange={(e) => setForm({ ...form, tolerance: e.target.value })}
+                                    className="flex-1"
+                                  />
+                                  <div className="flex rounded-lg border border-slate-200 overflow-hidden shrink-0 mb-0.5">
+                                    <button
+                                      type="button"
+                                      className={`px-2 py-1.5 text-[11px] font-semibold ${form.toleranceUnit !== 'pct' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}
+                                      onClick={() => setForm({ ...form, toleranceUnit: 'abs' })}
+                                    >
+                                      abs
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`px-2 py-1.5 text-[11px] font-semibold ${form.toleranceUnit === 'pct' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}
+                                      onClick={() => setForm({ ...form, toleranceUnit: 'pct' })}
+                                    >
+                                      %
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      </>
+                        ) : null}
+                      </div>
                     ) : null}
                     {showOptionForm ? (
                       <div className="space-y-2">
@@ -540,20 +634,10 @@ export const MmTypeFieldsEditor = forwardRef<MmTypeFieldsHandle, MmTypeFieldsEdi
                       <>
                         <CatalogTableCell className="text-slate-600">
                           {MM_FIELD_TYPES.find((t) => t.value === row.dataType)?.label ?? row.dataType}
+                          {tolerancePreview(row) ? (
+                            <span className="text-slate-400"> · {tolerancePreview(row)}</span>
+                          ) : null}
                         </CatalogTableCell>
-                        <CatalogTableCell className="text-slate-600">
-                          {MM_CAPTURE_SITES.find((site) => site.value === row.captureSite)?.label ?? 'Mill or warehouse'}
-                        </CatalogTableCell>
-                        {showV4Rules ? (
-                          <>
-                            <CatalogTableCell className="text-slate-600">
-                              {row.testLevel === 'lot' ? 'Per lot' : 'Per roll'}
-                            </CatalogTableCell>
-                            <CatalogTableCell className="text-slate-600 truncate">
-                              {(row.requiredAtStages ?? []).join(', ') || '—'}
-                            </CatalogTableCell>
-                          </>
-                        ) : null}
                         <CatalogTableCell>
                           {row.options.length > 0 ? (
                             <div className="flex flex-wrap gap-1">

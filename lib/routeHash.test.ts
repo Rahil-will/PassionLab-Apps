@@ -98,6 +98,19 @@ describe('parseRouteHash', () => {
     expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_END_BITS);
   });
 
+  it('sends old mill process history to the warehouse', () => {
+    expect(parseRouteHash('#/material/mill/process').route).toBe(RoutePath.MATERIAL_WAREHOUSE_PROCESS);
+    expect(parseRouteHash(RoutePath.MATERIAL_WAREHOUSE_PROCESS).route).toBe(RoutePath.MATERIAL_WAREHOUSE_PROCESS);
+    const mill = parseRouteHash('#/material/mill/process/proc-abc-123');
+    expect(mill.route).toBe(RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL);
+    expect(mill.params.id).toBe('proc-abc-123');
+    expect(mill.params.side).toBeUndefined();
+    const warehouse = parseRouteHash('#/material/warehouse/process/proc-abc-123');
+    expect(warehouse.route).toBe(RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL);
+    expect(warehouse.params.id).toBe('proc-abc-123');
+    expect(warehouse.params.side).toBeUndefined();
+  });
+
   it('resolves a process challan with id', () => {
     const { route, params } = parseRouteHash('#/material/process/proc-abc-123');
     expect(route).toBe(RoutePath.MATERIAL_PROCESS_DETAIL);
@@ -116,9 +129,9 @@ describe('parseRouteHash', () => {
     expect(params.id).toBe('ret-abc-123');
   });
 
-  it('resolves warehouse stock before treating it as warehouse home', () => {
+  it('sends the old stock page to the fabric view', () => {
     const { route } = parseRouteHash(RoutePath.MATERIAL_WAREHOUSE_STOCK);
-    expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_STOCK);
+    expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_FABRICS);
   });
 
   it('resolves warehouse movements without treating it as stock', () => {
@@ -126,9 +139,27 @@ describe('parseRouteHash', () => {
     expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_MOVEMENTS);
   });
 
-  it('resolves expected receipts without treating it as warehouse home', () => {
-    const { route } = parseRouteHash(RoutePath.MATERIAL_WAREHOUSE_EXPECTED);
-    expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXPECTED);
+  it('resolves expected, and splits internal and external receipts', () => {
+    expect(parseRouteHash('#/material/warehouse/expected').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXPECTED);
+    expect(parseRouteHash('#/material/warehouse/receipts').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXTERNAL);
+    expect(parseRouteHash('#/material/warehouse/receipts/external').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXTERNAL);
+    expect(parseRouteHash('#/material/warehouse/external').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXTERNAL);
+    expect(parseRouteHash('#/material/warehouse/receipts/internal').route).toBe(RoutePath.MATERIAL_WAREHOUSE_INTERNAL);
+    expect(parseRouteHash('#/material/warehouse/receipts/process-returns').route).toBe(RoutePath.MATERIAL_WAREHOUSE_PROCESS_RETURNS);
+    expect(parseRouteHash('#/material/warehouse/internal').route).toBe(RoutePath.MATERIAL_WAREHOUSE_INTERNAL);
+    const detail = parseRouteHash('#/material/warehouse/receipts/rcpt-1');
+    expect(detail.route).toBe(RoutePath.MATERIAL_WAREHOUSE_RECEIPT);
+    expect(detail.params.id).toBe('rcpt-1');
+  });
+
+  it('sends style fabrics to expected', () => {
+    expect(parseRouteHash('#/material/warehouse/style-fabrics').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXPECTED);
+    const line = parseRouteHash('#/material/warehouse/style-fabrics/line-9');
+    expect(line.route).toBe(RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC);
+    expect(line.params.lineId).toBe('line-9');
+    const alloc = parseRouteHash('#/material/warehouse/style-fabrics/line-9/allocate');
+    expect(alloc.route).toBe(RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC_ALLOCATE);
+    expect(alloc.params.lineId).toBe('line-9');
   });
 
   it('resolves warehouse process send without treating it as warehouse home', () => {
@@ -136,64 +167,22 @@ describe('parseRouteHash', () => {
     expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND);
   });
 
-  it('resolves receive unallocated without treating it as warehouse home', () => {
-    const { route } = parseRouteHash(RoutePath.MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED);
-    expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_RECEIVE_UNALLOCATED);
+  it('sends old receive-unallocated to receive fabric', () => {
+    const { route } = parseRouteHash('#/material/warehouse/receive-unallocated');
+    expect(route).toBe(RoutePath.MATERIAL_WAREHOUSE_RECEIVE);
   });
 
-  it('resolves mill unallocated without treating it as mill line', () => {
-    const { route } = parseRouteHash(RoutePath.MATERIAL_MILL_UNALLOCATED);
-    expect(route).toBe(RoutePath.MATERIAL_MILL_UNALLOCATED);
-  });
-
-  it('resolves mill unallocated dispatch without treating it as mill line', () => {
-    expect(parseRouteHash(RoutePath.MATERIAL_MILL_UNALLOCATED_DISPATCH).route).toBe(
-      RoutePath.MATERIAL_MILL_UNALLOCATED_DISPATCH,
-    );
-  });
-
-  it('resolves mill general PO allocate without treating it as a batch', () => {
-    expect(parseRouteHash(RoutePath.MATERIAL_MILL_UNALLOCATED_ALLOCATE).route).toBe(
-      RoutePath.MATERIAL_MILL_UNALLOCATED_ALLOCATE,
-    );
-  });
-
-  it('resolves mill general PO fabric details and allocate', () => {
-    const line = parseRouteHash('#/material/mill/unallocated/batch-1');
-    expect(line.route).toBe(RoutePath.MATERIAL_MILL_UNALLOCATED_LINE);
-    expect(line.params).toMatchObject({ batchId: 'batch-1' });
-    const alloc = parseRouteHash('#/material/mill/unallocated/batch-1/allocate');
-    expect(alloc.route).toBe(RoutePath.MATERIAL_MILL_UNALLOCATED_LINE_ALLOCATE);
-    expect(alloc.params).toMatchObject({ batchId: 'batch-1' });
-  });
-
-  it('resolves mill stock without treating it as mill line', () => {
-    expect(parseRouteHash(RoutePath.MATERIAL_MILL_STOCK).route).toBe(RoutePath.MATERIAL_MILL_STOCK);
-  });
-
-  it('keeps mill stock query mode for testing and inspection', () => {
-    const testing = parseRouteHash(`${RoutePath.MATERIAL_MILL_STOCK}?mode=testing`);
-    expect(testing.route).toBe(RoutePath.MATERIAL_MILL_STOCK);
-    expect(testing.params.mode).toBe('testing');
-    const inspection = parseRouteHash(`${RoutePath.MATERIAL_MILL_STOCK}?mode=inspection`);
-    expect(inspection.route).toBe(RoutePath.MATERIAL_MILL_STOCK);
-    expect(inspection.params.mode).toBe('inspection');
-  });
-
-  it('resolves mill styles and history without treating them as mill line', () => {
-    expect(parseRouteHash(RoutePath.MATERIAL_MILL_STYLES).route).toBe(RoutePath.MATERIAL_MILL_STYLES);
-    expect(parseRouteHash(RoutePath.MATERIAL_MILL_HISTORY).route).toBe(RoutePath.MATERIAL_MILL_HISTORY);
-  });
-
-  it('resolves mill challan detail without treating it as mill line or dispatch', () => {
-    const hash = '#/material/mill/line/ord-1/col-2/fab-3/challan/ch-99';
-    const { route, params } = parseRouteHash(hash);
-    expect(route).toBe(RoutePath.MATERIAL_MILL_CHALLAN);
-    expect(params).toMatchObject({
-      orderId: 'ord-1',
-      colorwayId: 'col-2',
-      fabricLineId: 'fab-3',
-      id: 'ch-99',
-    });
+  it('sends old mill hashes into the warehouse', () => {
+    expect(parseRouteHash('#/material/mill').route).toBe(RoutePath.MATERIAL_WAREHOUSE);
+    expect(parseRouteHash('#/material/mill/batches').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXTERNAL);
+    expect(parseRouteHash('#/material/mill/stock').route).toBe(RoutePath.MATERIAL_WAREHOUSE_FABRICS);
+    expect(parseRouteHash('#/material/mill/qc').route).toBe(RoutePath.MATERIAL_WAREHOUSE_QC);
+    expect(parseRouteHash('#/material/mill/styles').route).toBe(RoutePath.MATERIAL_WAREHOUSE_EXPECTED);
+    const line = parseRouteHash('#/material/mill/line/ord-1/col-2/fab-3');
+    expect(line.route).toBe(RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC);
+    expect(line.params.lineId).toBe('fab-3');
+    const alloc = parseRouteHash('#/material/mill/line/ord-1/col-2/fab-3/allocate');
+    expect(alloc.route).toBe(RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC_ALLOCATE);
+    expect(alloc.params.lineId).toBe('fab-3');
   });
 });

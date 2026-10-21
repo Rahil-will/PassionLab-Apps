@@ -15,10 +15,10 @@ import { useMmChallanPrint } from '../../lib/useMmChallanPrint';
 import { storeDispatchStatusClass, storeDispatchStatusLabel } from '../../lib/inboundDisplay';
 import { mmReceiveStoreChallan } from '../../lib/mmRpc';
 import { useInvalidateMmOps, useMmStoreChallanDetail } from '../../lib/useMmOps';
-import { formatQtyM, millDateTimeParts } from '../../lib/mmRollDraft';
+import { formatQtyM, dateTimeParts } from '../../lib/mmRollDraft';
 
 function WhenPill({ label, iso }: { label: string; iso: string | null | undefined }) {
-  const parts = millDateTimeParts(iso);
+  const parts = dateTimeParts(iso);
   return (
     <span className="px-2 py-0.5 rounded-full border border-slate-200 bg-white text-[10px] font-medium text-slate-600">
       <span className="text-slate-400">{label}</span>

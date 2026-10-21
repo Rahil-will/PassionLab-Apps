@@ -6,6 +6,7 @@ import { usePageHeader } from '../../../../components/Breadcrumb';
 import { useNavigationStore } from '../../../../stores';
 import { mmListEndBitReturns, type MmEndBitReturn } from '../../lib/mmRpc';
 import { formatQtyM, formatWhen } from '../../lib/mmRollDraft';
+import { MmStatusDot } from '../../components/MmStatusDot';
 
 const thCls =
   'px-2.5 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50 text-left whitespace-nowrap';
@@ -45,7 +46,6 @@ export default function MmWarehouseEndBitsPage() {
                 <th className={thCls}>Roll</th>
                 <th className={thCls}>Style</th>
                 <th className={thCls}>Qty</th>
-                <th className={thCls}>Mill shade</th>
                 <th className={thCls}>Tested shade</th>
                 <th className={thCls}>Location</th>
                 <th className={thCenterCls}>Status</th>
@@ -55,7 +55,7 @@ export default function MmWarehouseEndBitsPage() {
             <tbody>
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-[11px] text-slate-400">
+                  <td colSpan={7} className="px-4 py-10 text-center text-[11px] text-slate-400">
                     No end-bit returns.
                   </td>
                 </tr>
@@ -70,10 +70,11 @@ export default function MmWarehouseEndBitsPage() {
                     ) : null}
                   </td>
                   <td className={`${tdCls} tabular-nums`}>{formatQtyM(row.qty, row.qty_uom)}</td>
-                  <td className={tdCls}>{row.mill_shade || '—'}</td>
                   <td className={tdCls}>{row.tested_shade || '—'}</td>
                   <td className={tdCls}>{row.location_name || '—'}</td>
-                  <td className={`${tdCls} text-center`}>{row.status ? row.status.replace(/_/g, ' ') : '—'}</td>
+                  <td className={`${tdCls} text-center`}>
+                    <MmStatusDot label={row.status ? row.status.replace(/_/g, ' ') : '—'} />
+                  </td>
                   <td className={tdCls}>{formatWhen(row.returned_at)}</td>
                 </tr>
               ))}

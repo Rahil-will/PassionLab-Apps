@@ -1,11 +1,12 @@
 import type { MmRackOpsRoll, MmRackOpsTarget } from './mmRpc';
+import { declaredQty } from './mmRollDraft';
 
 export function styleKey(roll: MmRackOpsRoll): string {
   return roll.order_id || roll.style_name;
 }
 
 export function batchKey(roll: MmRackOpsRoll): string {
-  return roll.mill_batch_id || roll.batch_no || roll.lot_no || '';
+  return roll.batch_no || roll.lot_no || '';
 }
 
 export function batchLabel(roll: MmRackOpsRoll): string {
@@ -13,7 +14,19 @@ export function batchLabel(roll: MmRackOpsRoll): string {
 }
 
 export function qtySum(rolls: MmRackOpsRoll[]): number {
-  return rolls.reduce((sum, roll) => sum + (Number(roll.length_m) || 0), 0);
+  return rolls.reduce((sum, roll) => sum + declaredQty(roll, roll.uom), 0);
+}
+
+export function qtyPhrase(rolls: MmRackOpsRoll[]): string {
+  const buckets = new Map<string, number>();
+  for (const roll of rolls) {
+    const unit = (roll.uom ?? '').trim() || 'm';
+    const qty = declaredQty(roll, unit);
+    if (qty <= 0) continue;
+    buckets.set(unit, (buckets.get(unit) ?? 0) + qty);
+  }
+  if (buckets.size === 0) return '0';
+  return [...buckets.entries()].map(([unit, qty]) => qtyText(qty, unit)).join(' · ');
 }
 
 export function qtyText(n: number, uom = 'm'): string {

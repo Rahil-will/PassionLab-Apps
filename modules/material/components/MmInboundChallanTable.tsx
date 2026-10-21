@@ -1,14 +1,11 @@
-import React, { useState } from 'react';
-import { Check, Eye } from 'lucide-react';
-import { DesktopWriteGate, useDesktopWriteRole } from '../../../components/DesktopWriteGate';
-import { useNavigationStore, useNotificationStore } from '../../../stores';
+import React from 'react';
+import { Eye } from 'lucide-react';
+import { useNavigationStore } from '../../../stores';
 import { RoutePath } from '../../../types';
-import { receiveMillChallanAsIs, type MmInChallanHeader } from '../lib/mmRpc';
-import { useInvalidateMmOps } from '../lib/useMmOps';
+import { type MmInChallanHeader } from '../lib/mmRpc';
 import {
   inboundDocKind,
   inboundFabricCategory,
-  inboundIsStyleBound,
   inboundOpsStatus,
   inboundOpsStatusLabel,
   inboundPassedRolls,
@@ -16,7 +13,6 @@ import {
   inboundStatusDot,
   inboundStatusText,
   inboundStyleDisplayName,
-  inboundStyleKindLabel,
   inboundWhen,
 } from '../lib/inboundDisplay';
 import { formatQtyM, formatWhen } from '../lib/mmRollDraft';
@@ -84,41 +80,19 @@ function unitsLabel(count: number | null | undefined, form: string | null | unde
 }
 
 function InboundActionCell({
-  row,
-  busyId,
-  hideReceive,
   onView,
-  onReceive,
+  row,
 }: {
   row: MmInChallanHeader;
-  busyId: string | null;
-  hideReceive?: boolean;
   onView: (row: MmInChallanHeader, e: React.MouseEvent) => void;
-  onReceive: (row: MmInChallanHeader, e: React.MouseEvent) => void;
 }) {
-  const millPending = row.source === 'mill' && row.status === 'pending';
-  const canWrite = useDesktopWriteRole();
   const iconBtn =
-    'inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40';
+    'inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800';
   return (
     <div className="inline-flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-      {millPending && canWrite && !hideReceive ? (
-        <DesktopWriteGate>
-          <button
-            type="button"
-            className={`${iconBtn} text-emerald-700 border-emerald-200 hover:bg-emerald-50`}
-            disabled={busyId === row.id}
-            aria-label="Receive challan"
-            onClick={(e) => onReceive(row, e)}
-          >
-            <Check size={14} />
-          </button>
-        </DesktopWriteGate>
-      ) : (
-        <button type="button" className={iconBtn} aria-label="View challan" onClick={(e) => onView(row, e)}>
-          <Eye size={14} />
-        </button>
-      )}
+      <button type="button" className={iconBtn} aria-label="View challan" onClick={(e) => onView(row, e)}>
+        <Eye size={14} />
+      </button>
     </div>
   );
 }
@@ -138,16 +112,11 @@ function StatusCell({ row }: { row: MmInChallanHeader }) {
 export function MmInboundChallanTable({
   rows,
   variant,
-  millOrigin = false,
 }: {
   rows: MmInChallanHeader[];
-  variant: 'mill' | 'vendor' | 'mixed' | 'preview' | 'testing';
-  millOrigin?: boolean;
+  variant: 'vendor' | 'mixed' | 'preview' | 'testing';
 }) {
   const requestNavigate = useNavigationStore((s) => s.requestNavigate);
-  const { showNotification } = useNotificationStore();
-  const invalidate = useInvalidateMmOps();
-  const [busyId, setBusyId] = useState<string | null>(null);
   const testing = variant === 'testing';
 
   const open = (row: MmInChallanHeader) => {
@@ -155,36 +124,12 @@ export function MmInboundChallanTable({
       requestNavigate(RoutePath.MATERIAL_WAREHOUSE_TESTING_DETAIL, { id: row.id });
       return;
     }
-    if (millOrigin && row.order_id && row.colorway_id && row.fabric_line_id) {
-      requestNavigate(RoutePath.MATERIAL_MILL_CHALLAN, {
-        orderId: row.order_id,
-        colorwayId: row.colorway_id,
-        fabricLineId: row.fabric_line_id,
-        id: row.id,
-      });
-      return;
-    }
-    requestNavigate(RoutePath.MATERIAL_WAREHOUSE_ROLL, { kind: row.source, id: row.id });
+    requestNavigate(RoutePath.MATERIAL_WAREHOUSE_RECEIPT, { id: row.id });
   };
 
   const view = (row: MmInChallanHeader, e: React.MouseEvent) => {
     e.stopPropagation();
     open(row);
-  };
-
-  const receive = async (row: MmInChallanHeader, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setBusyId(row.id);
-    try {
-      const res = await receiveMillChallanAsIs(row.id, row.row_version);
-      if (res.ok === false) throw new Error(res.message);
-      showNotification(`Received ${row.challan_no}`, 'success');
-      await invalidate();
-    } catch (err) {
-      showNotification(err instanceof Error ? err.message : 'Receive failed', 'error');
-    } finally {
-      setBusyId(null);
-    }
   };
 
   if (variant === 'preview') {
@@ -236,7 +181,7 @@ export function MmInboundChallanTable({
                 <td className={previewTdQty}>{formatQtyM(row.qty, row.uom)}</td>
                 <td className={previewTdRolls}>{inboundRollBadge(row)}</td>
                 <td className={`${previewTd} text-center`}>
-                  <InboundActionCell row={row} busyId={busyId} hideReceive={millOrigin} onView={view} onReceive={(r, e) => void receive(r, e)} />
+                  <InboundActionCell row={row} onView={view} />
                 </td>
               </tr>
             ))}
@@ -261,7 +206,6 @@ export function MmInboundChallanTable({
           <col style={{ width: '8%' }} />
           <col style={{ width: '14%' }} />
           {testing ? <col style={{ width: '7%' }} /> : null}
-          {millOrigin ? <col style={{ width: '7%' }} /> : null}
           <col style={{ width: '7%' }} />
           <col style={{ width: '7%' }} />
           <col style={{ width: '7%' }} />
@@ -279,7 +223,6 @@ export function MmInboundChallanTable({
             <th className={thCls}>Color</th>
             <th className={thCls}>Fabric</th>
             {testing ? <th className={thCls}>Source</th> : null}
-            {millOrigin ? <th className={thCenterCls}>Kind</th> : null}
             <th className={thRecvCls}>Received qty</th>
             <th className={thRecvCls}>Rolls / laps</th>
             <th className={thPassCls}>Passed qty</th>
@@ -307,13 +250,6 @@ export function MmInboundChallanTable({
                   <TwoLine primary={fabricName(row)} secondary={category === '—' ? null : category} />
                 </td>
                 {testing ? <td className={`${tdCls} truncate`}>{inboundSourceLabel(row)}</td> : null}
-                {millOrigin ? (
-                  <td className={`${tdCls} text-center`}>
-                    <span className={`text-[10px] font-semibold ${inboundIsStyleBound(row) ? 'text-slate-700' : 'text-amber-700'}`}>
-                      {inboundStyleKindLabel(row)}
-                    </span>
-                  </td>
-                ) : null}
                 <td className={tdRecvCls}>
                   <span className="block text-[11px] font-semibold text-blue-900 tabular-nums">
                     {formatQtyM(row.qty, row.uom)}
@@ -336,13 +272,13 @@ export function MmInboundChallanTable({
                   <StatusCell row={row} />
                 </td>
                 <td className={`${tdCls} text-center`}>
-                  <InboundActionCell row={row} busyId={busyId} hideReceive={millOrigin} onView={view} onReceive={(r, e) => void receive(r, e)} />
+                  <InboundActionCell row={row} onView={view} />
                 </td>
               </tr>
             );
           })}
           <tr aria-hidden>
-            <td colSpan={(testing ? 1 : 0) + (millOrigin ? 1 : 0) + 13} className="h-10 border-0 p-0" />
+            <td colSpan={(testing ? 1 : 0) + 13} className="h-10 border-0 p-0" />
           </tr>
         </tbody>
       </table>

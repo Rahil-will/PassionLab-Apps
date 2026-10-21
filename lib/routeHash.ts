@@ -23,6 +23,74 @@ export function buildRouteHash(route: string, params: Record<string, string> = {
   return hash;
 }
 
+/**
+ * Old mill and inbound hashes. Kept so bookmarks land in the warehouse.
+ * This is the redirect table.
+ */
+function legacyMaterialRedirect(raw: string): { route: string; params: Record<string, string> } | null {
+  if (raw === '#/material/mill' || raw === '#/material/mill/') {
+    return { route: RoutePath.MATERIAL_WAREHOUSE, params: {} };
+  }
+  if (raw.startsWith('#/material/mill/batches')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_EXTERNAL, params: {} };
+  }
+  if (raw === '#/material/mill/stock' || raw.startsWith('#/material/mill/stock/')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_FABRICS, params: {} };
+  }
+  if (raw === '#/material/mill/qc' || raw.startsWith('#/material/mill/qc/')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_QC, params: {} };
+  }
+  if (raw === '#/material/mill/process-send' || raw.startsWith('#/material/mill/process-send/')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_PROCESS_SEND, params: {} };
+  }
+  if (raw.startsWith('#/material/mill/process/')) {
+    const id = decodeURIComponent(raw.slice('#/material/mill/process/'.length).split('/')[0] ?? '');
+    return { route: RoutePath.MATERIAL_WAREHOUSE_PROCESS_DETAIL, params: id ? { id } : {} };
+  }
+  if (raw === '#/material/mill/process') {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_PROCESS, params: {} };
+  }
+  if (raw === '#/material/mill/styles' || raw.startsWith('#/material/mill/styles/')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_EXPECTED, params: {} };
+  }
+  const line = raw.match(/^#\/material\/mill\/line\/[^/]+\/[^/]+\/([^/]+)(\/.*)?$/);
+  if (line) {
+    const lineId = decodeURIComponent(line[1]);
+    const rest = line[2] ?? '';
+    if (rest.startsWith('/assign') || rest.startsWith('/allocate')) {
+      return { route: RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC_ALLOCATE, params: { lineId } };
+    }
+    return { route: RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC, params: { lineId } };
+  }
+  if (raw.startsWith('#/material/mill')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE, params: {} };
+  }
+  if (raw === '#/material/warehouse/receive-unallocated' || raw.startsWith('#/material/warehouse/receive-unallocated/')) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_RECEIVE, params: {} };
+  }
+  if (raw === '#/material/warehouse/receipts' || raw === '#/material/warehouse/external') {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_EXTERNAL, params: {} };
+  }
+  if (raw === '#/material/warehouse/internal') {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_INTERNAL, params: {} };
+  }
+  if (raw === '#/material/warehouse/stock') {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_FABRICS, params: {} };
+  }
+  if (raw === '#/material/warehouse/style-fabrics') {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_EXPECTED, params: {} };
+  }
+  const styleAlloc = raw.match(/^#\/material\/warehouse\/style-fabrics\/([^/]+)\/allocate\/?$/);
+  if (styleAlloc) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC_ALLOCATE, params: { lineId: decodeURIComponent(styleAlloc[1]) } };
+  }
+  const styleLine = raw.match(/^#\/material\/warehouse\/style-fabrics\/([^/]+)\/?$/);
+  if (styleLine) {
+    return { route: RoutePath.MATERIAL_WAREHOUSE_STYLE_FABRIC, params: { lineId: decodeURIComponent(styleLine[1]) } };
+  }
+  return null;
+}
+
 /** Parse `window.location.hash` into canonical route + params. */
 export function parseRouteHash(hash: string): { route: string; params: Record<string, string> } {
   const rawBare = (hash || RoutePath.DASHBOARD).split('?')[0];
@@ -30,12 +98,18 @@ export function parseRouteHash(hash: string): { route: string; params: Record<st
   const raw = aliased;
   const params: Record<string, string> = { ...aliasRouteParams(rawBare) };
 
+  const legacy = legacyMaterialRedirect(raw);
+  if (legacy) {
+    return { route: legacy.route, params: { ...params, ...legacy.params } };
+  }
+
   const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
   if (query) {
     new URLSearchParams(query).forEach((v, k) => {
       params[k] = v;
     });
   }
+  if (params.section === 'mills') params.section = 'fabric-vendors';
 
   // Exact static routes before parameterized patterns (e.g. #/material/warehouse/styles vs style/:orderId).
   if (ROUTE_MAP[raw]) {

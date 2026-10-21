@@ -63,11 +63,6 @@ const MATERIAL_SWITCHES: {
     hint: 'Fabric Master, receiving, stock, QC, allocate, and store challan to cutting.',
   },
   {
-    key: 'fabric_mill',
-    label: 'Fabric mill',
-    hint: 'Production orders, batches, mill stock, processing, mill QC, and dispatch to warehouse.',
-  },
-  {
     key: 'trims',
     label: 'Trims warehouse',
     hint: 'Trims master, receiving, stock, allocate, and issue.',
@@ -140,7 +135,6 @@ export const ModuleSelectorPanel: React.FC = () => {
   const [confirmOff, setConfirmOff] = useState<MmMaterialFeatureKey | null>(null);
 
   const isOn = (key: ModuleKey) => Boolean(modules?.find((m) => m.module_key === key)?.enabled);
-  const warehouseOn = materialFeatures.data?.fabric_warehouse === true;
   const featureOn = (key: MmMaterialFeatureKey) => materialFeatures.data?.[key] === true;
 
   const invalidate = async () => {
@@ -265,20 +259,17 @@ export const ModuleSelectorPanel: React.FC = () => {
               <div className="space-y-1.5 border-t border-slate-200/80 pt-2">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Features</p>
                 {m.key === 'material' ? (
-                  MATERIAL_SWITCHES.map((feature) => {
-                    const millLocked = feature.key === 'fabric_mill' && !warehouseOn;
-                    return (
+                  MATERIAL_SWITCHES.map((feature) => (
                       <FeatureSwitch
                         key={feature.key}
                         label={feature.label}
-                        hint={millLocked ? 'Needs Fabric warehouse' : feature.hint}
+                        hint={feature.hint}
                         on={featureOn(feature.key)}
                         busy={busyFeature === feature.key || materialFeatures.isLoading}
-                        disabled={!on || millLocked}
+                        disabled={!on}
                         onToggle={() => requestFeatureToggle(feature.key)}
                       />
-                    );
-                  })
+                  ))
                 ) : (
                   m.features.map((feature) => (
                     <FeatureRow key={feature.key} label={feature.label} />

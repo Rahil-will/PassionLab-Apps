@@ -6,7 +6,7 @@ import {
   challanPrintRollCell,
   challanPrintTotals,
   inboundChallanPrintDoc,
-  millChallanPrintDoc,
+  inhouseChallanPrintDoc,
   storeChallanPrintDoc,
 } from './mmChallanPrint';
 
@@ -36,13 +36,14 @@ const rolls = [
     weight_kg: null,
     shade: null,
     lot_no: null,
-    mill_snapshot: { batch_no: 'B-02', length_m: 18, attributes: { gsm: '175' } },
+    batch_no: 'B-02',
+    attributes: { gsm: '175' },
   },
 ];
 
-describe('millChallanPrintDoc', () => {
-  it('builds a mill-to-warehouse paper challan with factory name and all field columns', () => {
-    const doc = millChallanPrintDoc({
+describe('inhouseChallanPrintDoc', () => {
+  it('builds an in-house paper challan with factory name and all field columns', () => {
+    const doc = inhouseChallanPrintDoc({
       factory: { name: 'North Plant', code: 'NP' },
       challanNo: 'MILL-26-000012',
       referenceNo: 'DC-9',
@@ -59,9 +60,9 @@ describe('millChallanPrintDoc', () => {
       rolls,
     });
     expect(doc.title).toBe('Delivery challan');
-    expect(doc.movement).toBe('Mill to warehouse');
+    expect(doc.movement).toBe('In-house to warehouse');
     expect(doc.factoryName).toBe('North Plant');
-    expect(doc.fromLocation).toBe('In-house mill');
+    expect(doc.fromLocation).toBe('In-house');
     expect(doc.toLocation).toBe('Warehouse');
     expect(doc.rolls[1].batch_no).toBe('B-02');
     expect(challanPrintTotals(doc)).toEqual({ rolls: 2, qty: '60 m' });
